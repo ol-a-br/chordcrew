@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { font-family: 'Outfit', sans-serif; }
+  body { @apply bg-surface-0 text-ink; }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-surface-1; }
+  ::-webkit-scrollbar-thumb { @apply bg-surface-3 rounded-full; }
+}
+
+/* ── ChordPro renderer ────────────────────────────────────────────────────── */
+
+.chordpro-output {
+  font-family: 'Outfit', sans-serif;
+  line-height: 1.6;
+  @apply text-ink;
+}
+
+/* Multi-column song layout */
+.chordpro-columns-1 { column-count: 1; }
+.chordpro-columns-2 { column-count: 2; column-gap: 2.5rem; }
+.chordpro-columns-3 { column-count: 3; column-gap: 2rem; }
+
+/* Prevent sections splitting across columns */
+.chordpro-output .paragraph {
+  break-inside: avoid;
+  margin-bottom: 1.25rem;
+}
+
+/* Section headers — [Verse 1], [Chorus], etc. */
+.chordpro-output .paragraph-label {
+  @apply text-section font-semibold text-sm uppercase tracking-wider mb-1;
+}
+
+/* Each chord+lyric row */
+.chordpro-output .row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  min-height: 2.8em;
+}
+
+/* Each chord+lyric column pair */
+.chordpro-output .column {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  white-space: pre;
+}
+
+/* The chord itself */
+.chordpro-output .chord {
+  @apply text-chord font-mono font-medium;
+  font-size: 0.85em;
+  min-height: 1.2em;
+  line-height: 1.2;
+}
+
+/* The lyric below the chord */
+.chordpro-output .lyrics {
+  line-height: 1.6;
+}
+
+/* Lyrics-only mode — hide all chords */
+.chordpro-output.lyrics-only .chord { display: none; }
+.chordpro-output.lyrics-only .row { min-height: unset; }
+.chordpro-output.lyrics-only .column { flex-direction: row; }
+
+/* Comment lines */
+.chordpro-output .comment {
+  @apply text-ink-muted italic text-sm my-1;
+}
+
+/* Directives rendered as metadata (key, tempo, etc.) */
+.chordpro-output .metadata { display: none; }
+
+/* Chorus section highlight */
+.chordpro-output .chorus { @apply pl-4 border-l-2 border-chord/40; }
+
+/* Tab blocks */
+.chordpro-output .tab {
+  @apply font-mono text-sm text-ink-muted bg-surface-2 rounded p-3 my-2;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* ── CodeMirror editor overrides ─────────────────────────────────────────── */
+
+.cm-editor {
+  height: 100%;
+  @apply text-sm font-mono;
+}
+
+.cm-editor.cm-focused { outline: none !important; }
+
+/* ── Transitions ──────────────────────────────────────────────────────────── */
+
+* { transition-property: color, background-color, border-color; transition-duration: 100ms; }

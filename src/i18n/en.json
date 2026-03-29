@@ -1,0 +1,101 @@
+{
+  "app": { "name": "ChordCrew" },
+  "nav": {
+    "library": "Library",
+    "setlists": "Setlists",
+    "import": "Import",
+    "settings": "Settings"
+  },
+  "auth": {
+    "signIn": "Sign in with Google",
+    "signOut": "Sign out",
+    "welcome": "Welcome to ChordCrew",
+    "subtitle": "Your worship team's chord library — online and offline",
+    "localMode": "Running in local mode (no Firebase configured)"
+  },
+  "library": {
+    "allSongs": "All Songs",
+    "favorites": "Favorites",
+    "books": "Books",
+    "newSong": "New Song",
+    "newBook": "New Book",
+    "searchPlaceholder": "Search songs, artists, lyrics…",
+    "noSongs": "No songs yet",
+    "noSongsHint": "Create a new song or import from chords.wiki"
+  },
+  "song": {
+    "untitled": "Untitled Song",
+    "unknownArtist": "Unknown Artist",
+    "key": "Key",
+    "capo": "Capo",
+    "bpm": "BPM",
+    "timeSignature": "Time",
+    "tags": "Tags",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "transpose": "Transpose",
+    "lyricsOnly": "Lyrics only",
+    "columns": "Columns",
+    "editingWarning": "{{name}} is currently editing this song"
+  },
+  "editor": {
+    "title": "Editor",
+    "preview": "Preview",
+    "chordproHelp": "ChordPro format"
+  },
+  "setlist": {
+    "newSetlist": "New Setlist",
+    "noSetlists": "No setlists yet",
+    "addSong": "Add song",
+    "present": "Present",
+    "songOf": "Song {{current}} of {{total}}"
+  },
+  "import": {
+    "title": "Import from chords.wiki",
+    "subtitle": "Upload your chords.wiki library-backup JSON file",
+    "dropHint": "Drop file here or click to browse",
+    "importing": "Importing…",
+    "done": "Import complete",
+    "songs": "{{count}} songs",
+    "setlists": "{{count}} setlists",
+    "books": "{{count}} books",
+    "warnings": "Warnings",
+    "flaggedTitles": "Songs with filename-style titles (may need renaming)"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "darkMode": "Dark mode",
+    "pedalNext": "Pedal: Next key",
+    "pedalPrev": "Pedal: Previous key",
+    "defaultColumns": "Default columns",
+    "about": "About ChordCrew",
+    "version": "Version",
+    "openSource": "Open source on GitHub"
+  },
+  "sync": {
+    "status": {
+      "clean": "In sync",
+      "pending": "Pending changes",
+      "conflict": "Conflict",
+      "offline": "Offline"
+    },
+    "syncNow": "Sync Now",
+    "lastSync": "Last sync: {{time}}"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "confirm": "Confirm",
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "yes": "Yes",
+    "no": "No"
+  }
+}

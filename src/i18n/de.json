@@ -1,0 +1,101 @@
+{
+  "app": { "name": "ChordCrew" },
+  "nav": {
+    "library": "Bibliothek",
+    "setlists": "Setlisten",
+    "import": "Importieren",
+    "settings": "Einstellungen"
+  },
+  "auth": {
+    "signIn": "Mit Google anmelden",
+    "signOut": "Abmelden",
+    "welcome": "Willkommen bei ChordCrew",
+    "subtitle": "Die Akkord-Bibliothek deines Worship-Teams — online und offline",
+    "localMode": "Lokaler Modus (kein Firebase konfiguriert)"
+  },
+  "library": {
+    "allSongs": "Alle Songs",
+    "favorites": "Favoriten",
+    "books": "Bücher",
+    "newSong": "Neuer Song",
+    "newBook": "Neues Buch",
+    "searchPlaceholder": "Songs, Künstler, Liedtext suchen…",
+    "noSongs": "Noch keine Songs",
+    "noSongsHint": "Erstelle einen neuen Song oder importiere von chords.wiki"
+  },
+  "song": {
+    "untitled": "Unbenannter Song",
+    "unknownArtist": "Unbekannter Künstler",
+    "key": "Tonart",
+    "capo": "Capo",
+    "bpm": "BPM",
+    "timeSignature": "Takt",
+    "tags": "Tags",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "view": "Anzeigen",
+    "transpose": "Transponieren",
+    "lyricsOnly": "Nur Text",
+    "columns": "Spalten",
+    "editingWarning": "{{name}} bearbeitet diesen Song gerade"
+  },
+  "editor": {
+    "title": "Editor",
+    "preview": "Vorschau",
+    "chordproHelp": "ChordPro-Format"
+  },
+  "setlist": {
+    "newSetlist": "Neue Setliste",
+    "noSetlists": "Noch keine Setlisten",
+    "addSong": "Song hinzufügen",
+    "present": "Präsentieren",
+    "songOf": "Song {{current}} von {{total}}"
+  },
+  "import": {
+    "title": "Von chords.wiki importieren",
+    "subtitle": "Lade deine chords.wiki-Sicherungsdatei (JSON) hoch",
+    "dropHint": "Datei hier ablegen oder zum Durchsuchen klicken",
+    "importing": "Importiere…",
+    "done": "Import abgeschlossen",
+    "songs": "{{count}} Songs",
+    "setlists": "{{count}} Setlisten",
+    "books": "{{count}} Bücher",
+    "warnings": "Hinweise",
+    "flaggedTitles": "Songs mit dateinamen-ähnlichen Titeln (evtl. umbenennen)"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "language": "Sprache",
+    "darkMode": "Dunkelmodus",
+    "pedalNext": "Pedal: Weiter-Taste",
+    "pedalPrev": "Pedal: Zurück-Taste",
+    "defaultColumns": "Standard-Spaltenanzahl",
+    "about": "Über ChordCrew",
+    "version": "Version",
+    "openSource": "Open Source auf GitHub"
+  },
+  "sync": {
+    "status": {
+      "clean": "Synchronisiert",
+      "pending": "Ausstehende Änderungen",
+      "conflict": "Konflikt",
+      "offline": "Offline"
+    },
+    "syncNow": "Jetzt synchronisieren",
+    "lastSync": "Letzte Synchronisation: {{time}}"
+  },
+  "common": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "close": "Schließen",
+    "confirm": "Bestätigen",
+    "loading": "Laden…",
+    "error": "Etwas ist schiefgelaufen",
+    "yes": "Ja",
+    "no": "Nein"
+  }
+}
