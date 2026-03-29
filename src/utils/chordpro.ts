@@ -107,3 +107,34 @@ export function isKnownChord(chord: string): boolean {
   const base = chord.split('/')[0]
   return ROOTS.some(r => QUALITIES.some(q => base === r + q))
 }
+
+// ─── Transpose a key name by N semitones ──────────────────────────────────────
+// Delegates to chordsheetjs so enharmonic spelling is consistent with chord transposition.
+
+export function transposeKey(key: string, semitones: number): string {
+  if (!key || semitones === 0) return key
+  try {
+    const html = renderToHtml(`[${key}]\n`, semitones)
+    const match = html.match(/<div class="chord">([^<]+)<\/div>/)
+    return match?.[1]?.trim() ?? key
+  } catch {
+    return key
+  }
+}
+
+// ─── Extract first N unique chords from a song (after transposition) ─────────
+
+export function getFirstChords(content: string, transposeOffset: number, limit = 3): string[] {
+  const html = renderToHtml(content, transposeOffset)
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html')
+  const chords: string[] = []
+  doc.querySelectorAll('.chord').forEach(el => {
+    if (chords.length >= limit) return
+    const text = el.textContent?.trim() ?? ''
+    if (text && isKnownChord(text) && !chords.includes(text)) {
+      chords.push(text)
+    }
+  })
+  return chords
+}

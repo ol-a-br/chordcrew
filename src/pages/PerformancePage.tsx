@@ -1,25 +1,51 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { X, ChevronUp, ChevronDown, AlignLeft, ZoomIn, ZoomOut } from 'lucide-react'
 import { db } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { useKeyboardNav } from '@/hooks/useKeyboard'
+import { transposeKey } from '@/utils/chordpro'
+
+function getDefaultColumns(): number {
+  if (typeof window === 'undefined') return 2
+  return window.matchMedia('(orientation: landscape)').matches ? 4 : 2
+}
 
 export default function PerformancePage() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const song = useLiveQuery(() => id ? db.songs.get(id) : undefined, [id])
 
+  const setlistId = searchParams.get('setlistId')
+  const currentPos = parseInt(searchParams.get('pos') ?? '0', 10)
+
   const [transpose, setTranspose]     = useState(0)
-  const [columns, setColumns]         = useState<1 | 2 | 3>(2)
+  const [columns, setColumns]         = useState(getDefaultColumns)
   const [lyricsOnly, setLyricsOnly]   = useState(false)
   const [fontScale, setFontScale]     = useState(1.15)
   const [showControls, setShowControls] = useState(true)
-  const [currentCol, setCurrentCol]   = useState(0)
   const contentRef = useRef<HTMLDivElement>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Transposed key display
+  const transposedKey = useMemo(
+    () => transposeKey(song?.transcription.key ?? '', transpose),
+    [song?.transcription.key, transpose]
+  )
+
+  // Setlist context: next song id
+  const setlistItems = useLiveQuery<import('@/types').SetlistItem[]>(
+    async () => setlistId ? db.setlistItems.where('setlistId').equals(setlistId).sortBy('order') : [],
+    [setlistId]
+  )
+  const songItems = useMemo(
+    () => setlistItems?.filter(i => i.type === 'song' && i.songId) ?? [],
+    [setlistItems]
+  )
+  const nextSongId = songItems[currentPos + 1]?.songId
 
   // ── Wake Lock: keep screen on ─────────────────────────────────────────────
   useEffect(() => {
@@ -46,28 +72,24 @@ export default function PerformancePage() {
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current) }
   }, [resetHideTimer])
 
-  // ── Column-scroll navigation ───────────────────────────────────────────────
-  const scrollToColumn = useCallback((col: number) => {
+  // ── Page-flip navigation: jump by one full screen height ──────────────────
+  const goNext = useCallback(() => {
     const container = contentRef.current
     if (!container) return
-    const colWidth = container.clientWidth / columns
-    container.scrollTo({ left: col * colWidth, behavior: 'smooth' })
-    setCurrentCol(col)
-  }, [columns])
-
-  const totalColumns = columns  // simplification: we treat screen columns as pages
-
-  const goNext = useCallback(() => {
-    if (currentCol < totalColumns - 1) {
-      scrollToColumn(currentCol + 1)
+    const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 4
+    if (atBottom && nextSongId && setlistId) {
+      // Advance to next song in setlist
+      navigate(`/perform/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`)
+    } else {
+      container.scrollBy({ top: container.clientHeight, behavior: 'auto' })
     }
-  }, [currentCol, totalColumns, scrollToColumn])
+  }, [nextSongId, setlistId, currentPos, navigate])
 
   const goPrev = useCallback(() => {
-    if (currentCol > 0) {
-      scrollToColumn(currentCol - 1)
-    }
-  }, [currentCol, scrollToColumn])
+    const container = contentRef.current
+    if (!container) return
+    container.scrollBy({ top: -container.clientHeight, behavior: 'auto' })
+  }, [])
 
   // ── PageFlip Cicada V7 — Mode 2: Left/Right Arrow ─────────────────────────
   useKeyboardNav({ onNext: goNext, onPrev: goPrev, enabled: true })
@@ -91,16 +113,23 @@ export default function PerformancePage() {
           <X size={20} />
         </button>
 
-        {/* Title */}
+        {/* Title + artist */}
         <div className="flex-1 min-w-0">
-          <span className="font-semibold text-sm truncate">{song.title}</span>
-          {song.artist && <span className="text-ink-muted text-xs ml-2">{song.artist}</span>}
+          <div className="font-semibold text-base truncate leading-tight">{song.title}</div>
+          {song.artist && <div className="text-xs text-ink-muted truncate">{song.artist}</div>}
         </div>
+
+        {/* Setlist position */}
+        {setlistId && songItems.length > 0 && (
+          <span className="text-xs font-mono text-ink-faint shrink-0">
+            {currentPos + 1}/{songItems.length}
+          </span>
+        )}
 
         {/* Key & tempo */}
         {song.transcription.key && (
           <span className="text-xs font-mono text-chord shrink-0" title="Key">
-            𝄞 {song.transcription.key}
+            𝄞 {transpose !== 0 ? `${song.transcription.key} → ${transposedKey}` : song.transcription.key}
           </span>
         )}
         {song.transcription.tempo > 0 && (
@@ -118,13 +147,13 @@ export default function PerformancePage() {
           <button onClick={() => setTranspose(t => t + 1)} className="p-1.5 text-ink-muted hover:text-ink"><ChevronUp size={15} /></button>
         </div>
 
-        {/* Column count */}
-        <div className="flex items-center gap-0.5 bg-surface-2/80 rounded-lg overflow-hidden">
-          {([1, 2, 3] as const).map(n => (
+        {/* Column count 1–5 */}
+        <div className="flex items-center gap-0 bg-surface-2/80 rounded-lg overflow-hidden">
+          {[1, 2, 3, 4, 5].map(n => (
             <button
               key={n}
-              onClick={() => { setColumns(n); setCurrentCol(0) }}
-              className={`px-2.5 py-1.5 text-xs ${columns === n ? 'bg-chord/30 text-chord' : 'text-ink-muted hover:text-ink'}`}
+              onClick={() => setColumns(n)}
+              className={`px-2 py-1.5 text-xs ${columns === n ? 'bg-chord/30 text-chord' : 'text-ink-muted hover:text-ink'}`}
             >
               {n}
             </button>
@@ -148,7 +177,7 @@ export default function PerformancePage() {
         </button>
       </div>
 
-      {/* Song content — scrollable horizontally for column navigation */}
+      {/* Song content — page-flip scroll (jumps by screen height) */}
       <div
         ref={contentRef}
         className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-16 pb-6"

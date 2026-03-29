@@ -5,13 +5,14 @@ import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/components/auth/LoginPage'
 
 // Lazy-load pages for better initial load performance
-const LibraryPage     = lazy(() => import('@/pages/LibraryPage'))
-const EditorPage      = lazy(() => import('@/pages/EditorPage'))
-const ViewerPage      = lazy(() => import('@/pages/ViewerPage'))
-const PerformancePage = lazy(() => import('@/pages/PerformancePage'))
-const SetlistsPage    = lazy(() => import('@/pages/SetlistsPage'))
-const ImportPage      = lazy(() => import('@/pages/ImportPage'))
-const SettingsPage    = lazy(() => import('@/pages/SettingsPage'))
+const LibraryPage        = lazy(() => import('@/pages/LibraryPage'))
+const EditorPage         = lazy(() => import('@/pages/EditorPage'))
+const ViewerPage         = lazy(() => import('@/pages/ViewerPage'))
+const PerformancePage    = lazy(() => import('@/pages/PerformancePage'))
+const SetlistsPage       = lazy(() => import('@/pages/SetlistsPage'))
+const SetlistDetailPage  = lazy(() => import('@/pages/SetlistDetailPage'))
+const ImportPage         = lazy(() => import('@/pages/ImportPage'))
+const SettingsPage       = lazy(() => import('@/pages/SettingsPage'))
 
 function PageLoader() {
   return (
@@ -45,7 +46,7 @@ export default function App() {
               <Route path="/editor/:id"     element={<EditorPage />} />
               <Route path="/view/:id"       element={<ViewerPage />} />
               <Route path="/setlists"       element={<SetlistsPage />} />
-              <Route path="/setlists/:id"   element={<SetlistsPage />} />
+              <Route path="/setlists/:id"   element={<SetlistDetailPage />} />
               <Route path="/import"         element={<ImportPage />} />
               <Route path="/settings"       element={<SettingsPage />} />
               <Route path="*"               element={<Navigate to="/library" replace />} />

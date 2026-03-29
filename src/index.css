@@ -18,14 +18,20 @@
   font-family: 'Barlow Condensed', sans-serif;
   line-height: 1.6;
   @apply text-ink;
-  /* Section counter — resets per song render */
-  counter-reset: section-idx;
 }
 
-/* Multi-column song layout */
+/* Multi-column song layout (1–5 columns) */
 .chordpro-columns-1 { column-count: 1; }
 .chordpro-columns-2 { column-count: 2; column-gap: 2.5rem; }
 .chordpro-columns-3 { column-count: 3; column-gap: 2rem; }
+.chordpro-columns-4 { column-count: 4; column-gap: 1.5rem; }
+.chordpro-columns-5 { column-count: 5; column-gap: 1.25rem; }
+
+/* Page-flip mode: fixed height + horizontal column flow */
+.chordpro-output.page-flip {
+  height: 100%;
+  column-fill: auto;
+}
 
 /* Prevent sections splitting across columns */
 .chordpro-output .paragraph {
@@ -33,26 +39,45 @@
   margin-bottom: 1.25rem;
 }
 
-/* Section headers — output by chordsheetjs as h3.label */
+/* Section headers — directive syntax: h3.label */
 .chordpro-output .label {
   @apply text-section font-semibold text-sm uppercase tracking-wider;
   font-family: 'Barlow Condensed', sans-serif;
   margin: 0.75rem 0 0.2rem 0;
-  counter-increment: section-idx;
+  line-height: 1.4;
 }
 /* First label in a song — no top margin */
 .chordpro-output .paragraph:first-child .label:first-of-type {
   margin-top: 0;
 }
-/* [A] [B] [C] letter identifiers before each section label */
-.chordpro-output .label::before {
-  content: "[" counter(section-idx, upper-alpha) "]  ";
+
+/* Section headers — bracket-notation: first .row in paragraph */
+.chordpro-output .section-header-row {
+  min-height: unset !important;
+  align-items: center;
+  margin: 0.75rem 0 0.2rem 0;
+}
+.chordpro-output .section-header-row .chord {
+  /* Override chord styling: show section name as label */
+  @apply text-section font-semibold uppercase tracking-wider;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.9em;
+  min-height: unset;
+  line-height: 1.4;
+}
+.chordpro-output .section-header-row .lyrics {
+  display: none;
+}
+
+/* [A] [B] [C] letter badge — injected by JS for both syntaxes */
+.chordpro-output .section-badge {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.7em;
   font-weight: 600;
   @apply text-ink-faint;
-  letter-spacing: 0;
-  margin-right: 0.15em;
+  margin-right: 0.4em;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 /* Each chord+lyric row */

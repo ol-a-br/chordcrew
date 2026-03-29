@@ -316,7 +316,7 @@ test('renderer uses Barlow Condensed font', async ({ page }) => {
   expect(fontFamily.toLowerCase()).toContain('barlow condensed')
 })
 
-test('section labels show [A] [B] counter prefix via CSS counter', async ({ page }) => {
+test('section labels show [A] [B] badge (injected by JS)', async ({ page }) => {
   await waitForApp(page)
   const songId = await createSong(page)
   await setSongContent(page, songId,
@@ -325,13 +325,10 @@ test('section labels show [A] [B] counter prefix via CSS counter', async ({ page
   await page.goto(`/view/${songId}`)
   await expect(page.locator('.chordpro-output h3.label').first()).toBeVisible({ timeout: 5000 })
 
-  // getComputedStyle(::before).content returns the unresolved CSS string for
-  // counter() functions — verify it contains the counter() call, confirming the
-  // CSS rule is applied and will render [A] [B] visually.
-  const beforeContent = await page.locator('.chordpro-output h3.label').first().evaluate(
-    el => getComputedStyle(el, '::before').content
-  )
-  expect(beforeContent).toContain('counter(section-idx')
+  // JS injects .section-badge siblings for [A] [B] [C] letters
+  await expect(page.locator('.chordpro-output .section-badge').first()).toBeVisible({ timeout: 3000 })
+  const badgeText = await page.locator('.chordpro-output .section-badge').first().textContent()
+  expect(badgeText?.trim()).toBe('[A]')
 })
 
 test('named chorus section gets .chorus-section class (vertical bar)', async ({ page }) => {
