@@ -97,6 +97,18 @@ export default function PerformancePage() {
           {song.artist && <span className="text-ink-muted text-xs ml-2">{song.artist}</span>}
         </div>
 
+        {/* Key & tempo */}
+        {song.transcription.key && (
+          <span className="text-xs font-mono text-chord shrink-0" title="Key">
+            𝄞 {song.transcription.key}
+          </span>
+        )}
+        {song.transcription.tempo > 0 && (
+          <span className="text-xs font-mono text-ink-muted shrink-0" title="Tempo">
+            ♩ {song.transcription.tempo}
+          </span>
+        )}
+
         {/* Transpose */}
         <div className="flex items-center gap-1 bg-surface-2/80 rounded-lg px-1">
           <button onClick={() => setTranspose(t => t - 1)} className="p-1.5 text-ink-muted hover:text-ink"><ChevronDown size={15} /></button>

@@ -17,11 +17,11 @@ export default {
           muted: '#8b949e',
           faint: '#484f58',
         },
-        // Chord colour — amber, warm and musical
+        // Chord colour — light yellow for legibility on dark stage backgrounds
         chord: {
-          DEFAULT: '#f59e0b',
-          light: '#fbbf24',
-          dark: '#d97706',
+          DEFAULT: '#fde68a',
+          light: '#fef9c3',
+          dark: '#fbbf24',
         },
         // Section label colour
         section: '#38bdf8',
@@ -29,6 +29,7 @@ export default {
       fontFamily: {
         ui: ['Outfit', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
+        condensed: ['Barlow Condensed', 'sans-serif'],
       },
     },
   },

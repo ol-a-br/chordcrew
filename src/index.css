@@ -15,9 +15,11 @@
 /* ── ChordPro renderer ────────────────────────────────────────────────────── */
 
 .chordpro-output {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Barlow Condensed', sans-serif;
   line-height: 1.6;
   @apply text-ink;
+  /* Section counter — resets per song render */
+  counter-reset: section-idx;
 }
 
 /* Multi-column song layout */
@@ -31,9 +33,26 @@
   margin-bottom: 1.25rem;
 }
 
-/* Section headers — [Verse 1], [Chorus], etc. */
-.chordpro-output .paragraph-label {
-  @apply text-section font-semibold text-sm uppercase tracking-wider mb-1;
+/* Section headers — output by chordsheetjs as h3.label */
+.chordpro-output .label {
+  @apply text-section font-semibold text-sm uppercase tracking-wider;
+  font-family: 'Barlow Condensed', sans-serif;
+  margin: 0.75rem 0 0.2rem 0;
+  counter-increment: section-idx;
+}
+/* First label in a song — no top margin */
+.chordpro-output .paragraph:first-child .label:first-of-type {
+  margin-top: 0;
+}
+/* [A] [B] [C] letter identifiers before each section label */
+.chordpro-output .label::before {
+  content: "[" counter(section-idx, upper-alpha) "]  ";
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7em;
+  font-weight: 600;
+  @apply text-ink-faint;
+  letter-spacing: 0;
+  margin-right: 0.15em;
 }
 
 /* Each chord+lyric row */
@@ -52,7 +71,7 @@
   white-space: pre;
 }
 
-/* The chord itself */
+/* The chord itself — light yellow for dark stage backgrounds */
 .chordpro-output .chord {
   @apply text-chord font-mono font-medium;
   font-size: 0.85em;
@@ -78,8 +97,16 @@
 /* Directives rendered as metadata (key, tempo, etc.) */
 .chordpro-output .metadata { display: none; }
 
-/* Chorus section highlight */
-.chordpro-output .chorus { @apply pl-4 border-l-2 border-chord/40; }
+/* ── Chorus vertical bar ─────────────────────────────────────────────────── */
+/* Anonymous chorus: chordsheetjs adds .chorus on the paragraph directly */
+.chordpro-output .paragraph.chorus {
+  @apply pl-4 border-l-2 border-chord/50;
+}
+/* Named chorus: JS in SongRenderer detects the label and adds .chorus-section
+   class to the row group; see SongRenderer.tsx */
+.chordpro-output .chorus-section {
+  @apply pl-4 border-l-2 border-chord/50;
+}
 
 /* Tab blocks */
 .chordpro-output .tab {

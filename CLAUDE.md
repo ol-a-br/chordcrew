@@ -13,7 +13,15 @@ npm run dev       # dev server → localhost:5173
 npm run build     # TypeScript check + Vite build
 npm run preview   # preview production build
 npm run deploy    # build + firebase deploy (needs firebase-tools + login)
+npm test          # Playwright E2E tests (26 tests)
+npm run test:ui   # Playwright interactive UI
 ```
+
+## Key documents
+
+- `docs/requirements.md` — requirements spec with implementation status (REQ-IDs)
+- `docs/roadmap.md` — phased implementation plan with decision log
+- `data/chords_wiki_library_export_20260329.json` — real export (4 books, 298 songs, 88 setlists)
 
 ## Architecture
 
