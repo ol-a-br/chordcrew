@@ -213,8 +213,14 @@ export default function PerformancePage() {
           className="flex-1 overflow-x-auto overflow-y-hidden hide-scrollbar"
           onClick={resetHideTimer}
         >
-          {/* Inner wrapper: gives SongRenderer a definite height for CSS column-fill: auto */}
-          <div className="h-full pt-16 px-6 pb-6">
+          {/* Padding shrinks when controls hide to reclaim screen space */}
+          <div
+            className="h-full px-6 pb-6"
+            style={{
+              paddingTop: showControls ? '4rem' : '0.5rem',
+              transition: 'padding-top 300ms ease-in-out',
+            }}
+          >
             <SongRenderer
               content={song.transcription.content}
               transposeOffset={transpose}
@@ -229,8 +235,12 @@ export default function PerformancePage() {
         /* Single column: vertical page-flip */
         <div
           ref={contentRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-16 pb-6"
+          className="flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6"
           onClick={resetHideTimer}
+          style={{
+            paddingTop: showControls ? '4rem' : '0.5rem',
+            transition: 'padding-top 300ms ease-in-out',
+          }}
         >
           <SongRenderer
             content={song.transcription.content}

@@ -86,6 +86,7 @@ export interface Setlist {
   sharedTeamId?: string
   createdAt: number
   updatedAt: number
+  accessedAt?: number       // last time the setlist was opened (for recently accessed sort)
 }
 
 export type SetlistItemType = 'song' | 'divider'

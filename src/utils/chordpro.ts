@@ -9,10 +9,22 @@ const { ChordProParser, HtmlDivFormatter, TextFormatter } = ChordSheetJS
 
 export function preprocessChordPro(content: string): string {
   return content
+    // chords.wiki start_of_part / sop → standard labeled section
     .replace(/\{sop\s*:\s*([^}]+)\}/gi, '{start_of_verse: $1}')
     .replace(/\{start_of_part\s*:\s*([^}]+)\}/gi, '{start_of_verse: $1}')
     .replace(/\{eop\b[^}]*\}/gi, '{end_of_verse}')
     .replace(/\{end_of_part\b[^}]*\}/gi, '{end_of_verse}')
+    // {inline: [C] / / / | [F] / / / |} → strip wrapper; inner content is standard ChordPro
+    .replace(/\{inline\s*:\s*([^}]+)\}/gi, (_m, c: string) => c.trim())
+    // {repeat: Chorus} or {repeat: Chorus 2x} → rendered as a comment with ↺ indicator
+    .replace(/\{repeat\s*:\s*([^}]+)\}/gi, (_m, c: string) => {
+      const s = c.trim().replace(/\s+/g, ' ')
+      const xm = s.match(/^(.*?)\s+(\d+)x\s*$/i)
+      if (xm) return `{comment: ↺ ${xm[1].trim()} ×${xm[2]}}`
+      return `{comment: ↺ ${s}}`
+    })
+    // {new_song} — multi-song file separator; ignore in single-song view
+    .replace(/\{new_song[^}]*\}/gi, '')
 }
 
 // ─── Parse ────────────────────────────────────────────────────────────────────

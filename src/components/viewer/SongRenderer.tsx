@@ -144,15 +144,26 @@ export function SongRenderer({
       }
     })
 
-    // ── Chord quality superscript pass ────────────────────────────────────────
-    // Split chord names into root (normal size) + quality (smaller superscript)
+    // ── Chord processing pass ─────────────────────────────────────────────────
     container.querySelectorAll<HTMLElement>('.chord').forEach(el => {
       if (el.closest('.section-header-row')) return     // skip section names
-      if (el.querySelector('span')) return              // already processed
-      const text = el.textContent?.trim() ?? ''
-      if (!text || !isKnownChord(text)) return
+      if (el.querySelector('span, sup')) return         // already processed
+
+      let text = el.textContent?.trim() ?? ''
+      if (!text) return
+
+      // Parenthesised optional chords: "(Am)" → strip parens, add opacity class
+      if (text.startsWith('(') && text.endsWith(')')) {
+        text = text.slice(1, -1).trim()
+        el.textContent = text
+        el.classList.add('chord-optional')
+      }
+
+      if (!isKnownChord(text)) return
+
+      // Split into root + quality modifier (slightly smaller, slightly raised)
       const { root, quality, bass } = splitChordName(text)
-      if (!quality && !bass) return                     // simple root like 'A', 'G'
+      if (!quality && !bass) return                     // plain root like 'A', 'G'
       el.innerHTML =
         `<span>${root}</span>` +
         (quality ? `<sup class="chord-quality">${quality}</sup>` : '') +

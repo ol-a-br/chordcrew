@@ -8,7 +8,7 @@ import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
 import type { Setlist } from '@/types'
 
-type SetlistSort = 'name' | 'updatedAt' | 'createdAt'
+type SetlistSort = 'name' | 'updatedAt' | 'createdAt' | 'accessedAt'
 
 export default function SetlistsPage() {
   const { t } = useTranslation()
@@ -24,8 +24,9 @@ export default function SetlistsPage() {
     const s = [...(setlistsRaw ?? [])]
     switch (sortBy) {
       case 'name':      return s.sort((a, b) => a.name.localeCompare(b.name))
-      case 'createdAt': return s.sort((a, b) => b.createdAt - a.createdAt)
-      default:          return s.sort((a, b) => b.updatedAt - a.updatedAt)
+      case 'createdAt':   return s.sort((a, b) => b.createdAt - a.createdAt)
+      case 'accessedAt':  return s.sort((a, b) => ((b.accessedAt ?? 0) - (a.accessedAt ?? 0)))
+      default:            return s.sort((a, b) => b.updatedAt - a.updatedAt)
     }
   }, [setlistsRaw, sortBy])
 
@@ -56,6 +57,7 @@ export default function SetlistsPage() {
           <option value="updatedAt">Last edited</option>
           <option value="name">Name</option>
           <option value="createdAt">Date created</option>
+          <option value="accessedAt">Recently opened</option>
         </select>
         <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
           <Plus size={15} />

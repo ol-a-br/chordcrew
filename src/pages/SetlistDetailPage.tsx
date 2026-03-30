@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowLeft, Play, Music } from 'lucide-react'
@@ -8,6 +8,11 @@ import { Button } from '@/components/shared/Button'
 export default function SetlistDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+
+  // Track last-accessed time for "recently opened" sort
+  useEffect(() => {
+    if (id) db.setlists.update(id, { accessedAt: Date.now() })
+  }, [id])
 
   const setlist = useLiveQuery(() => id ? db.setlists.get(id) : undefined, [id])
   const items = useLiveQuery(

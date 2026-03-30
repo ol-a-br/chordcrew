@@ -94,11 +94,11 @@
   line-height: 1;
 }
 
-/* Each chord+lyric row */
+/* Each chord+lyric row — flex-start so all chord tops align at the same height */
 .chordpro-output .row {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: flex-start;
   min-height: 2.8em;
 }
 
@@ -110,21 +110,11 @@
   white-space: pre;
 }
 
-/* Song title and subtitle from {title:} / {subtitle:} directives */
-.chordpro-output .title {
-  font-family: 'Outfit', sans-serif;
-  font-size: 1.45em;
-  font-weight: 700;
-  @apply text-ink;
-  margin-bottom: 0.1em;
-  line-height: 1.2;
-}
-.chordpro-output .subtitle {
-  font-family: 'Outfit', sans-serif;
-  font-size: 0.72em;
-  @apply text-ink-muted;
-  margin-bottom: 1.25rem;
-}
+/* Song title and subtitle from {title:} / {subtitle:} directives
+   Hidden in renderer: they are already shown in the toolbar/header above the song.
+   Showing them twice would duplicate information. */
+.chordpro-output .title   { display: none; }
+.chordpro-output .subtitle { display: none; }
 
 /* The chord itself — light yellow for dark stage backgrounds */
 .chordpro-output .chord {
@@ -133,11 +123,16 @@
   min-height: 1.2em;
   line-height: 1.2;
 }
-/* Chord quality superscript: "sus4" in Dsus4, "maj7" in Amaj7 */
+/* Chord quality modifier: "sus4" in Dsus4, "maj7" in Amaj7 — slightly smaller,
+   slightly raised but staying within the cap-height of the root letter */
 .chordpro-output .chord-quality {
-  font-size: 0.62em;
-  vertical-align: super;
+  font-size: 0.7em;
+  vertical-align: 0.25em;
   line-height: 1;
+}
+/* Optional chord (parenthesised) — same colour but at 45% opacity */
+.chordpro-output .chord.chord-optional {
+  opacity: 0.45;
 }
 /* Bass note after slash: "/G" in C/G */
 .chordpro-output .chord-bass {
@@ -154,7 +149,7 @@
 .chordpro-output.lyrics-only .row { min-height: unset; }
 .chordpro-output.lyrics-only .column { flex-direction: row; }
 
-/* Comment lines */
+/* Comment lines — also used for {repeat: Chorus} indicators */
 .chordpro-output .comment {
   @apply text-ink-muted italic text-sm my-1;
 }

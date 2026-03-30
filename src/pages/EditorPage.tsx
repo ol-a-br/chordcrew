@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Save, Eye, X, RotateCcw } from 'lucide-react'
+import { Save, Eye, X, RotateCcw, Tag } from 'lucide-react'
 import { db, upsertSongVersions, markPending } from '@/db'
 import { buildSearchText, extractMeta } from '@/utils/chordpro'
 import { ChordProEditor } from '@/components/editor/ChordProEditor'
@@ -16,12 +16,17 @@ export default function EditorPage() {
   const song = useLiveQuery(() => id ? db.songs.get(id) : undefined, [id])
 
   const [content, setContent] = useState('')
+  const [tags, setTags] = useState<string[]>([])
   const [dirty, setDirty] = useState(false)
   const [showPreview, setShowPreview] = useState(true)
+  const tagInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (song) setContent(song.transcription.content)
-  }, [song?.id]) // only on mount/song change, not every keystroke
+    if (song) {
+      setContent(song.transcription.content)
+      setTags(song.tags ?? [])
+    }
+  }, [song?.id])
 
   const handleChange = (val: string) => {
     setContent(val)
@@ -35,7 +40,8 @@ export default function EditorPage() {
     await db.songs.update(song.id, {
       title:      meta.title ?? song.title,
       artist:     meta.artist ?? song.artist,
-      searchText: buildSearchText(meta.title ?? song.title, meta.artist ?? song.artist, song.tags, content),
+      tags,
+      searchText: buildSearchText(meta.title ?? song.title, meta.artist ?? song.artist, tags, content),
       updatedAt:  Date.now(),
       transcription: {
         ...song.transcription,
@@ -48,6 +54,33 @@ export default function EditorPage() {
     })
     await markPending('song', song.id)
     setDirty(false)
+  }
+
+  const addTag = (value: string) => {
+    const tag = value.trim().toLowerCase()
+    if (!tag || tags.includes(tag)) return
+    const newTags = [...tags, tag]
+    setTags(newTags)
+    setDirty(true)
+  }
+
+  const removeTag = (tag: string) => {
+    setTags(t => {
+      const updated = t.filter(x => x !== tag)
+      setDirty(true)
+      return updated
+    })
+  }
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const input = e.currentTarget
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addTag(input.value)
+      input.value = ''
+    } else if (e.key === 'Backspace' && input.value === '' && tags.length > 0) {
+      removeTag(tags[tags.length - 1])
+    }
   }
 
   if (!song) return <div className="p-8 text-ink-muted">Loading…</div>
@@ -78,6 +111,36 @@ export default function EditorPage() {
           <Save size={14} />
           Save
         </Button>
+      </div>
+
+      {/* Metadata bar — tags */}
+      <div className="flex items-center gap-2 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0">
+        <Tag size={13} className="text-ink-faint shrink-0" />
+        <div className="flex flex-wrap items-center gap-1 flex-1">
+          {tags.map(tag => (
+            <span
+              key={tag}
+              className="flex items-center gap-1 bg-surface-3 text-ink-muted text-xs px-2 py-0.5 rounded-full"
+            >
+              {tag}
+              <button
+                onClick={() => removeTag(tag)}
+                className="text-ink-faint hover:text-ink leading-none"
+                title="Remove tag"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+          <input
+            ref={tagInputRef}
+            type="text"
+            placeholder={tags.length === 0 ? 'add tags (press Enter or ,)' : 'add tag…'}
+            className="bg-transparent text-xs text-ink placeholder:text-ink-faint outline-none min-w-[100px] py-0.5"
+            onKeyDown={handleTagKeyDown}
+            onBlur={e => { if (e.target.value.trim()) { addTag(e.target.value); e.target.value = '' } }}
+          />
+        </div>
       </div>
 
       {/* Split pane */}
