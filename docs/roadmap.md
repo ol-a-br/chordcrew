@@ -34,13 +34,18 @@
 | **Visual: Section labels [A] [B] [C] via CSS counter** | RENDER-02 | |
 | **Visual: Chorus vertical bar (anonymous + named)** | RENDER-03 | |
 | **Visual: 𝄞 key and ♩ tempo in Viewer + Performance** | VIEW-08–09, PERF-06 | |
+| **Section labels [A][B][C] on real songs (bracket + directive syntax)** | RENDER-02 | |
+| **Chorus vertical bar on real songs (bracket + directive syntax)** | RENDER-03 | |
+| **Transpose: key display "G → A" + first-3-chords preview** | VIEW-02 | |
+| **Column count 1–5, orientation-based default (4 landscape, 2 portrait)** | VIEW-04, PERF | |
+| **Performance mode: page-flip navigation (jumps full screen height)** | PERF-03–04 | |
+| **SetlistDetailPage: ordered song list, click → viewer with setlist nav** | SET-04 | |
 
 ### 🔜 Remaining Phase 1 gaps
 
 | Item | Req IDs | Priority |
 |------|---------|----------|
 | PWA icons: `public/icons/icon-192.png` + `icon-512.png` | PWA-03 | high |
-| `SetlistDetailPage`: view/edit songs within a setlist | SET-04 | high |
 | Pinch-to-zoom on Viewer and Performance pages | VIEW-10, PERF-11 | medium |
 | Firebase setup: create project, enable Auth + Firestore | AUTH-01 | medium |
 | CI/CD: GitHub Actions → Firebase deploy on push to `main` | — | medium |
