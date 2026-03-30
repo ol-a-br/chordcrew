@@ -20,12 +20,12 @@
   @apply text-ink;
 }
 
-/* Multi-column song layout (1–5 columns) */
+/* Multi-column song layout (1–5 columns) — with subtle column separators */
 .chordpro-columns-1 { column-count: 1; }
-.chordpro-columns-2 { column-count: 2; column-gap: 2.5rem; }
-.chordpro-columns-3 { column-count: 3; column-gap: 2rem; }
-.chordpro-columns-4 { column-count: 4; column-gap: 1.5rem; }
-.chordpro-columns-5 { column-count: 5; column-gap: 1.25rem; }
+.chordpro-columns-2 { column-count: 2; column-gap: 2.5rem; column-rule: 1px solid rgba(255,255,255,0.06); }
+.chordpro-columns-3 { column-count: 3; column-gap: 2rem;   column-rule: 1px solid rgba(255,255,255,0.06); }
+.chordpro-columns-4 { column-count: 4; column-gap: 1.5rem; column-rule: 1px solid rgba(255,255,255,0.06); }
+.chordpro-columns-5 { column-count: 5; column-gap: 1.25rem; column-rule: 1px solid rgba(255,255,255,0.06); }
 
 /* Page-flip mode: fixed height + horizontal column flow */
 .chordpro-output.page-flip {
@@ -69,15 +69,29 @@
   display: none;
 }
 
-/* [A] [B] [C] letter badge — injected by JS for both syntaxes */
+/* [A] [B] [C] letter badge — graphical bordered box, injected by JS */
 .chordpro-output .section-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  height: 1.5em;
+  padding: 0 0.2em;
+  border: 1.5px solid #484f58;   /* ink-faint */
+  border-radius: 2px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7em;
-  font-weight: 600;
-  @apply text-ink-faint;
-  margin-right: 0.4em;
+  font-size: 0.85em;
+  font-weight: 700;
+  @apply text-ink-muted;
+  margin-right: 0.5em;
   vertical-align: middle;
   flex-shrink: 0;
+  line-height: 1;
+}
+/* Superscript repeat count: B², C³ */
+.chordpro-output .section-badge sup {
+  font-size: 0.65em;
+  line-height: 1;
 }
 
 /* Each chord+lyric row */
@@ -96,12 +110,38 @@
   white-space: pre;
 }
 
+/* Song title and subtitle from {title:} / {subtitle:} directives */
+.chordpro-output .title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.45em;
+  font-weight: 700;
+  @apply text-ink;
+  margin-bottom: 0.1em;
+  line-height: 1.2;
+}
+.chordpro-output .subtitle {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.72em;
+  @apply text-ink-muted;
+  margin-bottom: 1.25rem;
+}
+
 /* The chord itself — light yellow for dark stage backgrounds */
 .chordpro-output .chord {
   @apply text-chord font-mono font-medium;
   font-size: 0.85em;
   min-height: 1.2em;
   line-height: 1.2;
+}
+/* Chord quality superscript: "sus4" in Dsus4, "maj7" in Amaj7 */
+.chordpro-output .chord-quality {
+  font-size: 0.62em;
+  vertical-align: super;
+  line-height: 1;
+}
+/* Bass note after slash: "/G" in C/G */
+.chordpro-output .chord-bass {
+  font-size: 0.8em;
 }
 
 /* The lyric below the chord */
@@ -139,6 +179,10 @@
   white-space: pre;
   overflow-x: auto;
 }
+
+/* ── Hide scrollbar (for page-flip containers) ───────────────────────────── */
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* ── CodeMirror editor overrides ─────────────────────────────────────────── */
 

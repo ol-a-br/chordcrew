@@ -328,7 +328,8 @@ test('section labels show [A] [B] badge (injected by JS)', async ({ page }) => {
   // JS injects .section-badge siblings for [A] [B] [C] letters
   await expect(page.locator('.chordpro-output .section-badge').first()).toBeVisible({ timeout: 3000 })
   const badgeText = await page.locator('.chordpro-output .section-badge').first().textContent()
-  expect(badgeText?.trim()).toBe('[A]')
+  // Badge shows just the letter; the graphical square box comes from CSS border styling
+  expect(badgeText?.trim()).toBe('A')
 })
 
 test('named chorus section gets .chorus-section class (vertical bar)', async ({ page }) => {

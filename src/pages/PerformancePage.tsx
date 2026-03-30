@@ -6,6 +6,7 @@ import { db } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { useKeyboardNav } from '@/hooks/useKeyboard'
 import { transposeKey } from '@/utils/chordpro'
+import type { SetlistItem } from '@/types'
 
 function getDefaultColumns(): number {
   if (typeof window === 'undefined') return 2
@@ -26,19 +27,18 @@ export default function PerformancePage() {
   const [lyricsOnly, setLyricsOnly]   = useState(false)
   const [fontScale, setFontScale]     = useState(1.15)
   const [showControls, setShowControls] = useState(true)
+
   const contentRef = useRef<HTMLDivElement>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Transposed key display
   const transposedKey = useMemo(
     () => transposeKey(song?.transcription.key ?? '', transpose),
     [song?.transcription.key, transpose]
   )
 
-  // Setlist context: next song id
-  const setlistItems = useLiveQuery<import('@/types').SetlistItem[]>(
-    async () => setlistId ? db.setlistItems.where('setlistId').equals(setlistId).sortBy('order') : [],
+  const setlistItems = useLiveQuery(
+    async (): Promise<SetlistItem[]> => setlistId ? db.setlistItems.where('setlistId').equals(setlistId).sortBy('order') : [],
     [setlistId]
   )
   const songItems = useMemo(
@@ -47,14 +47,14 @@ export default function PerformancePage() {
   )
   const nextSongId = songItems[currentPos + 1]?.songId
 
-  // ── Wake Lock: keep screen on ─────────────────────────────────────────────
+  // ── Wake Lock ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const acquire = async () => {
       try {
         if ('wakeLock' in navigator) {
           wakeLockRef.current = await navigator.wakeLock.request('screen')
         }
-      } catch { /* not supported or denied */ }
+      } catch { /* not supported */ }
     }
     acquire()
     return () => { wakeLockRef.current?.release() }
@@ -72,29 +72,63 @@ export default function PerformancePage() {
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current) }
   }, [resetHideTimer])
 
-  // ── Page-flip navigation: jump by one full screen height ──────────────────
+  // ── Compute CSS column stride for precise column-by-column navigation ─────
+  const getColumnStride = useCallback((): number => {
+    const container = contentRef.current
+    if (!container || columns <= 1) return 0
+    const output = container.querySelector<HTMLElement>('.chordpro-output')
+    if (output) {
+      const style = getComputedStyle(output)
+      const colW = parseFloat(style.columnWidth) || 0
+      const gap  = parseFloat(style.columnGap)   || 0
+      if (colW > 0) return colW + gap
+    }
+    return container.clientWidth / columns
+  }, [columns])
+
+  // ── Navigation ────────────────────────────────────────────────────────────
   const goNext = useCallback(() => {
     const container = contentRef.current
     if (!container) return
-    const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 4
-    if (atBottom && nextSongId && setlistId) {
-      // Advance to next song in setlist
-      navigate(`/perform/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`)
+    resetHideTimer()
+
+    if (columns > 1) {
+      // Horizontal column-by-column flip
+      const stride = getColumnStride()
+      const newLeft = container.scrollLeft + stride
+      container.scrollTo({ left: newLeft, behavior: 'auto' })
+      // At end of horizontal content → advance to next song
+      if (newLeft + container.clientWidth >= container.scrollWidth - 10 && nextSongId && setlistId) {
+        setTimeout(() => navigate(`/perform/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`), 120)
+      }
     } else {
-      container.scrollBy({ top: container.clientHeight, behavior: 'auto' })
+      // Single column: vertical page-flip by full screen height
+      const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 4
+      if (atBottom && nextSongId && setlistId) {
+        navigate(`/perform/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`)
+      } else {
+        container.scrollBy({ top: container.clientHeight, behavior: 'auto' })
+      }
     }
-  }, [nextSongId, setlistId, currentPos, navigate])
+  }, [columns, getColumnStride, nextSongId, setlistId, currentPos, navigate, resetHideTimer])
 
   const goPrev = useCallback(() => {
     const container = contentRef.current
     if (!container) return
-    container.scrollBy({ top: -container.clientHeight, behavior: 'auto' })
-  }, [])
+    resetHideTimer()
+    if (columns > 1) {
+      const stride = getColumnStride()
+      container.scrollTo({ left: Math.max(0, container.scrollLeft - stride), behavior: 'auto' })
+    } else {
+      container.scrollBy({ top: -container.clientHeight, behavior: 'auto' })
+    }
+  }, [columns, getColumnStride, resetHideTimer])
 
-  // ── PageFlip Cicada V7 — Mode 2: Left/Right Arrow ─────────────────────────
   useKeyboardNav({ onNext: goNext, onPrev: goPrev, enabled: true })
 
   if (!song) return null
+
+  const isMultiColumn = columns > 1
 
   return (
     <div
@@ -102,31 +136,27 @@ export default function PerformancePage() {
       onPointerMove={resetHideTimer}
       onTouchStart={resetHideTimer}
     >
-      {/* Controls overlay — auto-hides after 3s */}
+      {/* Controls overlay */}
       <div className={`
-        absolute top-0 inset-x-0 z-10 flex items-center gap-3 px-4 py-3
+        absolute top-0 inset-x-0 z-10 flex items-center gap-2 px-4 py-3
         bg-gradient-to-b from-surface-0/95 to-transparent
         transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}
       `}>
-        {/* Close */}
-        <button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink p-1">
+        <button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink p-1 shrink-0">
           <X size={20} />
         </button>
 
-        {/* Title + artist */}
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-base truncate leading-tight">{song.title}</div>
           {song.artist && <div className="text-xs text-ink-muted truncate">{song.artist}</div>}
         </div>
 
-        {/* Setlist position */}
         {setlistId && songItems.length > 0 && (
           <span className="text-xs font-mono text-ink-faint shrink-0">
             {currentPos + 1}/{songItems.length}
           </span>
         )}
 
-        {/* Key & tempo */}
         {song.transcription.key && (
           <span className="text-xs font-mono text-chord shrink-0" title="Key">
             𝄞 {transpose !== 0 ? `${song.transcription.key} → ${transposedKey}` : song.transcription.key}
@@ -139,12 +169,12 @@ export default function PerformancePage() {
         )}
 
         {/* Transpose */}
-        <div className="flex items-center gap-1 bg-surface-2/80 rounded-lg px-1">
-          <button onClick={() => setTranspose(t => t - 1)} className="p-1.5 text-ink-muted hover:text-ink"><ChevronDown size={15} /></button>
-          <span className="text-xs font-mono w-7 text-center">
+        <div className="flex items-center gap-0.5 bg-surface-2/80 rounded-lg px-1">
+          <button onClick={() => setTranspose(t => t - 1)} className="p-1 text-ink-muted hover:text-ink"><ChevronDown size={15} /></button>
+          <span className="text-xs font-mono w-6 text-center">
             {transpose > 0 ? `+${transpose}` : transpose}
           </span>
-          <button onClick={() => setTranspose(t => t + 1)} className="p-1.5 text-ink-muted hover:text-ink"><ChevronUp size={15} /></button>
+          <button onClick={() => setTranspose(t => t + 1)} className="p-1 text-ink-muted hover:text-ink"><ChevronUp size={15} /></button>
         </div>
 
         {/* Column count 1–5 */}
@@ -160,39 +190,59 @@ export default function PerformancePage() {
           ))}
         </div>
 
-        {/* Lyrics only */}
         <button
           onClick={() => setLyricsOnly(l => !l)}
-          className={`p-1.5 rounded ${lyricsOnly ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
+          className={`p-1.5 rounded shrink-0 ${lyricsOnly ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
         >
-          <AlignLeft size={16} />
+          <AlignLeft size={15} />
         </button>
 
-        {/* Font */}
-        <button onClick={() => setFontScale(s => Math.max(0.8, s - 0.1))} className="p-1 text-ink-muted hover:text-ink">
-          <ZoomOut size={16} />
+        <button onClick={() => setFontScale(s => Math.max(0.8, s - 0.1))} className="p-1 text-ink-muted hover:text-ink shrink-0">
+          <ZoomOut size={15} />
         </button>
-        <button onClick={() => setFontScale(s => Math.min(2.5, s + 0.1))} className="p-1 text-ink-muted hover:text-ink">
-          <ZoomIn size={16} />
+        <button onClick={() => setFontScale(s => Math.min(2.5, s + 0.1))} className="p-1 text-ink-muted hover:text-ink shrink-0">
+          <ZoomIn size={15} />
         </button>
       </div>
 
-      {/* Song content — page-flip scroll (jumps by screen height) */}
-      <div
-        ref={contentRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-16 pb-6"
-        onClick={resetHideTimer}
-      >
-        <SongRenderer
-          content={song.transcription.content}
-          transposeOffset={transpose}
-          columns={columns}
-          lyricsOnly={lyricsOnly}
-          fontScale={fontScale}
-        />
-      </div>
+      {/* Song content */}
+      {isMultiColumn ? (
+        /* Multi-column: horizontal column-by-column flip, scrollbar hidden */
+        <div
+          ref={contentRef}
+          className="flex-1 overflow-x-auto overflow-y-hidden hide-scrollbar"
+          onClick={resetHideTimer}
+        >
+          {/* Inner wrapper: gives SongRenderer a definite height for CSS column-fill: auto */}
+          <div className="h-full pt-16 px-6 pb-6">
+            <SongRenderer
+              content={song.transcription.content}
+              transposeOffset={transpose}
+              columns={columns}
+              lyricsOnly={lyricsOnly}
+              fontScale={fontScale}
+              pageFlip
+            />
+          </div>
+        </div>
+      ) : (
+        /* Single column: vertical page-flip */
+        <div
+          ref={contentRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-16 pb-6"
+          onClick={resetHideTimer}
+        >
+          <SongRenderer
+            content={song.transcription.content}
+            transposeOffset={transpose}
+            columns={1}
+            lyricsOnly={lyricsOnly}
+            fontScale={fontScale}
+          />
+        </div>
+      )}
 
-      {/* Bottom tap zones — tap left/right half to navigate */}
+      {/* Tap zones: left half = prev, right half = next */}
       <div className="absolute inset-x-0 bottom-0 top-16 flex pointer-events-none">
         <div className="flex-1 pointer-events-auto" onClick={goPrev} />
         <div className="flex-1 pointer-events-auto" onClick={goNext} />

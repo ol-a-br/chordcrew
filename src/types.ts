@@ -43,6 +43,7 @@ export interface Song {
   isFavorite: boolean
   savedAt: number
   updatedAt: number
+  accessedAt?: number       // last time the song was opened in viewer (for "recently accessed" sort)
   transcription: Transcription
 }
 
@@ -133,10 +134,11 @@ export interface SyncState {
 export interface AppSettings {
   language: 'en' | 'de'
   darkMode: boolean
-  defaultColumnCount: 1 | 2 | 3
-  pedalKeyNext: string      // keydown event.key, default "ArrowRight"
-  pedalKeyPrev: string      // keydown event.key, default "ArrowLeft"
-  fontScale: number         // multiplier, default 1.0
+  defaultColumnCount: number  // 1–5
+  pedalKeyNext: string        // keydown event.key, default "ArrowRight"
+  pedalKeyPrev: string        // keydown event.key, default "ArrowLeft"
+  fontScale: number           // multiplier, default 1.0
+  continuousScroll: boolean   // false = page-flip (default), true = continuous scroll
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -146,6 +148,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pedalKeyNext: 'ArrowRight',
   pedalKeyPrev: 'ArrowLeft',
   fontScale: 1.0,
+  continuousScroll: false,
 }
 
 // ─── chords.wiki import types ─────────────────────────────────────────────────

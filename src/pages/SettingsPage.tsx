@@ -60,8 +60,8 @@ export default function SettingsPage() {
           </Row>
 
           <Row label={t('settings.defaultColumns')}>
-            <div className="flex gap-1 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
-              {([1, 2, 3] as const).map(n => (
+            <div className="flex gap-0 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
+              {[1, 2, 3, 4, 5].map(n => (
                 <button
                   key={n}
                   onClick={() => update({ defaultColumnCount: n })}
@@ -70,6 +70,23 @@ export default function SettingsPage() {
                   {n}
                 </button>
               ))}
+            </div>
+          </Row>
+
+          <Row label="Page navigation">
+            <div className="flex gap-0 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
+              <button
+                onClick={() => update({ continuousScroll: false })}
+                className={`px-3 py-1.5 text-sm ${!settings.continuousScroll ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:text-ink'}`}
+              >
+                Flip
+              </button>
+              <button
+                onClick={() => update({ continuousScroll: true })}
+                className={`px-3 py-1.5 text-sm ${settings.continuousScroll ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:text-ink'}`}
+              >
+                Scroll
+              </button>
             </div>
           </Row>
         </div>

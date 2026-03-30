@@ -2,12 +2,25 @@ import ChordSheetJS from 'chordsheetjs'
 
 const { ChordProParser, HtmlDivFormatter, TextFormatter } = ChordSheetJS
 
+// ─── Preprocess chords.wiki extensions before standard parse ─────────────────
+// {sop: Name} / {start_of_part: Name} → {start_of_verse: Name}
+// {eop} / {end_of_part} → {end_of_verse}
+// These are chords.wiki-specific and not supported by chordsheetjs natively.
+
+export function preprocessChordPro(content: string): string {
+  return content
+    .replace(/\{sop\s*:\s*([^}]+)\}/gi, '{start_of_verse: $1}')
+    .replace(/\{start_of_part\s*:\s*([^}]+)\}/gi, '{start_of_verse: $1}')
+    .replace(/\{eop\b[^}]*\}/gi, '{end_of_verse}')
+    .replace(/\{end_of_part\b[^}]*\}/gi, '{end_of_verse}')
+}
+
 // ─── Parse ────────────────────────────────────────────────────────────────────
 
 export function parseChordPro(content: string) {
   const parser = new ChordProParser()
   try {
-    return parser.parse(content)
+    return parser.parse(preprocessChordPro(content))
   } catch {
     // Return empty song on parse error
     return parser.parse('{title:Parse Error}\n')

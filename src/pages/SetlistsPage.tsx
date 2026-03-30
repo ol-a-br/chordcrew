@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -8,17 +8,26 @@ import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
 import type { Setlist } from '@/types'
 
+type SetlistSort = 'name' | 'updatedAt' | 'createdAt'
+
 export default function SetlistsPage() {
   const { t } = useTranslation()
   const { user } = useAuth()
   const navigate = useNavigate()
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
+  const [sortBy, setSortBy] = useState<SetlistSort>('updatedAt')
 
-  const setlists = useLiveQuery(
-    () => db.setlists.orderBy('updatedAt').reverse().toArray(),
-    []
-  )
+  const setlistsRaw = useLiveQuery(() => db.setlists.toArray(), [])
+
+  const setlists = useMemo(() => {
+    const s = [...(setlistsRaw ?? [])]
+    switch (sortBy) {
+      case 'name':      return s.sort((a, b) => a.name.localeCompare(b.name))
+      case 'createdAt': return s.sort((a, b) => b.createdAt - a.createdAt)
+      default:          return s.sort((a, b) => b.updatedAt - a.updatedAt)
+    }
+  }, [setlistsRaw, sortBy])
 
   const createSetlist = async () => {
     if (!user || !newName.trim()) return
@@ -37,8 +46,17 @@ export default function SetlistsPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">{t('nav.setlists')}</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="text-lg font-semibold flex-1">{t('nav.setlists')}</h1>
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as SetlistSort)}
+          className="bg-surface-2 text-xs text-ink-muted rounded-lg px-2 py-1.5 border border-surface-3 focus:outline-none cursor-pointer"
+        >
+          <option value="updatedAt">Last edited</option>
+          <option value="name">Name</option>
+          <option value="createdAt">Date created</option>
+        </select>
         <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
           <Plus size={15} />
           {t('setlist.newSetlist')}

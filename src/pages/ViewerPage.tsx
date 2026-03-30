@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -6,6 +6,7 @@ import { db } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
 import { transposeKey, getFirstChords } from '@/utils/chordpro'
+import type { SetlistItem } from '@/types'
 
 function getDefaultColumns(): number {
   if (typeof window === 'undefined') return 2
@@ -27,8 +28,13 @@ export default function ViewerPage() {
   const [fontScale, setFontScale] = useState(1.0)
 
   // Setlist context for prev/next navigation
-  const setlistItems = useLiveQuery<import('@/types').SetlistItem[]>(
-    async () => setlistId ? db.setlistItems.where('setlistId').equals(setlistId).sortBy('order') : [],
+  // Track last-accessed time for "recently accessed" sort in library
+  useEffect(() => {
+    if (id) db.songs.update(id, { accessedAt: Date.now() })
+  }, [id])
+
+  const setlistItems = useLiveQuery(
+    async (): Promise<SetlistItem[]> => setlistId ? db.setlistItems.where('setlistId').equals(setlistId).sortBy('order') : [],
     [setlistId]
   )
   const songItems = useMemo(

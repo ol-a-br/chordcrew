@@ -1,6 +1,5 @@
 import { useMemo, useRef, useEffect } from 'react'
-import { renderToHtml } from '@/utils/chordpro'
-import { isKnownChord } from '@/utils/chordpro'
+import { renderToHtml, isKnownChord } from '@/utils/chordpro'
 import { clsx } from 'clsx'
 
 interface SongRendererProps {
@@ -21,6 +20,16 @@ function isChorusLabel(text: string): boolean {
   return CHORUS_TERMS.some(t => lower === t || lower.startsWith(t + ' ') || lower.startsWith(t + '-'))
 }
 
+/** Split a chord name into root + quality + bass. E.g. "Dsus4/A" → {root:"D", quality:"sus4", bass:"/A"} */
+function splitChordName(chord: string): { root: string; quality: string; bass: string } {
+  const slashIdx = chord.indexOf('/')
+  const bass = slashIdx !== -1 ? chord.slice(slashIdx) : ''
+  const main = slashIdx !== -1 ? chord.slice(0, slashIdx) : chord
+  const m = main.match(/^([A-G][b#]?)(.*)$/)
+  if (!m) return { root: chord, quality: '', bass: '' }
+  return { root: m[1], quality: m[2], bass }
+}
+
 export function SongRenderer({
   content,
   transposeOffset = 0,
@@ -37,42 +46,60 @@ export function SongRenderer({
     [content, transposeOffset]
   )
 
-  // Post-process: detect section headers (both directive h3.label and bracket-notation)
-  // and inject [A][B][C] badges + chorus vertical bar classes.
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
-    // Clear previous injections
+    // ── Clear previous injections ─────────────────────────────────────────────
     container.querySelectorAll('.section-badge').forEach(el => el.remove())
     container.querySelectorAll('.chorus-section, .section-header-row').forEach(el => {
       el.classList.remove('chorus-section', 'section-header-row')
     })
 
-    let sectionIndex = 0
+    // ── Track section names → letters + repeat counts ─────────────────────────
+    const nameToLetter = new Map<string, string>()
+    const letterCount  = new Map<string, number>()
+    let nextIdx = 0
 
+    function assignBadge(sectionName: string): { letter: string; count: number } {
+      const key = sectionName.toLowerCase().trim()
+      if (nameToLetter.has(key)) {
+        const letter = nameToLetter.get(key)!
+        const count = (letterCount.get(letter) ?? 0) + 1
+        letterCount.set(letter, count)
+        return { letter, count }
+      }
+      nextIdx++
+      const letter = String.fromCharCode(64 + nextIdx) // A=65
+      nameToLetter.set(key, letter)
+      letterCount.set(letter, 1)
+      return { letter, count: 1 }
+    }
+
+    function makeBadgeHtml(letter: string, count: number): string {
+      return count === 1 ? letter : `${letter}<sup>${count}</sup>`
+    }
+
+    function injectBadge(anchor: Element, sectionName: string): void {
+      const { letter, count } = assignBadge(sectionName)
+      const badge = document.createElement('span')
+      badge.className = 'section-badge'
+      badge.innerHTML = makeBadgeHtml(letter, count)
+      anchor.parentElement?.insertBefore(badge, anchor)
+    }
+
+    // ── Process each paragraph in document order ──────────────────────────────
     container.querySelectorAll<HTMLElement>('.paragraph').forEach(para => {
 
-      // ── Case 1: Directive-based sections have h3.label elements ──────────
-      // Multiple named sections can share one paragraph (chordsheetjs merges them).
+      // Case 1: Directive-based sections — chordsheetjs outputs h3.label
+      // Multiple named sections can share one paragraph (they merge).
       const labelEls = para.querySelectorAll<HTMLElement>('h3.label')
       if (labelEls.length > 0) {
         labelEls.forEach(labelEl => {
-          sectionIndex++
-          const letter = String.fromCharCode(64 + sectionIndex) // 65='A'
-          const labelText = labelEl.textContent ?? ''
+          const name = labelEl.textContent ?? ''
+          injectBadge(labelEl, name)
 
-          // Inject badge as sibling BEFORE h3.label inside its .row
-          const row = labelEl.parentElement
-          if (row) {
-            const badge = document.createElement('span')
-            badge.className = 'section-badge'
-            badge.textContent = `[${letter}]`
-            row.insertBefore(badge, labelEl)
-          }
-
-          // Chorus detection: mark rows from this label to the next label
-          if (isChorusLabel(labelText)) {
+          if (isChorusLabel(name)) {
             const labelRow = labelEl.closest<HTMLElement>('.row')
             if (labelRow) {
               labelRow.classList.add('chorus-section')
@@ -88,10 +115,8 @@ export function SongRenderer({
         return
       }
 
-      // ── Case 2: Bracket-notation section header ───────────────────────────
-      // Pattern: first .row has exactly one .column, the .chord contains the
-      // section name (not a real chord), and .lyrics is empty.
-      // Each bracket-section gets its own .paragraph — so we mark the whole paragraph.
+      // Case 2: Bracket-notation section header
+      // Pattern: first .row has exactly one .column with section-name in .chord and empty .lyrics
       const firstRow = para.querySelector<HTMLElement>(':scope > .row')
       if (!firstRow) return
 
@@ -104,23 +129,34 @@ export function SongRenderer({
 
       const chordText = chordEl.textContent?.trim() ?? ''
       if (!chordText || lyricsEl.textContent?.trim() !== '') return
-      if (isKnownChord(chordText)) return  // It's a real chord, not a section name
+      if (isKnownChord(chordText)) return
 
-      // Mark as section header
-      sectionIndex++
-      const letter = String.fromCharCode(64 + sectionIndex)
       firstRow.classList.add('section-header-row')
-
-      // Inject badge before the column inside the row
+      // Inject badge directly before first child of the row
+      const { letter, count } = assignBadge(chordText)
       const badge = document.createElement('span')
       badge.className = 'section-badge'
-      badge.textContent = `[${letter}]`
+      badge.innerHTML = makeBadgeHtml(letter, count)
       firstRow.insertBefore(badge, firstRow.firstChild)
 
-      // Chorus: mark the entire paragraph (bracket sections have their own paragraph)
       if (isChorusLabel(chordText)) {
         para.classList.add('chorus-section')
       }
+    })
+
+    // ── Chord quality superscript pass ────────────────────────────────────────
+    // Split chord names into root (normal size) + quality (smaller superscript)
+    container.querySelectorAll<HTMLElement>('.chord').forEach(el => {
+      if (el.closest('.section-header-row')) return     // skip section names
+      if (el.querySelector('span')) return              // already processed
+      const text = el.textContent?.trim() ?? ''
+      if (!text || !isKnownChord(text)) return
+      const { root, quality, bass } = splitChordName(text)
+      if (!quality && !bass) return                     // simple root like 'A', 'G'
+      el.innerHTML =
+        `<span>${root}</span>` +
+        (quality ? `<sup class="chord-quality">${quality}</sup>` : '') +
+        (bass    ? `<span class="chord-bass">${bass}</span>` : '')
     })
   }, [html])
 

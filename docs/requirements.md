@@ -40,7 +40,9 @@
 | LIB-06 | Song row shows key badge and favorite star. | done |
 | LIB-07 | Sort: alphabetical by title (default). | done |
 | LIB-08 | Filter by key, tag, artist, BPM range. | planned |
-| LIB-09 | Sort by artist, key, last modified, recently used. | planned |
+| LIB-09 | Sort songs: by title, artist, last modified, date created, recently accessed. | planned |
+| LIB-10 | Tag browser in sidebar: list all unique tags (case-insensitive), click to filter. | planned |
+| LIB-11 | Tag editing: add/remove tags on a song from the editor metadata panel. | planned |
 
 ---
 
@@ -88,6 +90,11 @@
 | RENDER-06 | Comment lines styled as muted italic. | done |
 | RENDER-07 | Tab blocks displayed in monospace with horizontal scroll. | done |
 | RENDER-08 | Lyrics-only mode hides chord row height and collapses `.column` to inline. | done |
+| RENDER-09 | {start_of_part:}/{sop:} directives preprocessed → standard labeled sections before chordsheetjs parse. | planned |
+| RENDER-10 | Song title ({title:}) styled larger; subtitle ({subtitle:}) styled smaller and muted in renderer output. | planned |
+| RENDER-11 | Chord quality/modifier rendered as smaller superscript (e.g. Dsus4 → D + ˢᵘˢ⁴). | planned |
+| RENDER-12 | Vertical separator lines between columns (column-rule CSS). | planned |
+| RENDER-13 | Section badge rendered as graphical bordered box; repeated sections show superscript count (B²). | planned |
 
 ---
 
@@ -106,6 +113,7 @@
 | PERF-09 | Song counter "Song 3 of 8" in header during setlist performance. | planned |
 | PERF-10 | Quick-jump slide-out tray for non-sequential navigation. | planned |
 | PERF-11 | Pinch-to-zoom in performance mode. | planned |
+| PERF-12 | Multi-column mode: horizontal column-by-column page flip, scrollbar hidden. Single-column uses vertical page flip. | planned |
 
 ---
 
@@ -186,6 +194,8 @@
 | SETTINGS-03 | Pedal key reassignment (Next / Prev) via key capture. | done |
 | SETTINGS-04 | Clear local database (with confirmation). | done |
 | SETTINGS-05 | Font scale preference persisted per device. | planned |
+| SETTINGS-06 | Default column count extended to 1–5. | planned |
+| SETTINGS-07 | Continuous scroll mode toggle: when off (default), multi-column uses page-flip navigation. | planned |
 
 ---
 
@@ -203,4 +213,4 @@
 
 ---
 
-*Last updated: 2026-03-29*
+*Last updated: 2026-03-30*

@@ -46,6 +46,14 @@
 | Item | Req IDs | Priority |
 |------|---------|----------|
 | PWA icons: `public/icons/icon-192.png` + `icon-512.png` | PWA-03 | high |
+| {start_of_part:}/{sop:} section preprocessing | RENDER-09 | high |
+| Title/subtitle styled properly in renderer | RENDER-10 | high |
+| Chord modifier superscript | RENDER-11 | high |
+| Column separator lines | RENDER-12 | medium |
+| Section badge: graphical box + repeat tracking | RENDER-13 | high |
+| Horizontal column-by-column page flip (no scrollbar) | PERF-12 | high |
+| Sort options in Library | LIB-09 | medium |
+| Tag browser in sidebar | LIB-10 | medium |
 | Pinch-to-zoom on Viewer and Performance pages | VIEW-10, PERF-11 | medium |
 | Firebase setup: create project, enable Auth + Firestore | AUTH-01 | medium |
 | CI/CD: GitHub Actions → Firebase deploy on push to `main` | — | medium |
@@ -70,7 +78,8 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 | Annotations: text, highlight, symbol (private + shared) | — | low |
 | Song version diff view + one-tap restore | ED-05 | low |
 | Chord validation highlighting in editor | ED-07 | low |
-| Filter/sort library: key, tag, artist, BPM, recently used | LIB-08–09 | low |
+| Filter library: key, tag, artist, BPM | LIB-08 | low |
+| Tag browser + tag editing (LIB-09 covers sort; see Phase 1 gaps) | LIB-10–11 | low |
 | Capo helper hint in viewer | VIEW-11 | low |
 | Font scale persisted in settings | SETTINGS-05 | low |
 | Setlist planned date/time field | SET-11 | low |
@@ -128,7 +137,9 @@ Focus: Firestore sync, team sharing, edit presence.
 | 2026-03-29 | Section labels: CSS counter [A][B][C] | Musician convention for rehearsal ("go to letter B") |
 | 2026-03-29 | Chorus bar: JS DOM post-process in SongRenderer | chordsheetjs doesn't add `.chorus` class on named sections |
 | 2026-03-29 | Key/tempo: from `song.transcription`, not renderer | chordsheetjs HtmlDivFormatter strips all metadata directives |
+| 2026-03-30 | Section badges: graphical bordered box with repeat superscript | Matches chords.wiki convention; makes repeated sections (A, B, B², C) instantly recognizable on stage |
+| 2026-03-30 | Horizontal page-flip for multi-column | Eliminates accidental scroll; pedal/tap always advances exactly one column at a time |
 
 ---
 
-*Last updated: 2026-03-29*
+*Last updated: 2026-03-30*
