@@ -84,7 +84,7 @@ export function SongRenderer({
     }
 
     function makeBadgeHtml(letter: string, count: number): string {
-      return count === 1 ? letter : `${letter}<sup>${count}</sup>`
+      return count === 1 ? letter : `${letter}${count}`
     }
 
     function injectBadge(anchor: Element, sectionName: string): void {
@@ -175,6 +175,19 @@ export function SongRenderer({
         `<span>${root}</span>` +
         (quality ? `<span class="chord-quality">${quality}</span>` : '') +
         (bass    ? `<span class="chord-bass">${bass}</span>` : '')
+    })
+    // ── Inline chord rows (from {inline:} directive) ──────────────────────────
+    // The preprocessor emits {comment: __inline__} on the line before the chord
+    // content. We hide the marker and make the chord row render inline (same
+    // baseline as the surrounding |, / characters).
+    container.querySelectorAll<HTMLElement>('.comment').forEach(commentEl => {
+      if (commentEl.textContent?.trim() !== '__inline__') return
+      commentEl.classList.add('inline-marker')
+      let sib = commentEl.nextElementSibling
+      while (sib && !sib.classList.contains('row')) {
+        sib = sib.nextElementSibling
+      }
+      if (sib) sib.classList.add('inline-chord-row')
     })
   }, [html])
 

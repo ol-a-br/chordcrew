@@ -14,8 +14,11 @@ export function preprocessChordPro(content: string): string {
     .replace(/\{start_of_part\s*:\s*([^}]+)\}/gi, '{start_of_verse: $1}')
     .replace(/\{eop\b[^}]*\}/gi, '{end_of_verse}')
     .replace(/\{end_of_part\b[^}]*\}/gi, '{end_of_verse}')
-    // {inline: [C] / / / | [F] / / / |} → strip wrapper; inner content is standard ChordPro
-    .replace(/\{inline\s*:\s*([^}]+)\}/gi, (_m, c: string) => c.trim())
+    // {inline: [C] / / / | [F] / / / |} → mark as inline-chord row, then the chord content.
+    // A __inline__ comment marker signals SongRenderer to render chords on the same baseline
+    // as the surrounding characters (|, /) instead of floating above them.
+    .replace(/\{inline\s*:\s*([^}]+)\}/gi, (_m, c: string) =>
+      `{comment: __inline__}\n${c.trim()}`)
     // {repeat: Chorus} or {repeat: Chorus 2x} → rendered as a comment with ↺ indicator
     .replace(/\{repeat\s*:\s*([^}]+)\}/gi, (_m, c: string) => {
       const s = c.trim().replace(/\s+/g, ' ')

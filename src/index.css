@@ -111,11 +111,17 @@
   white-space: pre;
 }
 
-/* Song title and subtitle from {title:} / {subtitle:} directives
-   Hidden in renderer: they are already shown in the toolbar/header above the song.
-   Showing them twice would duplicate information. */
-.chordpro-output .title   { display: none; }
-.chordpro-output .subtitle { display: none; }
+/* Song title from {title:} directive — hidden; shown in toolbar above song */
+.chordpro-output .title { display: none; }
+
+/* Subtitle from {subtitle:} directive — shown in renderer, smaller and muted */
+.chordpro-output .subtitle {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.85em;
+  @apply text-ink-muted;
+  margin-bottom: 0.4rem;
+  line-height: 1.4;
+}
 
 /* The chord itself — light yellow for dark stage backgrounds */
 .chordpro-output .chord {
@@ -177,6 +183,23 @@
   @apply font-mono text-sm text-ink-muted bg-surface-2 rounded p-3 my-2;
   white-space: pre;
   overflow-x: auto;
+}
+
+/* ── Inline chord rows (from {inline:} directive) ───────────────────────── */
+/* Chords appear on the same baseline as the surrounding |, / characters     */
+.chordpro-output .inline-marker { display: none; }
+
+.chordpro-output .inline-chord-row {
+  min-height: unset;
+  align-items: baseline;
+}
+.chordpro-output .inline-chord-row .column {
+  flex-direction: row;
+  align-items: baseline;
+}
+.chordpro-output .inline-chord-row .chord {
+  min-height: unset;
+  line-height: inherit;
 }
 
 /* ── Hide scrollbar (for page-flip containers) ───────────────────────────── */

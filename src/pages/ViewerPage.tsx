@@ -80,7 +80,7 @@ export default function ViewerPage() {
 
         {/* Song info */}
         <div className="flex-1 min-w-0 mr-2">
-          <h1 className="font-semibold text-base truncate leading-tight">{song.title}</h1>
+          <h1 className="font-semibold text-lg truncate leading-tight">{song.title}</h1>
           {song.artist && <p className="text-xs text-ink-muted truncate">{song.artist}</p>}
         </div>
 
