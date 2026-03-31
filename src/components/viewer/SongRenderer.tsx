@@ -20,14 +20,21 @@ function isChorusLabel(text: string): boolean {
   return CHORUS_TERMS.some(t => lower === t || lower.startsWith(t + ' ') || lower.startsWith(t + '-'))
 }
 
-/** Split a chord name into root + quality + bass. E.g. "Dsus4/A" → {root:"D", quality:"sus4", bass:"/A"} */
+/** Split a chord name into root + quality + bass. E.g. "Dsus4/A" → {root:"D", quality:"sus4", bass:"/A"}
+ *  Parenthesized modifiers are normalised: "D(4)" → {root:"D", quality:"4", bass:""}
+ */
 function splitChordName(chord: string): { root: string; quality: string; bass: string } {
   const slashIdx = chord.indexOf('/')
   const bass = slashIdx !== -1 ? chord.slice(slashIdx) : ''
   const main = slashIdx !== -1 ? chord.slice(0, slashIdx) : chord
   const m = main.match(/^([A-G][b#]?)(.*)$/)
   if (!m) return { root: chord, quality: '', bass: '' }
-  return { root: m[1], quality: m[2], bass }
+  let quality = m[2]
+  // Normalize parenthesized modifier: "(4)" → "4"
+  if (quality.startsWith('(') && quality.endsWith(')')) {
+    quality = quality.slice(1, -1)
+  }
+  return { root: m[1], quality, bass }
 }
 
 export function SongRenderer({

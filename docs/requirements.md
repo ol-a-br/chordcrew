@@ -22,7 +22,7 @@
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| AUTH-01 | Google Sign-In via Firebase Auth. | planned |
+| AUTH-01 | Google Sign-In via Firebase Auth. | done |
 | AUTH-02 | Local-mode guest user when Firebase is not configured — full offline functionality. | done |
 | AUTH-03 | LoginPage shown when not authenticated; guest user bypasses it in local mode. | done |
 
@@ -40,9 +40,9 @@
 | LIB-06 | Song row shows key badge and favorite star. | done |
 | LIB-07 | Sort: alphabetical by title (default). | done |
 | LIB-08 | Filter by key, tag, artist, BPM range. | planned |
-| LIB-09 | Sort songs: by title, artist, last modified, date created, recently accessed. | planned |
-| LIB-10 | Tag browser in sidebar: list all unique tags (case-insensitive), click to filter. | planned |
-| LIB-11 | Tag editing: add/remove tags on a song from the editor metadata panel. | planned |
+| LIB-09 | Sort songs: by title, artist, last modified, date created, recently accessed. | done |
+| LIB-10 | Tag browser in sidebar: list all unique tags (case-insensitive), click to filter. | done |
+| LIB-11 | Tag editing: add/remove tags on a song from the editor metadata panel. | done |
 
 ---
 
@@ -90,11 +90,12 @@
 | RENDER-06 | Comment lines styled as muted italic. | done |
 | RENDER-07 | Tab blocks displayed in monospace with horizontal scroll. | done |
 | RENDER-08 | Lyrics-only mode hides chord row height and collapses `.column` to inline. | done |
-| RENDER-09 | {start_of_part:}/{sop:} directives preprocessed → standard labeled sections before chordsheetjs parse. | planned |
-| RENDER-10 | Song title ({title:}) styled larger; subtitle ({subtitle:}) styled smaller and muted in renderer output. | planned |
-| RENDER-11 | Chord quality/modifier rendered as smaller superscript (e.g. Dsus4 → D + ˢᵘˢ⁴). | planned |
-| RENDER-12 | Vertical separator lines between columns (column-rule CSS). | planned |
-| RENDER-13 | Section badge rendered as graphical bordered box; repeated sections show superscript count (B²). | planned |
+| RENDER-09 | {start_of_part:}/{sop:} directives preprocessed → standard labeled sections before chordsheetjs parse. | done |
+| RENDER-10 | Song title ({title:}) styled larger; subtitle ({subtitle:}) styled smaller and muted in renderer output. | done |
+| RENDER-11 | Chord quality/modifier rendered as smaller superscript (e.g. Dsus4 → D + sup); numeric modifiers (D4, C2, D(4)) supported. | done |
+| RENDER-12 | Vertical separator lines between columns (column-rule CSS). | done |
+| RENDER-13 | Section badge rendered as graphical bordered box; repeated sections show superscript count (B²). | done |
+| RENDER-14 | Spaces between adjacent chords in chord-only lines preserved in rendered output. | done |
 
 ---
 
@@ -108,12 +109,12 @@
 | PERF-04 | Tap left/right half of screen to navigate columns. | done |
 | PERF-05 | Controls overlay auto-hides after 3 s; reappears on pointer/touch. | done |
 | PERF-06 | Key (𝄞) and tempo (♩) shown in controls overlay. | done |
-| PERF-07 | Column-by-column navigation: last column → advance to next song in setlist. | planned |
+| PERF-07 | Column-by-column navigation: last column → advance to next song in setlist. | done |
 | PERF-08 | Long-press ArrowRight = skip to next song; long-press ArrowLeft = back to start. | planned |
 | PERF-09 | Song counter "Song 3 of 8" in header during setlist performance. | planned |
 | PERF-10 | Quick-jump slide-out tray for non-sequential navigation. | planned |
 | PERF-11 | Pinch-to-zoom in performance mode. | planned |
-| PERF-12 | Multi-column mode: horizontal column-by-column page flip, scrollbar hidden. Single-column uses vertical page flip. | planned |
+| PERF-12 | Multi-column mode: horizontal column-by-column page flip, scrollbar hidden. Single-column uses vertical page flip. | done |
 
 ---
 
@@ -195,7 +196,24 @@
 | SETTINGS-04 | Clear local database (with confirmation). | done |
 | SETTINGS-05 | Font scale preference persisted per device. | planned |
 | SETTINGS-06 | Default column count extended to 1–5. | planned |
-| SETTINGS-07 | Continuous scroll mode toggle: when off (default), multi-column uses page-flip navigation. | planned |
+| SETTINGS-07 | Continuous scroll mode toggle: when off (default), multi-column uses page-flip navigation. | done |
+
+---
+
+## REQ-TEAMS — Teams & Collaboration (Phase 3)
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| TEAMS-01 | Support for multiple teams; a user can be a member of more than one team. | planned |
+| TEAMS-02 | Each team has a shared song library and setlist space visible to all team members. | planned |
+| TEAMS-03 | Team roles: Owner (full admin), Contributor (create/edit songs and setlists), Reader (view only). | planned |
+| TEAMS-04 | Owners can invite members by Google email, remove members, and change member roles. | planned |
+| TEAMS-05 | Songs and setlists are scoped to either personal space or a named team space. | planned |
+| TEAMS-06 | Copy a song to another book or team space (original remains). | planned |
+| TEAMS-07 | Move a song to another book or team space (removes from source). | planned |
+| TEAMS-08 | Reader role: can view and transpose songs but cannot edit or delete. | planned |
+| TEAMS-09 | Contributor role: can add, edit, and delete songs and setlists within the team space. | planned |
+| TEAMS-10 | Owner role: all Contributor rights plus manage membership and roles. | planned |
 
 ---
 
@@ -213,4 +231,4 @@
 
 ---
 
-*Last updated: 2026-03-30*
+*Last updated: 2026-03-31*

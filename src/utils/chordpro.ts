@@ -125,12 +125,21 @@ export function buildSearchText(
 // ─── Standard chord names (for validation hints) ─────────────────────────────
 
 const ROOTS = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
-const QUALITIES = ['', 'm', 'maj7', 'm7', '7', 'sus2', 'sus4', 'dim', 'aug', 'add9', '6', '9', '11', '13', 'maj9', 'm9', 'mmaj7', 'dim7', 'm7b5', '5']
+const QUALITIES = ['', 'm', 'maj7', 'm7', '7', 'sus2', 'sus4', 'dim', 'aug', 'add9', '6', '9', '11', '13', 'maj9', 'm9', 'mmaj7', 'dim7', 'm7b5', '5', '2', '4']
 
 export function isKnownChord(chord: string): boolean {
-  // Strip bass note
   const base = chord.split('/')[0]
-  return ROOTS.some(r => QUALITIES.some(q => base === r + q))
+  for (const r of ROOTS) {
+    if (!base.startsWith(r)) continue
+    const quality = base.slice(r.length)
+    // Normalize parenthesized modifier: "(4)" → "4"
+    const normalized = (quality.startsWith('(') && quality.endsWith(')'))
+      ? quality.slice(1, -1) : quality
+    if (QUALITIES.includes(normalized)) return true
+    // Accept pure numeric modifiers (number-notation style: D4, C2, G(4))
+    if (/^\d{1,2}$/.test(normalized)) return true
+  }
+  return false
 }
 
 // ─── Transpose a key name by N semitones ──────────────────────────────────────

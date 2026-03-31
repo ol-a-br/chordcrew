@@ -40,22 +40,26 @@
 | **Column count 1–5, orientation-based default (4 landscape, 2 portrait)** | VIEW-04, PERF | |
 | **Performance mode: page-flip navigation (jumps full screen height)** | PERF-03–04 | |
 | **SetlistDetailPage: ordered song list, click → viewer with setlist nav** | SET-04 | |
+| **Sort songs: title / artist / last modified / recently accessed** | LIB-09 | |
+| **Tag browser in Library sidebar + tag editing in Editor** | LIB-10, LIB-11 | |
+| **{start_of_part:}/{sop:} section preprocessing** | RENDER-09 | |
+| **Title/subtitle hidden in renderer (shown in toolbar only)** | RENDER-10 | |
+| **Chord modifier superscript (Dsus4 → D+sup, D4 → D+sup 4, D(4) → D+sup 4)** | RENDER-11 | |
+| **Chord-only line spacing: column-gap preserves spaces between chords** | RENDER-14 | |
+| **Column separator lines** | RENDER-12 | |
+| **Section badge: graphical box + repeat tracking (B²)** | RENDER-13 | |
+| **Horizontal column-by-column page flip (no scrollbar)** | PERF-12 | |
+| **Column navigation advances to next setlist song at end** | PERF-07 | |
+| **Recently opened sort for Setlists** | — | |
+| **Firebase Auth (Google Sign-In) + deployed to chordcrew-50c55.web.app** | AUTH-01 | |
+| **Continuous scroll mode toggle in Settings** | SETTINGS-07 | |
 
 ### 🔜 Remaining Phase 1 gaps
 
 | Item | Req IDs | Priority |
 |------|---------|----------|
 | PWA icons: `public/icons/icon-192.png` + `icon-512.png` | PWA-03 | high |
-| {start_of_part:}/{sop:} section preprocessing | RENDER-09 | high |
-| Title/subtitle styled properly in renderer | RENDER-10 | high |
-| Chord modifier superscript | RENDER-11 | high |
-| Column separator lines | RENDER-12 | medium |
-| Section badge: graphical box + repeat tracking | RENDER-13 | high |
-| Horizontal column-by-column page flip (no scrollbar) | PERF-12 | high |
-| Sort options in Library | LIB-09 | medium |
-| Tag browser in sidebar | LIB-10 | medium |
 | Pinch-to-zoom on Viewer and Performance pages | VIEW-10, PERF-11 | medium |
-| Firebase setup: create project, enable Auth + Firestore | AUTH-01 | medium |
 | CI/CD: GitHub Actions → Firebase deploy on push to `main` | — | medium |
 
 ---
@@ -90,7 +94,9 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 
 ## Phase 3 — Collaboration · *future*
 
-Focus: Firestore sync, team sharing, edit presence.
+Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
+
+### Sync & Auth
 
 | Item | Req IDs | Priority |
 |------|---------|----------|
@@ -98,8 +104,25 @@ Focus: Firestore sync, team sharing, edit presence.
 | Sync status badge (🟢🟡🔴✈️) | SYNC-03 | high |
 | Edit presence banner ("⚠ Lisa is editing") | SYNC-04 | high |
 | Stage safety: present mode disables all sync | SYNC-05 | high |
-| Google Sign-In (Firebase Auth) | AUTH-01 | high |
-| Shared books/setlists — invite by Google email | SYNC-06 | medium |
+
+### Teams & shared spaces
+
+| Item | Req IDs | Priority |
+|------|---------|----------|
+| Team creation and management (name, description) | TEAMS-01 | critical |
+| Invite members by Google email; accept/decline flow | TEAMS-04 | critical |
+| Role system: Owner / Contributor / Reader | TEAMS-03, 08–10 | critical |
+| Remove members; change roles (Owner only) | TEAMS-04 | high |
+| Team shared song library — scoped queries in Dexie + Firestore | TEAMS-02, 05 | high |
+| Team shared setlists | TEAMS-02, 05 | high |
+| Copy song to another book or team space | TEAMS-06 | medium |
+| Move song to another book or team space | TEAMS-07 | medium |
+| Reader role enforced in UI (no edit/delete buttons) | TEAMS-08 | medium |
+
+### Other
+
+| Item | Req IDs | Priority |
+|------|---------|----------|
 | ZIP bulk export | — | low |
 | Share-link for single song snapshot | — | low |
 
@@ -139,7 +162,8 @@ Focus: Firestore sync, team sharing, edit presence.
 | 2026-03-29 | Key/tempo: from `song.transcription`, not renderer | chordsheetjs HtmlDivFormatter strips all metadata directives |
 | 2026-03-30 | Section badges: graphical bordered box with repeat superscript | Matches chords.wiki convention; makes repeated sections (A, B, B², C) instantly recognizable on stage |
 | 2026-03-30 | Horizontal page-flip for multi-column | Eliminates accidental scroll; pedal/tap always advances exactly one column at a time |
+| 2026-03-31 | Teams scoped to Phase 3 alongside Firestore sync | Teams require per-user cloud identity; building on top of Firebase Auth makes natural prerequisite chain |
 
 ---
 
-*Last updated: 2026-03-30*
+*Last updated: 2026-03-31*
