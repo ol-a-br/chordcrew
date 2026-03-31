@@ -131,7 +131,7 @@
    never exceeds the cap-height of capital letters. */
 .chordpro-output .chord-quality {
   font-size: 0.82em;
-  vertical-align: 0.05em;
+  vertical-align: 0.15em;
   line-height: 1;
 }
 /* Optional chord (parenthesised) — same colour but at 45% opacity */
