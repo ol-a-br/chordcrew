@@ -126,11 +126,12 @@
 }
 /* Chord quality modifier: "sus4" in Dsus4, "maj7" in Amaj7 — ~70% of the base
    renderer font (0.82em within .chord which is itself 0.85em of base = ~0.70em abs).
-   vertical-align: 0.1em raises it only slightly so the top stays within the
-   cap-height of the root letter — no floating above uppercase letters. */
+   Uses <span> not <sup> to avoid browser-default vertical-align:super interference.
+   vertical-align: 0 keeps the modifier baseline-aligned with the root so its top
+   never exceeds the cap-height of capital letters. */
 .chordpro-output .chord-quality {
   font-size: 0.82em;
-  vertical-align: 0.1em;
+  vertical-align: 0;
   line-height: 1;
 }
 /* Optional chord (parenthesised) — same colour but at 45% opacity */

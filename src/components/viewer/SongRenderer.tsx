@@ -173,7 +173,7 @@ export function SongRenderer({
       if (!quality && !bass) return                     // plain root like 'A', 'G'
       el.innerHTML =
         `<span>${root}</span>` +
-        (quality ? `<sup class="chord-quality">${quality}</sup>` : '') +
+        (quality ? `<span class="chord-quality">${quality}</span>` : '') +
         (bass    ? `<span class="chord-bass">${bass}</span>` : '')
     })
   }, [html])
