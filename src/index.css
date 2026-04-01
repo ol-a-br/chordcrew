@@ -54,7 +54,7 @@
 /* Section headers — bracket-notation: first .row in paragraph */
 .chordpro-output .section-header-row {
   min-height: unset !important;
-  align-items: center;
+  align-items: baseline;
   margin: 0.75rem 0 0.2rem 0;
 }
 .chordpro-output .section-header-row .chord {
@@ -84,7 +84,7 @@
   font-weight: 700;
   @apply text-ink-muted;
   margin-right: 0.5em;
-  vertical-align: middle;
+  vertical-align: baseline;
   flex-shrink: 0;
   line-height: 1;
 }
@@ -111,11 +111,11 @@
   white-space: pre;
 }
 
-/* Song title from {title:} directive — shown large in the render area.
+/* Song title from {title:} directive — shown in the render area.
    Also appears in the toolbar above; both are intentional. */
 .chordpro-output .title {
   font-family: 'Barlow Condensed', sans-serif;
-  font-size: 1.5em;
+  font-size: 1.25em;
   font-weight: 700;
   @apply text-ink;
   margin-bottom: 0.1rem;
@@ -125,7 +125,7 @@
 /* Subtitle from {subtitle:} directive — smaller and muted beneath the title */
 .chordpro-output .subtitle {
   font-family: 'Barlow Condensed', sans-serif;
-  font-size: 0.9em;
+  font-size: 0.8em;
   @apply text-ink-muted;
   margin-bottom: 0.6rem;
   line-height: 1.4;

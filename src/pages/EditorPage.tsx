@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Save, Eye, X, RotateCcw, Tag } from 'lucide-react'
@@ -8,6 +8,16 @@ import { ChordProEditor } from '@/components/editor/ChordProEditor'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
+
+/** Replace or insert a ChordPro directive in the content string. */
+function updateDirective(content: string, directive: string, value: string): string {
+  const re = new RegExp(`\\{${directive}\\s*:[^}]*\\}`, 'gi')
+  if (re.test(content)) {
+    return content.replace(re, value.trim() ? `{${directive}: ${value}}` : '')
+  }
+  if (!value.trim()) return content
+  return `{${directive}: ${value}}\n${content}`
+}
 
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -21,12 +31,23 @@ export default function EditorPage() {
   const [showPreview, setShowPreview] = useState(true)
   const tagInputRef = useRef<HTMLInputElement>(null)
 
+  // Derive metadata from content for display; updated reactively
+  const derivedMeta = useMemo(() => extractMeta(content), [content])
+
   useEffect(() => {
     if (song) {
       setContent(song.transcription.content)
       setTags(song.tags ?? [])
     }
   }, [song?.id])
+
+  const commitMetaField = (directive: string, value: string) => {
+    setContent(prev => {
+      const updated = updateDirective(prev, directive, value)
+      setDirty(true)
+      return updated
+    })
+  }
 
   const handleChange = (val: string) => {
     setContent(val)
@@ -111,6 +132,30 @@ export default function EditorPage() {
           <Save size={14} />
           Save
         </Button>
+      </div>
+
+      {/* Metadata bar — song fields */}
+      <div className="flex items-center gap-3 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
+        {([
+          { label: 'Title',  directive: 'title',  value: derivedMeta.title  ?? '', width: 'w-36', type: 'text' },
+          { label: 'Artist', directive: 'artist', value: derivedMeta.artist ?? '', width: 'w-28', type: 'text' },
+          { label: 'Key',    directive: 'key',    value: derivedMeta.key    ?? '', width: 'w-12', type: 'text' },
+          { label: 'Tempo',  directive: 'tempo',  value: derivedMeta.tempo  ? String(derivedMeta.tempo) : '', width: 'w-14', type: 'number' },
+          { label: 'Capo',   directive: 'capo',   value: derivedMeta.capo   ? String(derivedMeta.capo)  : '', width: 'w-12', type: 'number' },
+          { label: 'Time',   directive: 'time',   value: derivedMeta.time   ?? '', width: 'w-14', type: 'text' },
+        ]).map(({ label, directive, value, width, type }) => (
+          <label key={directive} className="flex items-center gap-1 text-xs">
+            <span className="text-ink-faint shrink-0">{label}</span>
+            <input
+              type={type ?? 'text'}
+              defaultValue={value}
+              key={`${directive}-${song?.id}-${value}`}
+              onBlur={e => commitMetaField(directive, e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+              className={`${width} bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50`}
+            />
+          </label>
+        ))}
       </div>
 
       {/* Metadata bar — tags */}

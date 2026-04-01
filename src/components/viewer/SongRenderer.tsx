@@ -92,7 +92,8 @@ export function SongRenderer({
       const badge = document.createElement('span')
       badge.className = 'section-badge'
       badge.innerHTML = makeBadgeHtml(letter, count)
-      anchor.parentElement?.insertBefore(badge, anchor)
+      // Prepend inside anchor so badge + label text share the same inline baseline
+      anchor.prepend(badge)
     }
 
     // ── Process each paragraph in document order ──────────────────────────────
@@ -176,6 +177,28 @@ export function SongRenderer({
         (quality ? `<span class="chord-quality">${quality}</span>` : '') +
         (bass    ? `<span class="chord-bass">${bass}</span>` : '')
     })
+    // ── Pass 2: Repeat indicators (↺ SectionName) → look up section letter ───
+    // These are injected by preprocessChordPro from {repeat: SectionName}.
+    // Since Pass 1 has already assigned letters to real sections, we can now
+    // look up the section name, increment its count, and inject a repeat badge.
+    container.querySelectorAll<HTMLElement>('.comment').forEach(commentEl => {
+      const text = commentEl.textContent?.trim() ?? ''
+      if (!text.startsWith('↺')) return
+      // Extract section name: strip "↺ " prefix and optional " ×N" suffix
+      const sectionName = text.replace(/^↺\s*/, '').replace(/\s+×\d+\s*$/, '').trim()
+      if (!sectionName) return
+      const key = sectionName.toLowerCase().trim()
+      if (!nameToLetter.has(key)) return
+      const letter = nameToLetter.get(key)!
+      const count = (letterCount.get(letter) ?? 1) + 1
+      letterCount.set(letter, count)
+      const badge = document.createElement('span')
+      badge.className = 'section-badge'
+      badge.innerHTML = makeBadgeHtml(letter, count)
+      // Prepend inside the comment so badge + ↺ text share the same inline baseline
+      commentEl.prepend(badge)
+    })
+
     // ── Inline chord comments (from {inline:} directive) ─────────────────────
     // The preprocessor converts {inline: | [C] / / / |} to a {comment:} line
     // with chord names wrapped in «guillemet» markers. We expand those into

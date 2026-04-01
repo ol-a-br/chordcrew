@@ -21,16 +21,14 @@ export function preprocessChordPro(content: string): string {
       const marked = c.trim().replace(/\[([^\]]*)\]/g, '«$1»')
       return `{comment: ${marked}}`
     })
-    // {repeat: Chorus} or {repeat: Chorus 2x} → re-emit the section header so the
-    // badge tracker assigns the next repeat letter (e.g. C2, C3). A ↺ comment
-    // inside the section signals "this is a repeat, not new content".
+    // {repeat: Chorus} or {repeat: Chorus 2x} → a ↺ comment line that SongRenderer
+    // uses in Pass 2 to inject the correct repeat badge (e.g. A2, C3).
+    // Using a comment (not start_of_verse) avoids incorrect badge assignment order.
     .replace(/\{repeat\s*:\s*([^}]+)\}/gi, (_m, c: string) => {
       const s = c.trim().replace(/\s+/g, ' ')
       const xm = s.match(/^(.*?)\s+(\d+)x\s*$/i)
-      if (xm) {
-        return `{start_of_verse: ${xm[1].trim()}}\n{comment: ↺ ×${xm[2]}}\n{end_of_verse}`
-      }
-      return `{start_of_verse: ${s}}\n{comment: ↺}\n{end_of_verse}`
+      if (xm) return `{comment: ↺ ${xm[1].trim()} ×${xm[2]}}`
+      return `{comment: ↺ ${s}}`
     })
     // {new_song} — multi-song file separator; ignore in single-song view
     .replace(/\{new_song[^}]*\}/gi, '')
