@@ -14,17 +14,23 @@ export function preprocessChordPro(content: string): string {
     .replace(/\{start_of_part\s*:\s*([^}]+)\}/gi, '{start_of_verse: $1}')
     .replace(/\{eop\b[^}]*\}/gi, '{end_of_verse}')
     .replace(/\{end_of_part\b[^}]*\}/gi, '{end_of_verse}')
-    // {inline: [C] / / / | [F] / / / |} → mark as inline-chord row, then the chord content.
-    // A __inline__ comment marker signals SongRenderer to render chords on the same baseline
-    // as the surrounding characters (|, /) instead of floating above them.
-    .replace(/\{inline\s*:\s*([^}]+)\}/gi, (_m, c: string) =>
-      `{comment: __inline__}\n${c.trim()}`)
-    // {repeat: Chorus} or {repeat: Chorus 2x} → rendered as a comment with ↺ indicator
+    // {inline: | [C] / / / | [F2] / / / |} → a comment line where each [Chord] is
+    // replaced with «Chord» (guillemet markers). SongRenderer detects the «»
+    // markers and injects chord-styled <span>s, keeping everything on one baseline.
+    .replace(/\{inline\s*:\s*([^}]+)\}/gi, (_m, c: string) => {
+      const marked = c.trim().replace(/\[([^\]]*)\]/g, '«$1»')
+      return `{comment: ${marked}}`
+    })
+    // {repeat: Chorus} or {repeat: Chorus 2x} → re-emit the section header so the
+    // badge tracker assigns the next repeat letter (e.g. C2, C3). A ↺ comment
+    // inside the section signals "this is a repeat, not new content".
     .replace(/\{repeat\s*:\s*([^}]+)\}/gi, (_m, c: string) => {
       const s = c.trim().replace(/\s+/g, ' ')
       const xm = s.match(/^(.*?)\s+(\d+)x\s*$/i)
-      if (xm) return `{comment: ↺ ${xm[1].trim()} ×${xm[2]}}`
-      return `{comment: ↺ ${s}}`
+      if (xm) {
+        return `{start_of_verse: ${xm[1].trim()}}\n{comment: ↺ ×${xm[2]}}\n{end_of_verse}`
+      }
+      return `{start_of_verse: ${s}}\n{comment: ↺}\n{end_of_verse}`
     })
     // {new_song} — multi-song file separator; ignore in single-song view
     .replace(/\{new_song[^}]*\}/gi, '')

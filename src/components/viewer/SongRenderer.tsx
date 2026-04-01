@@ -176,18 +176,22 @@ export function SongRenderer({
         (quality ? `<span class="chord-quality">${quality}</span>` : '') +
         (bass    ? `<span class="chord-bass">${bass}</span>` : '')
     })
-    // ── Inline chord rows (from {inline:} directive) ──────────────────────────
-    // The preprocessor emits {comment: __inline__} on the line before the chord
-    // content. We hide the marker and make the chord row render inline (same
-    // baseline as the surrounding |, / characters).
+    // ── Inline chord comments (from {inline:} directive) ─────────────────────
+    // The preprocessor converts {inline: | [C] / / / |} to a {comment:} line
+    // with chord names wrapped in «guillemet» markers. We expand those into
+    // chord-styled <span>s so everything sits on the same baseline as | and /.
     container.querySelectorAll<HTMLElement>('.comment').forEach(commentEl => {
-      if (commentEl.textContent?.trim() !== '__inline__') return
-      commentEl.classList.add('inline-marker')
-      let sib = commentEl.nextElementSibling
-      while (sib && !sib.classList.contains('row')) {
-        sib = sib.nextElementSibling
-      }
-      if (sib) sib.classList.add('inline-chord-row')
+      const text = commentEl.textContent ?? ''
+      if (!text.includes('«')) return
+      commentEl.classList.add('inline-chord-comment')
+      // Split on «ChordName» markers using textContent (avoids &laquo; entity issues)
+      // Odd indices are chord names, even indices are plain text (|, /, spaces)
+      const parts = text.split(/«([^»]*)»/)
+      commentEl.innerHTML = parts.map((part, i) =>
+        i % 2 === 1
+          ? `<span class="chord inline-chord">${part}</span>`
+          : part
+      ).join('')
     })
   }, [html])
 

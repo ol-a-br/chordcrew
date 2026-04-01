@@ -111,15 +111,23 @@
   white-space: pre;
 }
 
-/* Song title from {title:} directive — hidden; shown in toolbar above song */
-.chordpro-output .title { display: none; }
+/* Song title from {title:} directive — shown large in the render area.
+   Also appears in the toolbar above; both are intentional. */
+.chordpro-output .title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.5em;
+  font-weight: 700;
+  @apply text-ink;
+  margin-bottom: 0.1rem;
+  line-height: 1.2;
+}
 
-/* Subtitle from {subtitle:} directive — shown in renderer, smaller and muted */
+/* Subtitle from {subtitle:} directive — smaller and muted beneath the title */
 .chordpro-output .subtitle {
   font-family: 'Barlow Condensed', sans-serif;
-  font-size: 0.85em;
+  font-size: 0.9em;
   @apply text-ink-muted;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.6rem;
   line-height: 1.4;
 }
 
@@ -185,21 +193,18 @@
   overflow-x: auto;
 }
 
-/* ── Inline chord rows (from {inline:} directive) ───────────────────────── */
-/* Chords appear on the same baseline as the surrounding |, / characters     */
-.chordpro-output .inline-marker { display: none; }
-
-.chordpro-output .inline-chord-row {
-  min-height: unset;
-  align-items: baseline;
+/* ── Inline chord comments (from {inline:} directive) ───────────────────── */
+/* Rendered as a comment line; chord names become styled spans on the same   */
+/* baseline as the surrounding | and / bar/beat characters.                  */
+.chordpro-output .comment.inline-chord-comment {
+  font-style: normal;
+  white-space: pre-wrap;
+  @apply text-ink;
 }
-.chordpro-output .inline-chord-row .column {
-  flex-direction: row;
-  align-items: baseline;
-}
-.chordpro-output .inline-chord-row .chord {
-  min-height: unset;
-  line-height: inherit;
+.chordpro-output .comment .inline-chord {
+  @apply text-chord font-mono font-medium;
+  font-size: 0.9em;
+  vertical-align: baseline;
 }
 
 /* ── Hide scrollbar (for page-flip containers) ───────────────────────────── */
