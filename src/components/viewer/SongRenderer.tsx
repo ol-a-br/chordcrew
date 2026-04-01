@@ -108,14 +108,20 @@ export function SongRenderer({
           injectBadge(labelEl, name)
 
           if (isChorusLabel(name)) {
-            const labelRow = labelEl.closest<HTMLElement>('.row')
-            if (labelRow) {
-              labelRow.classList.add('chorus-section')
-              let sib = labelRow.nextElementSibling
-              while (sib?.classList.contains('row')) {
-                if (sib.querySelector('h3.label')) break
-                sib.classList.add('chorus-section')
-                sib = sib.nextElementSibling
+            // Only add .chorus-section to rows if the paragraph doesn't already have
+            // .chorus class (added by chordsheetjs for {start_of_chorus:} directives).
+            // If .paragraph.chorus is present, the CSS rule handles the indent/bar.
+            const labelPara = labelEl.closest<HTMLElement>('.paragraph')
+            if (!labelPara?.classList.contains('chorus')) {
+              const labelRow = labelEl.closest<HTMLElement>('.row')
+              if (labelRow) {
+                labelRow.classList.add('chorus-section')
+                let sib = labelRow.nextElementSibling
+                while (sib?.classList.contains('row')) {
+                  if (sib.querySelector('h3.label')) break
+                  sib.classList.add('chorus-section')
+                  sib = sib.nextElementSibling
+                }
               }
             }
           }
@@ -187,7 +193,14 @@ export function SongRenderer({
       // Extract section name: strip "↺ " prefix and optional " ×N" suffix
       const sectionName = text.replace(/^↺\s*/, '').replace(/\s+×\d+\s*$/, '').trim()
       if (!sectionName) return
-      const key = sectionName.toLowerCase().trim()
+      let key = sectionName.toLowerCase().trim()
+      // Alias fallback: if the repeat refers to a chorus term not in the map,
+      // try all known chorus terms (handles multi-language: "Refrän" → "chorus").
+      if (!nameToLetter.has(key) && isChorusLabel(sectionName)) {
+        for (const term of CHORUS_TERMS) {
+          if (nameToLetter.has(term)) { key = term; break }
+        }
+      }
       if (!nameToLetter.has(key)) return
       const letter = nameToLetter.get(key)!
       const count = (letterCount.get(letter) ?? 1) + 1

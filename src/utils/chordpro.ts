@@ -14,6 +14,14 @@ export function preprocessChordPro(content: string): string {
     .replace(/\{start_of_part\s*:\s*([^}]+)\}/gi, '{start_of_verse: $1}')
     .replace(/\{eop\b[^}]*\}/gi, '{end_of_verse}')
     .replace(/\{end_of_part\b[^}]*\}/gi, '{end_of_verse}')
+    // Anonymous chorus/verse directives → add default label so badge tracking works.
+    // {start_of_chorus} → {start_of_chorus: Chorus} (keeps .paragraph.chorus CSS class)
+    // Must run before named variants to avoid double-matching.
+    .replace(/\{(start_of_chorus)\s*\}/gi, '{$1: Chorus}')
+    .replace(/\{(soc)\s*\}/gi, '{start_of_chorus: Chorus}')
+    // {soc: Name} shorthand with explicit name
+    .replace(/\{soc\s*:\s*([^}]+)\}/gi, '{start_of_chorus: $1}')
+    .replace(/\{eoc\b[^}]*\}/gi, '{end_of_chorus}')
     // {inline: | [C] / / / | [F2] / / / |} → a comment line where each [Chord] is
     // replaced with «Chord» (guillemet markers). SongRenderer detects the «»
     // markers and injects chord-styled <span>s, keeping everything on one baseline.

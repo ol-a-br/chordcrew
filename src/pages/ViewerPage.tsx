@@ -182,7 +182,7 @@ export default function ViewerPage() {
       </div>
 
       {/* Song content */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
         <SongRenderer
           content={song.transcription.content}
           transposeOffset={transpose}
