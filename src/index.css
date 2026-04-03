@@ -41,7 +41,8 @@
 
 /* Section headers — directive syntax: h3.label */
 .chordpro-output .label {
-  @apply text-section font-semibold text-sm uppercase tracking-wider;
+  @apply text-section font-semibold uppercase tracking-wider;
+  font-size: 0.875em;
   font-family: 'Barlow Condensed', sans-serif;
   margin: 0.75rem 0 0.2rem 0;
   line-height: 1.4;
@@ -169,7 +170,8 @@
 
 /* Comment lines — also used for {repeat: Chorus} indicators */
 .chordpro-output .comment {
-  @apply text-ink-muted italic text-sm my-1;
+  @apply text-ink-muted italic my-1;
+  font-size: 0.875em;
 }
 
 /* Directives rendered as metadata (key, tempo, etc.) */
@@ -188,7 +190,8 @@
 
 /* Tab blocks */
 .chordpro-output .tab {
-  @apply font-mono text-sm text-ink-muted bg-surface-2 rounded p-3 my-2;
+  @apply font-mono text-ink-muted bg-surface-2 rounded p-3 my-2;
+  font-size: 0.875em;
   white-space: pre;
   overflow-x: auto;
 }
