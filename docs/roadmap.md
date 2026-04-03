@@ -77,9 +77,9 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 |------|---------|----------|
 | **SetlistDetailPage: add songs, dividers, reorder, rename, delete** | SET-04–07 | ✅ done |
 | **Per-setlist-slot overrides: transpose, columns, notes** | SET-08–10 | ✅ done |
-| Setlist present mode: full-screen, song counter | SET-13, PERF-09 | high |
+| **Setlist present mode: full-screen, song counter, prev/next song buttons** | SET-13, PERF-09 | ✅ done |
 | Column navigation across setlist songs (PERF-07) | PERF-07 | high |
-| Long-press pedal: skip song / back to start | PERF-08 | medium |
+| **Long-press pedal: skip song / back to start** | PERF-08 | ✅ done |
 | Quick-jump tray (slide-out song list in present mode) | PERF-10 | medium |
 | PDF export: portrait + landscape, offline | PDF-01–07 | medium |
 | BPM display + tap-tempo + visual metronome | — | medium |

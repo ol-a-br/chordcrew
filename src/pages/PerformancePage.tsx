@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useFontScale } from '@/hooks/useFontScale'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { X, ChevronUp, ChevronDown, AlignLeft, ZoomIn, ZoomOut } from 'lucide-react'
+import { X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlignLeft, ZoomIn, ZoomOut } from 'lucide-react'
 import { db } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { useKeyboardNav } from '@/hooks/useKeyboard'
@@ -47,6 +47,7 @@ export default function PerformancePage() {
     () => setlistItems?.filter(i => i.type === 'song' && i.songId) ?? [],
     [setlistItems]
   )
+  const prevSongId = songItems[currentPos - 1]?.songId
   const nextSongId = songItems[currentPos + 1]?.songId
   const currentSetlistItem = songItems[currentPos]
 
@@ -137,6 +138,47 @@ export default function PerformancePage() {
 
   useKeyboardNav({ onNext: goNext, onPrev: goPrev, enabled: true })
 
+  // ── Long-press pedal: hold right = skip song, hold left = back to start ───
+  useEffect(() => {
+    const LONG_PRESS_MS = 700
+    const timers = new Map<string, ReturnType<typeof setTimeout>>()
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+
+      if (e.key === 'ArrowRight') {
+        timers.set('right', setTimeout(() => {
+          timers.delete('right')
+          if (nextSongId && setlistId) {
+            navigate(`/perform/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`)
+          }
+        }, LONG_PRESS_MS))
+      }
+      if (e.key === 'ArrowLeft') {
+        timers.set('left', setTimeout(() => {
+          timers.delete('left')
+          const container = contentRef.current
+          if (container) container.scrollTo({ left: 0, top: 0, behavior: 'auto' })
+        }, LONG_PRESS_MS))
+      }
+    }
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') { clearTimeout(timers.get('right')); timers.delete('right') }
+      if (e.key === 'ArrowLeft')  { clearTimeout(timers.get('left'));  timers.delete('left')  }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      timers.forEach(t => clearTimeout(t))
+    }
+  }, [nextSongId, setlistId, currentPos, navigate])
+
   if (!song) return null
 
   const isMultiColumn = columns > 1
@@ -163,9 +205,27 @@ export default function PerformancePage() {
         </div>
 
         {setlistId && songItems.length > 0 && (
-          <span className="text-xs font-mono text-ink-faint shrink-0">
-            {currentPos + 1}/{songItems.length}
-          </span>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              onClick={() => prevSongId && navigate(`/perform/${prevSongId}?setlistId=${setlistId}&pos=${currentPos - 1}`)}
+              disabled={!prevSongId}
+              className="p-0.5 text-ink-faint hover:text-ink disabled:opacity-30"
+              title="Previous song"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-xs font-mono text-ink-faint px-1">
+              {currentPos + 1}/{songItems.length}
+            </span>
+            <button
+              onClick={() => nextSongId && navigate(`/perform/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`)}
+              disabled={!nextSongId}
+              className="p-0.5 text-ink-faint hover:text-ink disabled:opacity-30"
+              title="Next song"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
         )}
 
         {song.transcription.key && (
