@@ -97,7 +97,7 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 
 ---
 
-## Phase 3 — Collaboration · *future*
+## Phase 3 — Collaboration · *in progress*
 
 Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
 
@@ -105,24 +105,24 @@ Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
 
 | Item | Req IDs | Priority |
 |------|---------|----------|
-| Firestore manual sync with last-write-wins | SYNC-01–02 | critical |
-| Sync status badge (🟢🟡🔴✈️) | SYNC-03 | high |
-| Edit presence banner ("⚠ Lisa is editing") | SYNC-04 | high |
-| Stage safety: present mode disables all sync | SYNC-05 | high |
+| **Firestore manual sync with last-write-wins** | SYNC-01–02 | ✅ done |
+| **Sync status badge (🟢🟡🔴)** | SYNC-03 | ✅ done |
+| Edit presence banner ("⚠ Lisa is editing") | SYNC-04 | high — deferred |
+| **Stage safety: present mode disables all sync** | SYNC-05 | ✅ done (sync is manual-only; no calls in PerformancePage) |
 
 ### Teams & shared spaces
 
 | Item | Req IDs | Priority |
 |------|---------|----------|
-| Team creation and management (name, description) | TEAMS-01 | critical |
-| Invite members by Google email; accept/decline flow | TEAMS-04 | critical |
-| Role system: Owner / Contributor / Reader | TEAMS-03, 08–10 | critical |
-| Remove members; change roles (Owner only) | TEAMS-04 | high |
-| Team shared song library — scoped queries in Dexie + Firestore | TEAMS-02, 05 | high |
-| Team shared setlists | TEAMS-02, 05 | high |
-| Copy song to another book or team space | TEAMS-06 | medium |
-| Move song to another book or team space | TEAMS-07 | medium |
-| Reader role enforced in UI (no edit/delete buttons) | TEAMS-08 | medium |
+| **Team creation and management (name, description)** | TEAMS-01 | ✅ done |
+| **Invite members by Google email; accept/decline flow** | TEAMS-04 | ✅ done |
+| **Role system: Owner / Contributor / Reader** | TEAMS-03, 08–10 | ✅ done |
+| **Remove members; change roles (Owner only)** | TEAMS-04 | ✅ done |
+| **Team shared song library — scoped queries in Dexie + Firestore** | TEAMS-02, 05 | ✅ done |
+| **Team shared setlists** | TEAMS-02, 05 | ✅ done (via sharedTeamId on setlists) |
+| **Copy song to another book or team space** | TEAMS-06 | ✅ done |
+| **Move song to another book or team space** | TEAMS-07 | ✅ done |
+| **Reader role enforced in UI (no edit/delete buttons)** | TEAMS-08 | ✅ done |
 
 ### Other
 
@@ -171,4 +171,8 @@ Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
 
 ---
 
-*Last updated: 2026-03-31*
+| 2026-04-01 | Sync manual-only via SyncContext + firestoreSync.ts | Stage safety guaranteed by absence of sync calls in PerformancePage |
+| 2026-04-01 | Team invite check queries all Firestore /teams docs | Simple approach; scales to small team counts; revisit with inviteIndex if needed |
+| 2026-04-01 | Team books use `Book.sharedTeamId` in same Dexie table | Avoids separate team song table; role enforcement is at read/write layer |
+
+*Last updated: 2026-04-01*

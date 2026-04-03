@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Plus, ListMusic, Play, Calendar, Copy } from 'lucide-react'
-import { db, generateId } from '@/db'
+import { db, generateId, markPending } from '@/db'
 import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
 import type { Setlist } from '@/types'
@@ -40,6 +40,7 @@ export default function SetlistsPage() {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
+    await markPending('setlist', id)
     setCreating(false)
     setNewName('')
     navigate(`/setlists/${id}`)

@@ -103,19 +103,32 @@ export interface SetlistItem {
   notes?: string
 }
 
-export type TeamMemberRole = 'editor' | 'viewer'
+export type TeamMemberRole = 'owner' | 'contributor' | 'reader'
 
 export interface TeamMember {
   userId: string
   email: string
+  displayName: string
   role: TeamMemberRole
+}
+
+export interface TeamInvite {
+  email: string
+  role: 'contributor' | 'reader'
+  invitedAt: number
 }
 
 export interface Team {
   id: string
   name: string
+  description?: string
   ownerId: string
+  ownerEmail: string
+  ownerDisplayName: string
   members: TeamMember[]
+  invites: TeamInvite[]
+  createdAt: number
+  updatedAt: number
 }
 
 export type SyncStatus = 'clean' | 'pending' | 'conflict'

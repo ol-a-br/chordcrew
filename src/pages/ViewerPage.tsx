@@ -1,13 +1,14 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer } from 'lucide-react'
-import { db } from '@/db'
+import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2 } from 'lucide-react'
+import { db, generateId, markPending, getTeamRole } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
-import { transposeKey, getFirstChords } from '@/utils/chordpro'
+import { transposeKey, getFirstChords, buildSearchText } from '@/utils/chordpro'
 import { useFontScale } from '@/hooks/useFontScale'
-import type { SetlistItem } from '@/types'
+import { useAuth } from '@/auth/AuthContext'
+import type { SetlistItem, Book } from '@/types'
 
 function getDefaultColumns(): number {
   if (typeof window === 'undefined') return 2
@@ -18,6 +19,7 @@ export default function ViewerPage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const song = useLiveQuery(() => id ? db.songs.get(id) : undefined, [id])
 
   const setlistId = searchParams.get('setlistId')
@@ -27,6 +29,17 @@ export default function ViewerPage() {
   const [columns, setColumns] = useState(getDefaultColumns)
   const [lyricsOnly, setLyricsOnly] = useState(false)
   const [fontScale, setFontScale] = useFontScale()
+  const [showShareMenu, setShowShareMenu] = useState(false)
+
+  // Teams — for copy/move to team space
+  const teams = useLiveQuery(() => db.teams.toArray(), [])
+  const contributorTeams = useMemo(() => {
+    if (!teams || !user) return []
+    return teams.filter(t => {
+      const role = getTeamRole(t, user.id, user.email)
+      return role === 'owner' || role === 'contributor'
+    })
+  }, [teams, user])
 
   // Setlist context for prev/next navigation
   // Track last-accessed time for "recently accessed" sort in library
@@ -74,6 +87,51 @@ export default function ViewerPage() {
   const toggleFavorite = async () => {
     if (!song) return
     await db.songs.update(song.id, { isFavorite: !song.isFavorite })
+  }
+
+  /** Ensure a team book exists in Dexie; return its id. */
+  const ensureTeamBook = async (teamId: string, teamName: string): Promise<string> => {
+    const existing = await db.books.where('sharedTeamId').equals(teamId).first()
+    if (existing) return existing.id
+    const bookId = generateId()
+    const book: Book = {
+      id: bookId, title: `${teamName} Songs`,
+      author: user?.displayName ?? 'Team',
+      ownerId: user?.id ?? '',
+      sharedTeamId: teamId,
+      readOnly: false, shareable: true,
+      createdAt: Date.now(), updatedAt: Date.now(),
+    }
+    await db.books.add(book)
+    await markPending('book', bookId)
+    return bookId
+  }
+
+  const copyToTeam = async (teamId: string, teamName: string) => {
+    if (!song) return
+    const bookId = await ensureTeamBook(teamId, teamName)
+    const newId = generateId()
+    const now = Date.now()
+    await db.songs.add({
+      ...song,
+      id: newId,
+      bookId,
+      savedAt: now,
+      updatedAt: now,
+      accessedAt: undefined,
+      searchText: buildSearchText(song.title, song.artist, song.tags, song.transcription.content),
+    })
+    await markPending('song', newId)
+    setShowShareMenu(false)
+    navigate(`/view/${newId}`)
+  }
+
+  const moveToTeam = async (teamId: string, teamName: string) => {
+    if (!song) return
+    const bookId = await ensureTeamBook(teamId, teamName)
+    await db.songs.update(song.id, { bookId, updatedAt: Date.now() })
+    await markPending('song', song.id)
+    setShowShareMenu(false)
   }
 
   if (!song) return <div className="p-8 text-ink-muted">Loading…</div>
@@ -203,6 +261,43 @@ export default function ViewerPage() {
         >
           <Printer size={16} />
         </button>
+
+        {/* Copy/Move to team */}
+        {contributorTeams.length > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setShowShareMenu(v => !v)}
+              className="p-1.5 text-ink-muted hover:text-ink rounded"
+              title="Copy / Move to team"
+            >
+              <Share2 size={16} />
+            </button>
+            {showShareMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowShareMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl py-1 min-w-[160px]">
+                  {contributorTeams.map(team => (
+                    <div key={team.id} className="px-2 py-1">
+                      <div className="text-xs text-ink-faint px-1 py-0.5 font-medium">{team.name}</div>
+                      <button
+                        onClick={() => copyToTeam(team.id, team.name)}
+                        className="block w-full text-left px-2 py-1 text-xs text-ink hover:bg-surface-3 rounded"
+                      >
+                        Copy here
+                      </button>
+                      <button
+                        onClick={() => moveToTeam(team.id, team.name)}
+                        className="block w-full text-left px-2 py-1 text-xs text-ink hover:bg-surface-3 rounded"
+                      >
+                        Move here
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Present mode */}
         <Button variant="primary" size="sm" onClick={() => navigate(`/perform/${song.id}${setlistId ? `?setlistId=${setlistId}&pos=${currentPos}` : ''}`)}>

@@ -32,6 +32,11 @@ export class ChordCrewDB extends Dexie {
       syncStates:   'id, entityType, status',
       settings:     'id',
     })
+
+    // Version 2: add updatedAt index to teams for sync
+    this.version(2).stores({
+      teams: 'id, ownerId, updatedAt',
+    })
   }
 }
 
@@ -126,6 +131,28 @@ export async function markPending(
   })
 }
 
+// ─── Team helpers ─────────────────────────────────────────────────────────────
+
+/** Returns all teams the user owns or is a member of. */
+export async function getMyTeams(userId: string, userEmail: string): Promise<Team[]> {
+  const all = await db.teams.toArray()
+  return all.filter(t =>
+    t.ownerId === userId ||
+    t.members.some(m => m.userId === userId || m.email === userEmail)
+  )
+}
+
+/** Returns the user's role in a team, or null if not a member. */
+export function getTeamRole(team: Team, userId: string, userEmail: string): TeamMemberRole | null {
+  if (team.ownerId === userId) return 'owner'
+  const member = team.members.find(m => m.userId === userId || m.email === userEmail)
+  return member?.role ?? null
+}
+
 export function generateId(): string {
   return crypto.randomUUID()
 }
+
+// ─── Re-export Team types used by helpers ────────────────────────────────────
+import type { TeamMemberRole } from '@/types'
+export type { TeamMemberRole }

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
+import { SyncProvider } from '@/sync/SyncContext'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/components/auth/LoginPage'
 
@@ -15,6 +16,8 @@ const ImportPage         = lazy(() => import('@/pages/ImportPage'))
 const SettingsPage       = lazy(() => import('@/pages/SettingsPage'))
 const PrintSongPage      = lazy(() => import('@/pages/PrintSongPage'))
 const PrintSetlistPage   = lazy(() => import('@/pages/PrintSetlistPage'))
+const TeamsPage          = lazy(() => import('@/pages/TeamsPage'))
+const TeamDetailPage     = lazy(() => import('@/pages/TeamDetailPage'))
 
 function PageLoader() {
   return (
@@ -36,6 +39,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <RequireAuth>
+        <SyncProvider>
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Full-screen performance mode — outside AppShell */}
@@ -53,12 +57,15 @@ export default function App() {
               <Route path="/view/:id"       element={<ViewerPage />} />
               <Route path="/setlists"       element={<SetlistsPage />} />
               <Route path="/setlists/:id"   element={<SetlistDetailPage />} />
+              <Route path="/teams"           element={<TeamsPage />} />
+              <Route path="/teams/:id"      element={<TeamDetailPage />} />
               <Route path="/import"         element={<ImportPage />} />
               <Route path="/settings"       element={<SettingsPage />} />
               <Route path="*"               element={<Navigate to="/library" replace />} />
             </Route>
           </Routes>
         </Suspense>
+        </SyncProvider>
       </RequireAuth>
     </BrowserRouter>
   )

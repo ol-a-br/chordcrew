@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Github } from 'lucide-react'
+import { Github, RefreshCw } from 'lucide-react'
 import { db, getSettings, saveSettings } from '@/db'
 import { useCaptureKey } from '@/hooks/useKeyboard'
 import { Button } from '@/components/shared/Button'
+import { useSync } from '@/sync/SyncContext'
 import type { AppSettings } from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 
 export default function SettingsPage() {
   const { t, i18n } = useTranslation()
+  const { status, pendingCount, lastSync, error: syncError, syncNow } = useSync()
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [capturingKey, setCapturingKey] = useState<'next' | 'prev' | null>(null)
 
@@ -124,6 +126,49 @@ export default function SettingsPage() {
           </Row>
         </div>
       </section>
+
+      {/* Sync */}
+      {status !== 'unconfigured' && (
+        <section>
+          <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Cloud Sync</h2>
+          <div className="bg-surface-1 rounded-xl px-4 py-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${
+                    status === 'clean'   ? 'bg-green-500' :
+                    status === 'pending' ? 'bg-amber-400' :
+                    status === 'error'   ? 'bg-red-500'   : 'bg-blue-400 animate-pulse'
+                  }`} />
+                  <span className="text-sm">
+                    {status === 'syncing' ? 'Syncing…' :
+                     status === 'error'   ? 'Sync error' :
+                     status === 'pending' ? `${pendingCount} change${pendingCount !== 1 ? 's' : ''} pending` :
+                     'Up to date'}
+                  </span>
+                </div>
+                {lastSync && (
+                  <p className="text-xs text-ink-faint pl-4">
+                    Last synced {new Date(lastSync).toLocaleString()}
+                  </p>
+                )}
+                {syncError && (
+                  <p className="text-xs text-red-400 pl-4">{syncError}</p>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={syncNow}
+                disabled={status === 'syncing'}
+              >
+                <RefreshCw size={14} className={status === 'syncing' ? 'animate-spin' : ''} />
+                Sync Now
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Danger zone */}
       <section>

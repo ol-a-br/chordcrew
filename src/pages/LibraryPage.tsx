@@ -2,8 +2,8 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Search, Star, BookOpen, ChevronRight, Music, Tag } from 'lucide-react'
-import { db, generateId, markPending } from '@/db'
+import { Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users } from 'lucide-react'
+import { db, generateId, markPending, getTeamRole } from '@/db'
 import { Button } from '@/components/shared/Button'
 import { buildSearchText } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
@@ -43,8 +43,31 @@ export default function LibraryPage() {
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<SortKey>('title')
 
-  const books   = useLiveQuery(() => db.books.toArray(), [])
+  const books    = useLiveQuery(() => db.books.toArray(), [])
   const allSongs = useLiveQuery(() => db.songs.toArray(), [])
+  const teams    = useLiveQuery(() => db.teams.toArray(), [])
+
+  // Separate personal books from team books
+  const personalBooks = useMemo(() => (books ?? []).filter(b => !b.sharedTeamId), [books])
+  const teamBooks = useMemo(() => (books ?? []).filter(b => b.sharedTeamId), [books])
+
+  // Map bookId → team for role lookup
+  const bookTeamMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    teamBooks.forEach(b => { if (b.sharedTeamId) map[b.id] = b.sharedTeamId })
+    return map
+  }, [teamBooks])
+
+  // Is the current user a reader for the active book?
+  const isActiveBookReadOnly = useMemo(() => {
+    if (activeBookId === 'all' || activeBookId === 'favorites') return false
+    const teamId = bookTeamMap[activeBookId]
+    if (!teamId || !user || !teams) return false
+    const team = teams.find(t => t.id === teamId)
+    if (!team) return false
+    const role = getTeamRole(team, user.id, user.email)
+    return role === 'reader'
+  }, [activeBookId, bookTeamMap, teams, user])
 
   // Unique tags across all songs (case-insensitive, sorted)
   const allTags = useMemo(() => {
@@ -137,11 +160,20 @@ export default function LibraryPage() {
         <NavItem label={t('library.allSongs')} icon={<Music size={15} />} active={activeBookId === 'all' && !activeTag} onClick={() => handleNavClick('all')} count={allSongs?.length} />
         <NavItem label={t('library.favorites')} icon={<Star size={15} />} active={activeBookId === 'favorites'} onClick={() => handleNavClick('favorites')} count={allSongs?.filter(s => s.isFavorite).length} />
 
-        {books && books.length > 0 && (
+        {personalBooks.length > 0 && (
           <>
             <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">{t('library.books')}</div>
-            {books.map(book => (
+            {personalBooks.map(book => (
               <NavItem key={book.id} label={book.title} icon={<BookOpen size={15} />} active={activeBookId === book.id} onClick={() => handleNavClick(book.id)} count={allSongs?.filter(s => s.bookId === book.id).length} />
+            ))}
+          </>
+        )}
+
+        {teamBooks.length > 0 && (
+          <>
+            <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">Teams</div>
+            {teamBooks.map(book => (
+              <NavItem key={book.id} label={book.title} icon={<Users size={14} />} active={activeBookId === book.id} onClick={() => handleNavClick(book.id)} count={allSongs?.filter(s => s.bookId === book.id).length} />
             ))}
           </>
         )}
@@ -198,10 +230,12 @@ export default function LibraryPage() {
             ))}
           </select>
 
-          <Button variant="primary" size="sm" onClick={createSong}>
-            <Plus size={15} />
-            {t('library.newSong')}
-          </Button>
+          {!isActiveBookReadOnly && (
+            <Button variant="primary" size="sm" onClick={createSong}>
+              <Plus size={15} />
+              {t('library.newSong')}
+            </Button>
+          )}
         </div>
 
         {/* Active tag indicator */}
@@ -223,9 +257,13 @@ export default function LibraryPage() {
             </div>
           ) : (
             <ul>
-              {sortedSongs.map(song => (
-                <SongRow key={song.id} song={song} navigate={navigate} />
-              ))}
+              {sortedSongs.map(song => {
+                const teamId = bookTeamMap[song.bookId]
+                const team = teamId ? teams?.find(t => t.id === teamId) : undefined
+                const role = team && user ? getTeamRole(team, user.id, user.email) : null
+                const readOnly = role === 'reader'
+                return <SongRow key={song.id} song={song} navigate={navigate} readOnly={readOnly} />
+              })}
             </ul>
           )}
         </div>
@@ -234,7 +272,7 @@ export default function LibraryPage() {
   )
 }
 
-function SongRow({ song, navigate }: { song: Song; navigate: (path: string) => void }) {
+function SongRow({ song, navigate, readOnly }: { song: Song; navigate: (path: string) => void; readOnly?: boolean }) {
   return (
     <li
       className="flex items-center gap-3 px-4 py-3 border-b border-surface-3/50 hover:bg-surface-2 cursor-pointer group"
@@ -256,13 +294,15 @@ function SongRow({ song, navigate }: { song: Song; navigate: (path: string) => v
           </span>
         )}
         {song.isFavorite && <Star size={13} className="text-chord fill-chord" />}
-        <button
-          className="text-ink-faint hover:text-ink opacity-0 group-hover:opacity-100 p-1"
-          onClick={e => { e.stopPropagation(); navigate(`/editor/${song.id}`) }}
-          title="Edit"
-        >
-          <ChevronRight size={16} />
-        </button>
+        {!readOnly && (
+          <button
+            className="text-ink-faint hover:text-ink opacity-0 group-hover:opacity-100 p-1"
+            onClick={e => { e.stopPropagation(); navigate(`/editor/${song.id}`) }}
+            title="Edit"
+          >
+            <ChevronRight size={16} />
+          </button>
+        )}
       </div>
     </li>
   )

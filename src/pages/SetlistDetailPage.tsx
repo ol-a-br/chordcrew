@@ -6,7 +6,7 @@ import {
   GripVertical, Trash2, Plus, Search,
   ChevronUp, ChevronDown, Printer,
 } from 'lucide-react'
-import { db, generateId } from '@/db'
+import { db, generateId, markPending } from '@/db'
 import { Button } from '@/components/shared/Button'
 import type { SetlistItem, Song } from '@/types'
 
@@ -77,12 +77,21 @@ export default function SetlistDetailPage() {
     navigate(`/view/${songId}?setlistId=${id}&pos=${posInSongItems}`)
   }
 
+  // ── Touch setlist (update timestamp + mark pending for sync) ─────────────────
+
+  const touchSetlist = async () => {
+    if (!id) return
+    await db.setlists.update(id, { updatedAt: Date.now() })
+    await markPending('setlist', id)
+  }
+
   // ── Rename setlist ────────────────────────────────────────────────────────────
 
-  const handleSetlistNameBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+  const handleSetlistNameBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const name = e.currentTarget.value.trim()
     if (name && id) {
-      db.setlists.update(id, { name, updatedAt: Date.now() })
+      await db.setlists.update(id, { name, updatedAt: Date.now() })
+      await markPending('setlist', id)
     }
   }
 
@@ -90,24 +99,27 @@ export default function SetlistDetailPage() {
     if (e.key === 'Enter') e.currentTarget.blur()
   }
 
-  const handleSetlistDateBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+  const handleSetlistDateBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const date = e.currentTarget.value.trim() || undefined
-    if (id) db.setlists.update(id, { date, updatedAt: Date.now() })
+    if (id) {
+      await db.setlists.update(id, { date, updatedAt: Date.now() })
+      await markPending('setlist', id)
+    }
   }
 
   // ── Rename divider ────────────────────────────────────────────────────────────
 
-  const handleDividerNameBlur = (itemId: string, value: string) => {
+  const handleDividerNameBlur = async (itemId: string, value: string) => {
     const dividerName = value.trim() || 'Section'
-    db.setlistItems.update(itemId, { dividerName })
-    if (id) db.setlists.update(id, { updatedAt: Date.now() })
+    await db.setlistItems.update(itemId, { dividerName })
+    await touchSetlist()
   }
 
   // ── Delete item ───────────────────────────────────────────────────────────────
 
   const handleDelete = async (itemId: string) => {
     await db.setlistItems.delete(itemId)
-    if (id) await db.setlists.update(id, { updatedAt: Date.now() })
+    await touchSetlist()
   }
 
   // ── Drag and drop ─────────────────────────────────────────────────────────────
@@ -149,7 +161,7 @@ export default function SetlistDetailPage() {
 
     const updated = current.map((item, idx) => ({ ...item, order: idx }))
     await db.setlistItems.bulkPut(updated)
-    if (id) await db.setlists.update(id, { updatedAt: Date.now() })
+    await touchSetlist()
   }
 
   // ── Add song ──────────────────────────────────────────────────────────────────
@@ -165,7 +177,7 @@ export default function SetlistDetailPage() {
       transposeOffset: 0,
     }
     await db.setlistItems.put(newItem)
-    await db.setlists.update(id, { updatedAt: Date.now() })
+    await touchSetlist()
   }
 
   // ── Add divider ───────────────────────────────────────────────────────────────
@@ -181,25 +193,25 @@ export default function SetlistDetailPage() {
       transposeOffset: 0,
     }
     await db.setlistItems.put(newItem)
-    await db.setlists.update(id, { updatedAt: Date.now() })
+    await touchSetlist()
   }
 
   // ── Per-slot overrides ────────────────────────────────────────────────────────
 
   const adjustTranspose = async (itemId: string, newOffset: number) => {
     await db.setlistItems.update(itemId, { transposeOffset: newOffset })
-    if (id) await db.setlists.update(id, { updatedAt: Date.now() })
+    await touchSetlist()
   }
 
   const setItemColumns = async (itemId: string, columnCount: number | undefined) => {
     await db.setlistItems.update(itemId, { columnCount })
-    if (id) await db.setlists.update(id, { updatedAt: Date.now() })
+    await touchSetlist()
   }
 
   const setItemNotes = async (itemId: string, notes: string) => {
     const trimmed = notes.trim() || undefined
     await db.setlistItems.update(itemId, { notes: trimmed })
-    if (id) await db.setlists.update(id, { updatedAt: Date.now() })
+    await touchSetlist()
   }
 
   // ── Toggle edit mode ──────────────────────────────────────────────────────────
