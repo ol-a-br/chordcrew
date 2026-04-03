@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react'
 import { db } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
 import { transposeKey, getFirstChords } from '@/utils/chordpro'
+import { useFontScale } from '@/hooks/useFontScale'
 import type { SetlistItem } from '@/types'
 
 function getDefaultColumns(): number {
@@ -25,7 +26,7 @@ export default function ViewerPage() {
   const [transpose, setTranspose] = useState(0)
   const [columns, setColumns] = useState(getDefaultColumns)
   const [lyricsOnly, setLyricsOnly] = useState(false)
-  const [fontScale, setFontScale] = useState(1.0)
+  const [fontScale, setFontScale] = useFontScale()
 
   // Setlist context for prev/next navigation
   // Track last-accessed time for "recently accessed" sort in library
@@ -159,9 +160,13 @@ export default function ViewerPage() {
         </button>
 
         {/* Font size */}
-        <div className="flex items-center gap-1">
-          <button onClick={() => setFontScale(s => Math.max(0.7, s - 0.1))} className="p-1 text-ink-muted hover:text-ink text-sm font-bold">A-</button>
-          <button onClick={() => setFontScale(s => Math.min(2.0, s + 0.1))} className="p-1 text-ink-muted hover:text-ink text-sm font-bold">A+</button>
+        <div className="flex items-center gap-0.5">
+          <button onClick={() => setFontScale(s => Math.max(0.7, s - 0.1))} className="p-1.5 text-ink-muted hover:text-ink">
+            <ZoomOut size={16} />
+          </button>
+          <button onClick={() => setFontScale(s => Math.min(2.5, s + 0.1))} className="p-1.5 text-ink-muted hover:text-ink">
+            <ZoomIn size={16} />
+          </button>
         </div>
 
         {/* Favorite */}
@@ -181,16 +186,32 @@ export default function ViewerPage() {
         </Button>
       </div>
 
-      {/* Song content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
-        <SongRenderer
-          content={song.transcription.content}
-          transposeOffset={transpose}
-          columns={columns}
-          lyricsOnly={lyricsOnly}
-          fontScale={fontScale}
-        />
-      </div>
+      {/* Song content — multi-column: wrap to columns (no vertical scroll);
+          single-column: normal vertical scroll */}
+      {columns > 1 ? (
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
+          <div className="h-full px-6 py-5">
+            <SongRenderer
+              content={song.transcription.content}
+              transposeOffset={transpose}
+              columns={columns}
+              lyricsOnly={lyricsOnly}
+              fontScale={fontScale}
+              pageFlip
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-5">
+          <SongRenderer
+            content={song.transcription.content}
+            transposeOffset={transpose}
+            columns={1}
+            lyricsOnly={lyricsOnly}
+            fontScale={fontScale}
+          />
+        </div>
+      )}
     </div>
   )
 }

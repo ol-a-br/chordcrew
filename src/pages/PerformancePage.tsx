@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useFontScale } from '@/hooks/useFontScale'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { X, ChevronUp, ChevronDown, AlignLeft, ZoomIn, ZoomOut } from 'lucide-react'
@@ -25,7 +26,7 @@ export default function PerformancePage() {
   const [transpose, setTranspose]     = useState(0)
   const [columns, setColumns]         = useState(getDefaultColumns)
   const [lyricsOnly, setLyricsOnly]   = useState(false)
-  const [fontScale, setFontScale]     = useState(1.15)
+  const [fontScale, setFontScale]     = useFontScale()
   const [showControls, setShowControls] = useState(true)
 
   const contentRef = useRef<HTMLDivElement>(null)
