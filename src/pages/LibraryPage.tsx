@@ -40,6 +40,7 @@ export default function LibraryPage() {
   const [query, setQuery] = useState('')
   const [activeBookId, setActiveBookId] = useState<string | 'all' | 'favorites'>('all')
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [activeKey, setActiveKey] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<SortKey>('title')
 
   const books   = useLiveQuery(() => db.books.toArray(), [])
@@ -52,18 +53,26 @@ export default function LibraryPage() {
     return [...tagSet].sort()
   }, [allSongs])
 
+  // Unique keys across all songs, sorted
+  const allKeys = useMemo(() => {
+    const keySet = new Set<string>()
+    allSongs?.forEach(s => { if (s.transcription.key) keySet.add(s.transcription.key) })
+    return [...keySet].sort((a, b) => a.localeCompare(b))
+  }, [allSongs])
+
   const filteredSongs = useMemo(() => {
     if (!allSongs) return []
     let songs = allSongs
     if (activeBookId === 'favorites') songs = songs.filter(s => s.isFavorite)
     else if (activeBookId !== 'all') songs = songs.filter(s => s.bookId === activeBookId)
     if (activeTag) songs = songs.filter(s => s.tags.some(t => t.toLowerCase() === activeTag))
+    if (activeKey) songs = songs.filter(s => s.transcription.key === activeKey)
     if (query.trim()) {
       const q = query.toLowerCase()
       songs = songs.filter(s => s.searchText.includes(q))
     }
     return songs
-  }, [allSongs, activeBookId, activeTag, query])
+  }, [allSongs, activeBookId, activeTag, activeKey, query])
 
   const sortedSongs = useMemo(() => {
     const s = [...filteredSongs]
@@ -109,11 +118,16 @@ export default function LibraryPage() {
   const handleNavClick = (bookId: typeof activeBookId) => {
     setActiveBookId(bookId)
     setActiveTag(null)
+    setActiveKey(null)
   }
 
   const handleTagClick = (tag: string) => {
     setActiveTag(activeTag === tag ? null : tag)
     setActiveBookId('all')
+  }
+
+  const handleKeyClick = (key: string) => {
+    setActiveKey(activeKey === key ? null : key)
   }
 
   return (
@@ -137,6 +151,22 @@ export default function LibraryPage() {
             <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">Tags</div>
             {allTags.map(tag => (
               <NavItem key={tag} label={tag} icon={<Tag size={14} />} active={activeTag === tag} onClick={() => handleTagClick(tag)} count={allSongs?.filter(s => s.tags.some(t => t.toLowerCase() === tag)).length} />
+            ))}
+          </>
+        )}
+
+        {allKeys.length > 0 && (
+          <>
+            <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">Key</div>
+            {allKeys.map(key => (
+              <NavItem
+                key={key}
+                label={key}
+                icon={<span className="text-xs font-mono text-chord leading-none">𝄞</span>}
+                active={activeKey === key}
+                onClick={() => handleKeyClick(key)}
+                count={allSongs?.filter(s => s.transcription.key === key).length}
+              />
             ))}
           </>
         )}

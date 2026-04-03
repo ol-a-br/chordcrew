@@ -87,7 +87,7 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 | Annotations: text, highlight, symbol (private + shared) | — | low |
 | Song version diff view + one-tap restore | ED-05 | low |
 | Chord validation highlighting in editor | ED-07 | low |
-| Filter library: key, tag, artist, BPM | LIB-08 | low |
+| **Filter library by key (sidebar "Key" section)** | LIB-08 | ✅ done |
 | Tag browser + tag editing (LIB-09 covers sort; see Phase 1 gaps) | LIB-10–11 | low |
 | **Capo helper hint in viewer (Capo 2 → sounds in A)** | VIEW-11 | ✅ done |
 | **Font scale persisted in settings (localStorage via useFontScale)** | SETTINGS-05 | ✅ done |
