@@ -139,7 +139,7 @@ Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
 |------|---------|-------|
 | Viewer role (read-only teammates) | — | |
 | Published / locked books and setlists | — | |
-| Setlist duplication for recurring services | SET-12 | |
+| **Setlist duplication for recurring services** | SET-12 | ✅ done |
 | Additional UI languages (beyond EN/DE) | — | |
 | Chord diagram rendering for `{chord:}` / `{define:}` | — | Out of scope per spec |
 

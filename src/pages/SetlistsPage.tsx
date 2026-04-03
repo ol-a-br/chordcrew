@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, ListMusic, Play, Calendar } from 'lucide-react'
+import { Plus, ListMusic, Play, Calendar, Copy } from 'lucide-react'
 import { db, generateId } from '@/db'
 import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
@@ -104,6 +104,25 @@ function SetlistRow({ setlist, navigate }: { setlist: Setlist; navigate: (p: str
     [setlist.id]
   )
 
+  const handleDuplicate = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const now = Date.now()
+    const newId = generateId()
+    await db.setlists.add({
+      ...setlist,
+      id: newId,
+      name: `${setlist.name} (copy)`,
+      createdAt: now,
+      updatedAt: now,
+      accessedAt: undefined,
+    })
+    const items = await db.setlistItems.where('setlistId').equals(setlist.id).toArray()
+    if (items.length > 0) {
+      await db.setlistItems.bulkAdd(items.map(item => ({ ...item, id: generateId(), setlistId: newId })))
+    }
+    navigate(`/setlists/${newId}`)
+  }
+
   return (
     <li
       className="flex items-center gap-3 p-3 bg-surface-1 rounded-xl border border-surface-3 hover:border-surface-3/80 hover:bg-surface-2 cursor-pointer group"
@@ -114,21 +133,33 @@ function SetlistRow({ setlist, navigate }: { setlist: Setlist; navigate: (p: str
       </div>
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm">{setlist.name}</div>
-        <div className="text-xs text-ink-muted">{itemCount ?? 0} songs</div>
-      </div>
-      {setlist.date && (
-        <div className="flex items-center gap-1 text-xs text-ink-muted">
-          <Calendar size={12} />
-          {new Date(setlist.date).toLocaleDateString()}
+        <div className="flex items-center gap-2 text-xs text-ink-muted">
+          <span>{itemCount ?? 0} songs</span>
+          {setlist.date && (
+            <>
+              <Calendar size={10} className="shrink-0" />
+              <span>{new Date(setlist.date).toLocaleDateString()}</span>
+            </>
+          )}
         </div>
-      )}
-      <button
-        className="p-1.5 bg-chord text-surface-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-        onClick={e => { e.stopPropagation(); navigate(`/setlists/${setlist.id}/present`) }}
-        title="Present"
-      >
-        <Play size={14} />
-      </button>
+      </div>
+
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          className="p-1.5 text-ink-faint hover:text-ink rounded"
+          onClick={handleDuplicate}
+          title="Duplicate setlist"
+        >
+          <Copy size={14} />
+        </button>
+        <button
+          className="p-1.5 bg-chord text-surface-0 rounded-lg"
+          onClick={e => { e.stopPropagation(); navigate(`/setlists/${setlist.id}`) }}
+          title="Open setlist"
+        >
+          <Play size={14} />
+        </button>
+      </div>
     </li>
   )
 }
