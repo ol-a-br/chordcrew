@@ -54,13 +54,18 @@
 | **Firebase Auth (Google Sign-In) + deployed to chordcrew-50c55.web.app** | AUTH-01 | |
 | **Continuous scroll mode toggle in Settings** | SETTINGS-07 | |
 
-### 🔜 Remaining Phase 1 gaps
+### ✅ Phase 1 gaps — now complete
+
+| Item | Req IDs | Notes |
+|------|---------|-------|
+| **PWA icons: `public/icons/icon-192.png` + `icon-512.png`** | PWA-03 | Generated from SVG via ImageMagick |
+| **CI/CD: GitHub Actions → Firebase deploy on push to `main`** | — | `.github/workflows/deploy.yml`; requires `FIREBASE_SERVICE_ACCOUNT` + `VITE_FIREBASE_*` secrets in repo settings |
+
+### 🔜 Remaining Phase 1 gap
 
 | Item | Req IDs | Priority |
 |------|---------|----------|
-| PWA icons: `public/icons/icon-192.png` + `icon-512.png` | PWA-03 | high |
 | Pinch-to-zoom on Viewer and Performance pages | VIEW-10, PERF-11 | medium |
-| CI/CD: GitHub Actions → Firebase deploy on push to `main` | — | medium |
 
 ---
 
@@ -70,7 +75,7 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 
 | Item | Req IDs | Priority |
 |------|---------|----------|
-| SetlistDetailPage: add songs, dividers, reorder | SET-04–07 | critical |
+| **SetlistDetailPage: add songs, dividers, reorder, rename, delete** | SET-04–07 | ✅ done |
 | Per-setlist-slot overrides: transpose, columns, notes | SET-08–10 | high |
 | Setlist present mode: full-screen, song counter | SET-13, PERF-09 | high |
 | Column navigation across setlist songs (PERF-07) | PERF-07 | high |
