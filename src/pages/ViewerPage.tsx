@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react'
+import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer } from 'lucide-react'
 import { db } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
@@ -182,6 +182,15 @@ export default function ViewerPage() {
         {/* Favorite */}
         <button onClick={toggleFavorite} className="p-1.5 hover:bg-surface-2 rounded">
           <Star size={16} className={song.isFavorite ? 'text-chord fill-chord' : 'text-ink-muted'} />
+        </button>
+
+        {/* Print / PDF */}
+        <button
+          onClick={() => window.open(`/print/song/${song.id}?transpose=${transpose}&columns=${columns}`, '_blank')}
+          className="p-1.5 text-ink-muted hover:text-ink rounded"
+          title="Print / Save as PDF"
+        >
+          <Printer size={16} />
         </button>
 
         {/* Present mode */}

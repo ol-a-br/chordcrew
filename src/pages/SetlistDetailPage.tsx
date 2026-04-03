@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import {
   ArrowLeft, Play, Music, Pencil, Check,
   GripVertical, Trash2, Plus, Search,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, Printer,
 } from 'lucide-react'
 import { db, generateId } from '@/db'
 import { Button } from '@/components/shared/Button'
@@ -247,10 +247,19 @@ export default function SetlistDetailPage() {
         </button>
 
         {!editMode && songItems.length > 0 && (
-          <Button variant="primary" size="sm" onClick={handlePresent}>
-            <Play size={14} />
-            Present
-          </Button>
+          <>
+            <button
+              onClick={() => window.open(`/print/setlist/${id}`, '_blank')}
+              className="p-1.5 text-ink-muted hover:text-ink rounded"
+              title="Print setlist / Save as PDF"
+            >
+              <Printer size={17} />
+            </button>
+            <Button variant="primary" size="sm" onClick={handlePresent}>
+              <Play size={14} />
+              Present
+            </Button>
+          </>
         )}
       </div>
 

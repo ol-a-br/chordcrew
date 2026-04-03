@@ -13,6 +13,8 @@ const SetlistsPage       = lazy(() => import('@/pages/SetlistsPage'))
 const SetlistDetailPage  = lazy(() => import('@/pages/SetlistDetailPage'))
 const ImportPage         = lazy(() => import('@/pages/ImportPage'))
 const SettingsPage       = lazy(() => import('@/pages/SettingsPage'))
+const PrintSongPage      = lazy(() => import('@/pages/PrintSongPage'))
+const PrintSetlistPage   = lazy(() => import('@/pages/PrintSetlistPage'))
 
 function PageLoader() {
   return (
@@ -38,6 +40,10 @@ export default function App() {
           <Routes>
             {/* Full-screen performance mode — outside AppShell */}
             <Route path="/perform/:id" element={<PerformancePage />} />
+
+            {/* Print / PDF export — standalone pages (no nav chrome) */}
+            <Route path="/print/song/:id"     element={<PrintSongPage />} />
+            <Route path="/print/setlist/:id"  element={<PrintSetlistPage />} />
 
             {/* Main app with sidebar */}
             <Route element={<AppShell />}>

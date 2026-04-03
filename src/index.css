@@ -226,3 +226,43 @@
 /* ── Transitions ──────────────────────────────────────────────────────────── */
 
 * { transition-property: color, background-color, border-color; transition-duration: 100ms; }
+
+/* ── Print / PDF export ──────────────────────────────────────────────────── */
+@media print {
+  @page { margin: 1.2cm 1.5cm; }
+
+  /* Force white background + legible text */
+  body { background: white !important; }
+  .chordpro-output { color: black !important; background: white !important; }
+
+  /* Chords: dark instead of amber */
+  .chordpro-output .chord { color: #111 !important; font-weight: 700 !important; }
+  .chordpro-output .chord-quality { color: #111 !important; }
+  .chordpro-output .chord.chord-optional { opacity: 0.5 !important; color: #555 !important; }
+  .chordpro-output .chord-bass { color: #111 !important; }
+
+  /* Section labels: blue (readable on white) */
+  .chordpro-output .label { color: #1d4ed8 !important; }
+  .chordpro-output .section-header-row .chord { color: #1d4ed8 !important; }
+
+  /* Section badge */
+  .chordpro-output .section-badge { border-color: #888 !important; color: #444 !important; }
+
+  /* Chorus bar */
+  .chordpro-output .paragraph.chorus { border-left-color: #888 !important; }
+  .chordpro-output .chorus-section    { border-left-color: #888 !important; }
+
+  /* Column separators */
+  .chordpro-columns-2,
+  .chordpro-columns-3,
+  .chordpro-columns-4,
+  .chordpro-columns-5 { column-rule-color: #ccc !important; }
+
+  /* Comments + metadata */
+  .chordpro-output .comment { color: #555 !important; font-style: italic; }
+  .chordpro-output h1 { color: black !important; }
+  .chordpro-output h2 { color: #555 !important; }
+
+  /* Lyrics */
+  .chordpro-output .lyrics { color: black !important; }
+}
