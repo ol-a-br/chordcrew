@@ -64,6 +64,12 @@ export default function ViewerPage() {
     () => transpose !== 0 ? getFirstChords(song?.transcription.content ?? '', transpose) : [],
     [song?.transcription.content, transpose]
   )
+  // Capo helper: sounding key = written key transposed up by capo value
+  const capo = song?.transcription.capo ?? 0
+  const soundingKey = useMemo(
+    () => (capo > 0 && song?.transcription.key) ? transposeKey(song.transcription.key, capo) : '',
+    [capo, song?.transcription.key]
+  )
 
   const toggleFavorite = async () => {
     if (!song) return
@@ -121,6 +127,11 @@ export default function ViewerPage() {
         {song.transcription.tempo > 0 && (
           <span className="text-xs font-mono text-ink-muted shrink-0" title="Tempo">
             ♩ {song.transcription.tempo}
+          </span>
+        )}
+        {capo > 0 && (
+          <span className="text-xs font-mono text-ink-muted shrink-0" title="Capo helper">
+            Capo {capo}{soundingKey ? ` → ${soundingKey}` : ''}
           </span>
         )}
 

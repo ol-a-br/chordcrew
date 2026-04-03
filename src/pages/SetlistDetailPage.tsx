@@ -90,6 +90,11 @@ export default function SetlistDetailPage() {
     if (e.key === 'Enter') e.currentTarget.blur()
   }
 
+  const handleSetlistDateBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const date = e.currentTarget.value.trim() || undefined
+    if (id) db.setlists.update(id, { date, updatedAt: Date.now() })
+  }
+
   // ── Rename divider ────────────────────────────────────────────────────────────
 
   const handleDividerNameBlur = (itemId: string, value: string) => {
@@ -263,12 +268,29 @@ export default function SetlistDetailPage() {
         )}
       </div>
 
-      {/* Song count */}
-      {allItems.length > 0 && (
-        <p className="text-xs text-ink-muted">
-          {songItems.length} song{songItems.length !== 1 ? 's' : ''}
-        </p>
-      )}
+      {/* Date field (edit mode) + song count + date badge */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {editMode && (
+          <label className="flex items-center gap-1.5 text-xs">
+            <span className="text-ink-faint">Date</span>
+            <input
+              type="date"
+              defaultValue={setlist.date ?? ''}
+              key={`date-${setlist.id}-${setlist.date}`}
+              onBlur={handleSetlistDateBlur}
+              className="bg-surface-2 border border-surface-3 focus:border-chord/40 rounded px-2 py-0.5 text-xs text-ink outline-none"
+            />
+          </label>
+        )}
+        {!editMode && setlist.date && (
+          <span className="text-xs text-ink-faint font-mono">{setlist.date}</span>
+        )}
+        {allItems.length > 0 && (
+          <p className="text-xs text-ink-muted">
+            {songItems.length} song{songItems.length !== 1 ? 's' : ''}
+          </p>
+        )}
+      </div>
 
       {/* Empty state (non-edit) */}
       {allItems.length === 0 && !editMode && (

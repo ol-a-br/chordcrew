@@ -78,7 +78,7 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 | **SetlistDetailPage: add songs, dividers, reorder, rename, delete** | SET-04–07 | ✅ done |
 | **Per-setlist-slot overrides: transpose, columns, notes** | SET-08–10 | ✅ done |
 | **Setlist present mode: full-screen, song counter, prev/next song buttons** | SET-13, PERF-09 | ✅ done |
-| Column navigation across setlist songs (PERF-07) | PERF-07 | high |
+| **Column navigation across setlist songs** | PERF-07 | ✅ done |
 | **Long-press pedal: skip song / back to start** | PERF-08 | ✅ done |
 | **Quick-jump tray (slide-out song list in present mode)** | PERF-10 | ✅ done |
 | **PDF export: print pages with @media print CSS, single song + setlist** | PDF-01, 04–06 | ✅ done |
@@ -89,10 +89,10 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 | Chord validation highlighting in editor | ED-07 | low |
 | Filter library: key, tag, artist, BPM | LIB-08 | low |
 | Tag browser + tag editing (LIB-09 covers sort; see Phase 1 gaps) | LIB-10–11 | low |
-| Capo helper hint in viewer | VIEW-11 | low |
+| **Capo helper hint in viewer (Capo 2 → sounds in A)** | VIEW-11 | ✅ done |
 | **Font scale persisted in settings (localStorage via useFontScale)** | SETTINGS-05 | ✅ done |
-| Setlist planned date/time field | SET-11 | low |
-| `.cho` / `.chopro` single-file import | IMP-05 | low |
+| **Setlist planned date/time field** | SET-11 | ✅ done |
+| **`.cho` / `.chopro` / `.chordpro` single-file import** | IMP-05 | ✅ done |
 | Deduplication warning on import | IMP-06 | low |
 
 ---
