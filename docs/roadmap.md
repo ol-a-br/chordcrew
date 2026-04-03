@@ -80,7 +80,7 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 | **Setlist present mode: full-screen, song counter, prev/next song buttons** | SET-13, PERF-09 | ✅ done |
 | Column navigation across setlist songs (PERF-07) | PERF-07 | high |
 | **Long-press pedal: skip song / back to start** | PERF-08 | ✅ done |
-| Quick-jump tray (slide-out song list in present mode) | PERF-10 | medium |
+| **Quick-jump tray (slide-out song list in present mode)** | PERF-10 | ✅ done |
 | PDF export: portrait + landscape, offline | PDF-01–07 | medium |
 | BPM display + tap-tempo + visual metronome | — | medium |
 | Autoscroll with `{@mm:ss}` time-tag support | — | low |
@@ -90,7 +90,7 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 | Filter library: key, tag, artist, BPM | LIB-08 | low |
 | Tag browser + tag editing (LIB-09 covers sort; see Phase 1 gaps) | LIB-10–11 | low |
 | Capo helper hint in viewer | VIEW-11 | low |
-| Font scale persisted in settings | SETTINGS-05 | low |
+| **Font scale persisted in settings (localStorage via useFontScale)** | SETTINGS-05 | ✅ done |
 | Setlist planned date/time field | SET-11 | low |
 | `.cho` / `.chopro` single-file import | IMP-05 | low |
 | Deduplication warning on import | IMP-06 | low |

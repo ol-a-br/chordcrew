@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useFontScale } from '@/hooks/useFontScale'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlignLeft, ZoomIn, ZoomOut } from 'lucide-react'
+import { X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlignLeft, ZoomIn, ZoomOut, List } from 'lucide-react'
 import { db } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { useKeyboardNav } from '@/hooks/useKeyboard'
@@ -28,6 +28,7 @@ export default function PerformancePage() {
   const [lyricsOnly, setLyricsOnly]   = useState(false)
   const [fontScale, setFontScale]     = useFontScale()
   const [showControls, setShowControls] = useState(true)
+  const [showTray, setShowTray]       = useState(false)
 
   const contentRef = useRef<HTMLDivElement>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
@@ -50,6 +51,22 @@ export default function PerformancePage() {
   const prevSongId = songItems[currentPos - 1]?.songId
   const nextSongId = songItems[currentPos + 1]?.songId
   const currentSetlistItem = songItems[currentPos]
+
+  // Songs needed for the quick-jump tray
+  const traySongIds = useMemo(
+    () => songItems.map(i => i.songId!),
+    [songItems]
+  )
+  const traySongMap = useLiveQuery(
+    async () => {
+      if (traySongIds.length === 0) return {}
+      const list = await db.songs.bulkGet(traySongIds)
+      return Object.fromEntries(
+        list.filter(Boolean).map(s => [s!.id, { title: s!.title, artist: s!.artist }])
+      )
+    },
+    [traySongIds.join(',')]
+  )
 
   // ── Per-slot overrides ────────────────────────────────────────────────────
   useEffect(() => {
@@ -182,6 +199,7 @@ export default function PerformancePage() {
   if (!song) return null
 
   const isMultiColumn = columns > 1
+  const trayItems = setlistItems ?? []
 
   return (
     <div
@@ -274,6 +292,17 @@ export default function PerformancePage() {
         <button onClick={() => setFontScale(s => Math.min(2.5, s + 0.1))} className="p-1 text-ink-muted hover:text-ink shrink-0">
           <ZoomIn size={15} />
         </button>
+
+        {/* Quick-jump tray toggle — only when in a setlist */}
+        {setlistId && songItems.length > 1 && (
+          <button
+            onClick={() => { setShowTray(t => !t); resetHideTimer() }}
+            className={`p-1.5 rounded shrink-0 ${showTray ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
+            title="Song list"
+          >
+            <List size={15} />
+          </button>
+        )}
       </div>
 
       {/* Song content */}
@@ -328,6 +357,78 @@ export default function PerformancePage() {
         <div className="flex-1 pointer-events-auto" onClick={goPrev} />
         <div className="flex-1 pointer-events-auto" onClick={goNext} />
       </div>
+
+      {/* Quick-jump tray */}
+      {showTray && setlistId && (
+        <>
+          {/* Backdrop — closes tray on tap */}
+          <div
+            className="absolute inset-0 z-20"
+            onClick={() => setShowTray(false)}
+          />
+          {/* Slide-up panel */}
+          <div className="absolute bottom-0 inset-x-0 z-30 bg-surface-1 border-t border-surface-3 rounded-t-2xl max-h-[65vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-surface-3 shrink-0">
+              <span className="text-sm font-semibold text-ink">Setlist</span>
+              <button
+                onClick={() => setShowTray(false)}
+                className="p-1 text-ink-muted hover:text-ink"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1">
+              {trayItems.map(item => {
+                if (item.type === 'divider') {
+                  return (
+                    <div
+                      key={item.id}
+                      className="px-4 py-1.5 text-xs text-ink-muted uppercase tracking-wider font-semibold bg-surface-2/50"
+                    >
+                      {item.dividerName ?? '—'}
+                    </div>
+                  )
+                }
+
+                const posInSongItems = songItems.findIndex(s => s.id === item.id)
+                const isCurrent = posInSongItems === currentPos
+                const songData = item.songId ? traySongMap?.[item.songId] : undefined
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setShowTray(false)
+                      if (item.songId && posInSongItems !== -1) {
+                        navigate(`/perform/${item.songId}?setlistId=${setlistId}&pos=${posInSongItems}`)
+                      }
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                      isCurrent ? 'bg-surface-2' : 'hover:bg-surface-2/60'
+                    }`}
+                  >
+                    <span className={`text-xs font-mono w-5 shrink-0 text-right ${isCurrent ? 'text-chord' : 'text-ink-faint'}`}>
+                      {posInSongItems + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-sm font-medium truncate ${isCurrent ? 'text-chord' : 'text-ink'}`}>
+                        {songData?.title ?? 'Unknown'}
+                      </div>
+                      {songData?.artist && (
+                        <div className="text-xs text-ink-muted truncate">{songData.artist}</div>
+                      )}
+                    </div>
+                    {isCurrent && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-chord shrink-0" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
