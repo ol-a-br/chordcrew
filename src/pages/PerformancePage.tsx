@@ -29,11 +29,14 @@ export default function PerformancePage() {
   const [fontScale, setFontScale]     = useFontScale()
   const [showControls, setShowControls] = useState(true)
   const [showTray, setShowTray]       = useState(false)
+  const [metronome, setMetronome]     = useState(false)
+  const [beat, setBeat]               = useState(false)
 
   const contentRef = useRef<HTMLDivElement>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const appliedItemRef = useRef<string | null>(null)
+  const beatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const transposedKey = useMemo(
     () => transposeKey(song?.transcription.key ?? '', transpose),
@@ -75,6 +78,21 @@ export default function PerformancePage() {
     setTranspose(currentSetlistItem.transposeOffset ?? 0)
     if (currentSetlistItem.columnCount) setColumns(currentSetlistItem.columnCount)
   }, [currentSetlistItem])
+
+  // ── Visual metronome ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (beatTimerRef.current) clearInterval(beatTimerRef.current)
+    if (metronome && song && song.transcription.tempo > 0) {
+      const intervalMs = 60000 / song.transcription.tempo
+      beatTimerRef.current = setInterval(() => {
+        setBeat(true)
+        setTimeout(() => setBeat(false), Math.min(80, intervalMs * 0.15))
+      }, intervalMs)
+    } else {
+      setBeat(false)
+    }
+    return () => { if (beatTimerRef.current) clearInterval(beatTimerRef.current) }
+  }, [metronome, song?.transcription.tempo])
 
   // ── Wake Lock ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -252,9 +270,22 @@ export default function PerformancePage() {
           </span>
         )}
         {song.transcription.tempo > 0 && (
-          <span className="text-xs font-mono text-ink-muted shrink-0" title="Tempo">
+          <button
+            onClick={() => setMetronome(m => !m)}
+            className={`relative text-xs font-mono shrink-0 px-1.5 py-0.5 rounded transition-colors ${
+              metronome ? 'text-chord bg-chord/10' : 'text-ink-muted hover:text-ink'
+            }`}
+            title={`Metronome — ${song.transcription.tempo} BPM`}
+          >
             ♩ {song.transcription.tempo}
-          </span>
+            {metronome && (
+              <span
+                className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full transition-colors duration-75 ${
+                  beat ? 'bg-chord' : 'bg-chord/25'
+                }`}
+              />
+            )}
+          </button>
         )}
 
         {/* Transpose */}

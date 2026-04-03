@@ -82,7 +82,7 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 | **Long-press pedal: skip song / back to start** | PERF-08 | ✅ done |
 | **Quick-jump tray (slide-out song list in present mode)** | PERF-10 | ✅ done |
 | **PDF export: print pages with @media print CSS, single song + setlist** | PDF-01, 04–06 | ✅ done |
-| BPM display + tap-tempo + visual metronome | — | medium |
+| **BPM tap-tempo in Editor + visual metronome in Performance** | — | ✅ done |
 | Autoscroll with `{@mm:ss}` time-tag support | — | low |
 | Annotations: text, highlight, symbol (private + shared) | — | low |
 | Song version diff view + one-tap restore | ED-05 | low |

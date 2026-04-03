@@ -31,6 +31,29 @@ export default function EditorPage() {
   const [showPreview, setShowPreview] = useState(true)
   const tagInputRef = useRef<HTMLInputElement>(null)
 
+  // ── Tap-tempo ─────────────────────────────────────────────────────────────
+  const tapTimesRef = useRef<number[]>([])
+  const tapResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleTap = () => {
+    const now = Date.now()
+    // Drop taps older than 3 s
+    tapTimesRef.current = [...tapTimesRef.current.filter(t => now - t < 3000), now]
+
+    if (tapTimesRef.current.length >= 3) {
+      const times = tapTimesRef.current
+      const intervals: number[] = []
+      for (let i = 1; i < times.length; i++) intervals.push(times[i] - times[i - 1])
+      const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length
+      const bpm = Math.round(60000 / avgMs)
+      commitMetaField('tempo', String(bpm))
+    }
+
+    // Reset after 3 s of silence
+    if (tapResetTimer.current) clearTimeout(tapResetTimer.current)
+    tapResetTimer.current = setTimeout(() => { tapTimesRef.current = [] }, 3000)
+  }
+
   // Derive metadata from content for display; updated reactively
   const derivedMeta = useMemo(() => extractMeta(content), [content])
 
@@ -154,6 +177,16 @@ export default function EditorPage() {
               onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
               className={`${width} bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50`}
             />
+            {directive === 'tempo' && (
+              <button
+                type="button"
+                onClick={handleTap}
+                className="px-1.5 py-0.5 text-xs bg-surface-2 border border-surface-3 rounded text-ink-muted hover:text-ink hover:border-chord/40 active:bg-chord/10 transition-colors select-none"
+                title="Tap tempo"
+              >
+                Tap
+              </button>
+            )}
           </label>
         ))}
       </div>
