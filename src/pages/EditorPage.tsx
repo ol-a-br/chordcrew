@@ -1,13 +1,14 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Save, Eye, X, RotateCcw, Tag } from 'lucide-react'
+import { Save, Eye, X, RotateCcw, Tag, History } from 'lucide-react'
 import { db, upsertSongVersions, markPending } from '@/db'
 import { buildSearchText, extractMeta } from '@/utils/chordpro'
 import { ChordProEditor } from '@/components/editor/ChordProEditor'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
+import type { SongVersion } from '@/types'
 
 /** Replace or insert a ChordPro directive in the content string. */
 function updateDirective(content: string, directive: string, value: string): string {
@@ -29,7 +30,21 @@ export default function EditorPage() {
   const [tags, setTags] = useState<string[]>([])
   const [dirty, setDirty] = useState(false)
   const [showPreview, setShowPreview] = useState(true)
+  const [showHistory, setShowHistory] = useState(false)
   const tagInputRef = useRef<HTMLInputElement>(null)
+
+  const versions = useLiveQuery(
+    async (): Promise<SongVersion[]> => id
+      ? db.songVersions.where('songId').equals(id).sortBy('savedAt')
+      : [],
+    [id]
+  )
+
+  const restoreVersion = useCallback((versionContent: string) => {
+    setContent(versionContent)
+    setDirty(true)
+    setShowHistory(false)
+  }, [])
 
   // ── Tap-tempo ─────────────────────────────────────────────────────────────
   const tapTimesRef = useRef<number[]>([])
@@ -147,6 +162,15 @@ export default function EditorPage() {
         >
           <Eye size={17} />
         </button>
+        {(versions?.length ?? 0) > 0 && (
+          <button
+            onClick={() => setShowHistory(h => !h)}
+            className={`p-1.5 rounded ${showHistory ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
+            title="Version history"
+          >
+            <History size={17} />
+          </button>
+        )}
         <Button variant="ghost" size="sm" onClick={() => navigate(`/view/${song.id}`)}>
           <RotateCcw size={14} />
           View
@@ -222,7 +246,7 @@ export default function EditorPage() {
       </div>
 
       {/* Split pane */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 relative">
         {/* Editor */}
         <div className={`flex flex-col min-h-0 ${showPreview ? 'w-1/2' : 'w-full'}`}>
           <ChordProEditor value={content} onChange={handleChange} />
@@ -234,6 +258,50 @@ export default function EditorPage() {
             <div className="w-px bg-surface-3 shrink-0" />
             <div className="flex-1 overflow-y-auto p-6">
               <SongRenderer content={content} columns={1} fontScale={0.95} />
+            </div>
+          </>
+        )}
+
+        {/* Version history panel — slides in from the right */}
+        {showHistory && versions && versions.length > 0 && (
+          <>
+            <div className="absolute inset-0 z-10" onClick={() => setShowHistory(false)} />
+            <div className="absolute right-0 top-0 bottom-0 z-20 w-72 bg-surface-1 border-l border-surface-3 flex flex-col shadow-2xl">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-surface-3 shrink-0">
+                <span className="text-sm font-semibold text-ink">Version history</span>
+                <button onClick={() => setShowHistory(false)} className="p-1 text-ink-muted hover:text-ink">
+                  <X size={15} />
+                </button>
+              </div>
+              <div className="overflow-y-auto flex-1 p-3 space-y-2">
+                {[...versions].reverse().map((v, i) => {
+                  const ago = Date.now() - v.savedAt
+                  const label = ago < 60000 ? 'just now'
+                    : ago < 3600000 ? `${Math.round(ago / 60000)} min ago`
+                    : ago < 86400000 ? `${Math.round(ago / 3600000)} h ago`
+                    : new Date(v.savedAt).toLocaleDateString()
+                  const preview = v.content.trim().split('\n').slice(0, 3).join(' ↵ ')
+
+                  return (
+                    <div key={v.id} className="bg-surface-2 rounded-lg p-3 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-ink-muted font-mono">v{versions.length - i}</span>
+                        <span className="text-xs text-ink-faint">{label}</span>
+                      </div>
+                      <p className="text-xs text-ink-faint truncate font-mono leading-snug">{preview}</p>
+                      <button
+                        onClick={() => restoreVersion(v.content)}
+                        className="w-full text-xs px-2 py-1 bg-chord/10 text-chord hover:bg-chord/20 rounded transition-colors"
+                      >
+                        Restore this version
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="px-4 py-2 text-xs text-ink-faint border-t border-surface-3 shrink-0">
+                Restoring replaces the editor content. Save to keep it.
+              </p>
             </div>
           </>
         )}

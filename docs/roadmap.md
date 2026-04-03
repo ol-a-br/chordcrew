@@ -85,7 +85,7 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 | **BPM tap-tempo in Editor + visual metronome in Performance** | — | ✅ done |
 | Autoscroll with `{@mm:ss}` time-tag support | — | low |
 | Annotations: text, highlight, symbol (private + shared) | — | low |
-| Song version diff view + one-tap restore | ED-05 | low |
+| **Song version history + one-tap restore (slide-over panel in Editor)** | ED-05 | ✅ done |
 | Chord validation highlighting in editor | ED-07 | low |
 | **Filter library by key (sidebar "Key" section)** | LIB-08 | ✅ done |
 | Tag browser + tag editing (LIB-09 covers sort; see Phase 1 gaps) | LIB-10–11 | low |
