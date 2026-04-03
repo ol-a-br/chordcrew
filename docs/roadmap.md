@@ -86,9 +86,9 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 | Autoscroll with `{@mm:ss}` time-tag support | — | low |
 | Annotations: text, highlight, symbol (private + shared) | — | low |
 | **Song version history + one-tap restore (slide-over panel in Editor)** | ED-05 | ✅ done |
-| Chord validation highlighting in editor | ED-07 | low |
+| **Chord validation: unknown chords highlighted orange in editor** | ED-07 | ✅ done |
 | **Filter library by key (sidebar "Key" section)** | LIB-08 | ✅ done |
-| Tag browser + tag editing (LIB-09 covers sort; see Phase 1 gaps) | LIB-10–11 | low |
+| **Tag browser + tag editing** | LIB-10–11 | ✅ done (Phase 1) |
 | **Capo helper hint in viewer (Capo 2 → sounds in A)** | VIEW-11 | ✅ done |
 | **Font scale persisted in settings (localStorage via useFontScale)** | SETTINGS-05 | ✅ done |
 | **Setlist planned date/time field** | SET-11 | ✅ done |

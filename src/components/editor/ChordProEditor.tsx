@@ -4,13 +4,28 @@ import { EditorView, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, historyKeymap, history } from '@codemirror/commands'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { StreamLanguage } from '@codemirror/language'
+import { isKnownChord } from '@/utils/chordpro'
 
-// Simple ChordPro syntax highlighter via StreamLanguage
+// Chord roots (A-G) — bracket content starting with these gets validated
+const CHORD_ROOT_RE = /^\[[A-G][^\\s\]]{0,9}\]/
+
+// ChordPro syntax highlighter with chord validation via StreamLanguage
 const chordProLanguage = StreamLanguage.define({
   name: 'chordpro',
   token(stream) {
     if (stream.match(/^\{[^}]*\}/)) return 'keyword'       // {directive}
-    if (stream.match(/^\[[^\]]{1,30}\]/)) return 'string'  // [Chord] or [Section]
+
+    // Check if this bracket looks like a chord (starts with A-G)
+    const peek = stream.string.slice(stream.pos)
+    const chordPeek = CHORD_ROOT_RE.exec(peek)
+    if (chordPeek) {
+      stream.match(/^\[[^\]]{1,30}\]/)                     // consume the bracket
+      const inner = chordPeek[0].slice(1, -1)              // strip [ and ]
+      // Only flag as invalid if no spaces (section labels often have spaces)
+      if (!inner.includes(' ') && !isKnownChord(inner.split('/')[0])) return 'invalid'
+      return 'string'
+    }
+    if (stream.match(/^\[[^\]]{1,30}\]/)) return 'string'  // [Section label]
     if (stream.match(/^#.*/)) return 'comment'             // # editor comment
     stream.next()
     return null
@@ -52,6 +67,8 @@ export function ChordProEditor({ value, onChange, readOnly = false }: ChordProEd
           '&': { height: '100%', fontSize: '13px' },
           '.cm-scroller': { fontFamily: "'JetBrains Mono', monospace", overflow: 'auto' },
           '.cm-content': { padding: '12px 0' },
+          // invalid chord — orange underline squiggle + muted orange text
+          '.cm-invalid': { color: '#fb923c !important', textDecoration: 'underline wavy #fb923c' },
         }),
       ],
     })
