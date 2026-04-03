@@ -93,7 +93,7 @@ Focus: live performance features — setlist management, autoscroll, PDF, metron
 | **Font scale persisted in settings (localStorage via useFontScale)** | SETTINGS-05 | ✅ done |
 | **Setlist planned date/time field** | SET-11 | ✅ done |
 | **`.cho` / `.chopro` / `.chordpro` single-file import** | IMP-05 | ✅ done |
-| Deduplication warning on import | IMP-06 | low |
+| **Deduplication: skip existing titles on import (both importers)** | IMP-06 | ✅ done |
 
 ---
 

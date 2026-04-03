@@ -13,6 +13,7 @@ interface ImportResult {
   books: number
   songs: number
   setlists: number
+  dupes: number
   flagged: string[]
   errors: string[]
 }
@@ -36,7 +37,13 @@ export function ChordsWikiImporter() {
         throw new Error('Not a chords.wiki library-backup file')
       }
 
-      const res: ImportResult = { books: 0, songs: 0, setlists: 0, flagged: [], errors: [] }
+      const res: ImportResult = { books: 0, songs: 0, setlists: 0, dupes: 0, flagged: [], errors: [] }
+
+      // ── Deduplication: build existing title set ───────────────────────────
+      const existingTitles = new Set(
+        (await db.songs.toArray()).map(s => s.title.toLowerCase().trim())
+      )
+      let dupesSkipped = 0
 
       // ── Import books + songs ──────────────────────────────────────────────
       const songIdMap: Record<string, string> = {} // old id → new id
@@ -62,6 +69,13 @@ export function ChordsWikiImporter() {
           const t_ = cwSong.transcription
           const newId = generateId()
           songIdMap[cwSongId] = newId
+
+          // Skip if a song with the same title already exists
+          if (existingTitles.has(cwSong.title.toLowerCase().trim())) {
+            dupesSkipped++
+            continue
+          }
+          existingTitles.add(cwSong.title.toLowerCase().trim())
 
           if (looksLikeFilename(cwSong.title)) {
             res.flagged.push(cwSong.title)
@@ -127,11 +141,12 @@ export function ChordsWikiImporter() {
         res.setlists++
       }
 
+      res.dupes = dupesSkipped
       setResult(res)
       setState('done')
     } catch (err) {
       console.error(err)
-      setResult({ books: 0, songs: 0, setlists: 0, flagged: [], errors: [String(err)] })
+      setResult({ books: 0, songs: 0, setlists: 0, dupes: 0, flagged: [], errors: [String(err)] })
       setState('error')
     }
   }
@@ -180,14 +195,15 @@ export function ChordsWikiImporter() {
             <CheckCircle size={20} />
             <span className="font-medium">{t('import.done')}</span>
           </div>
-          <div className="bg-surface-1 rounded-lg p-4 grid grid-cols-3 gap-4 text-center">
+          <div className="bg-surface-1 rounded-lg p-4 grid grid-cols-4 gap-4 text-center">
             {[
               { label: t('import.books'),    value: result.books    },
               { label: t('import.songs'),    value: result.songs    },
               { label: t('import.setlists'), value: result.setlists },
-            ].map(({ label, value }) => (
+              { label: 'Skipped',            value: result.dupes,   dim: true },
+            ].map(({ label, value, dim }) => (
               <div key={label}>
-                <div className="text-2xl font-bold text-chord">{value}</div>
+                <div className={`text-2xl font-bold ${dim ? 'text-ink-faint' : 'text-chord'}`}>{value}</div>
                 <div className="text-xs text-ink-muted mt-0.5">{label}</div>
               </div>
             ))}

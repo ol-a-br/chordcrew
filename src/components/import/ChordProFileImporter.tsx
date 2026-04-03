@@ -54,10 +54,23 @@ export function ChordProFileImporter() {
       const bookId = await ensureImportBook(user.id, user.displayName)
       let count = 0
 
+      // Build title set for dedup check
+      const existingTitles = new Set(
+        (await db.songs.toArray()).map(s => s.title.toLowerCase().trim())
+      )
+      let dupeCount = 0
+
       for (const file of fileArr) {
         const content = await file.text()
         const meta = extractMeta(content)
         const title = meta.title || file.name.replace(/\.[^.]+$/, '')
+
+        // Skip duplicates (same title, case-insensitive)
+        if (existingTitles.has(title.toLowerCase().trim())) {
+          dupeCount++
+          continue
+        }
+        existingTitles.add(title.toLowerCase().trim())
 
         const transcription: Transcription = {
           content,
@@ -90,6 +103,9 @@ export function ChordProFileImporter() {
       }
 
       setImported(count)
+      if (dupeCount > 0) {
+        setMessage(`${dupeCount} duplicate${dupeCount > 1 ? 's' : ''} skipped`)
+      }
       setStatus('done')
     } catch (err) {
       setStatus('error')
@@ -159,7 +175,10 @@ export function ChordProFileImporter() {
       {status === 'done' && (
         <div className="flex items-center gap-2 text-sm text-green-400">
           <Check size={16} className="shrink-0" />
-          Imported {imported} song{imported !== 1 ? 's' : ''} into the "Imported" book
+          <span>
+            Imported {imported} song{imported !== 1 ? 's' : ''} into the "Imported" book
+            {message ? <span className="text-ink-muted ml-1">({message})</span> : ''}
+          </span>
         </div>
       )}
 
