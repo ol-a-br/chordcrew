@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import {
   ArrowLeft, Play, Music, Pencil, Check,
   GripVertical, Trash2, Plus, Search,
+  ChevronUp, ChevronDown,
 } from 'lucide-react'
 import { db, generateId } from '@/db'
 import { Button } from '@/components/shared/Button'
@@ -178,6 +179,24 @@ export default function SetlistDetailPage() {
     await db.setlists.update(id, { updatedAt: Date.now() })
   }
 
+  // ── Per-slot overrides ────────────────────────────────────────────────────────
+
+  const adjustTranspose = async (itemId: string, newOffset: number) => {
+    await db.setlistItems.update(itemId, { transposeOffset: newOffset })
+    if (id) await db.setlists.update(id, { updatedAt: Date.now() })
+  }
+
+  const setItemColumns = async (itemId: string, columnCount: number | undefined) => {
+    await db.setlistItems.update(itemId, { columnCount })
+    if (id) await db.setlists.update(id, { updatedAt: Date.now() })
+  }
+
+  const setItemNotes = async (itemId: string, notes: string) => {
+    const trimmed = notes.trim() || undefined
+    await db.setlistItems.update(itemId, { notes: trimmed })
+    if (id) await db.setlists.update(id, { updatedAt: Date.now() })
+  }
+
   // ── Toggle edit mode ──────────────────────────────────────────────────────────
 
   const toggleEditMode = () => {
@@ -321,8 +340,10 @@ export default function SetlistDetailPage() {
           return (
             <li
               key={item.id}
-              className={`${rowBase} ${dragRingClass} ${dragOpacity} p-3 bg-surface-1 border-surface-3 ${
-                editMode ? '' : 'hover:border-chord/30 hover:bg-surface-2 cursor-pointer'
+              className={`${dragRingClass} ${dragOpacity} rounded-xl border transition-all ${
+                editMode
+                  ? 'flex flex-col bg-surface-1 border-surface-3 p-3'
+                  : 'flex items-center gap-3 p-3 bg-surface-1 border-surface-3 hover:border-chord/30 hover:bg-surface-2 cursor-pointer'
               } group`}
               draggable={editMode}
               onDragStart={editMode ? e => onDragStart(e, item.id) : undefined}
@@ -331,46 +352,101 @@ export default function SetlistDetailPage() {
               onDrop={editMode ? e => onDrop(e, item.id) : undefined}
               onClick={() => item.songId && !editMode && handleSongClick(item.songId, pos)}
             >
-              {editMode ? (
-                <GripVertical
-                  size={16}
-                  className="text-ink-faint cursor-grab active:cursor-grabbing shrink-0"
-                />
-              ) : (
-                <span className="text-xs font-mono text-ink-faint w-5 text-center shrink-0">
-                  {pos + 1}
-                </span>
-              )}
+              {/* Main row */}
+              <div className="flex items-center gap-3">
+                {editMode ? (
+                  <GripVertical
+                    size={16}
+                    className="text-ink-faint cursor-grab active:cursor-grabbing shrink-0"
+                  />
+                ) : (
+                  <span className="text-xs font-mono text-ink-faint w-5 text-center shrink-0">
+                    {pos + 1}
+                  </span>
+                )}
 
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm truncate">
-                  {song?.title ?? 'Unknown song'}
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm truncate">
+                    {song?.title ?? 'Unknown song'}
+                  </div>
+                  {song?.artist && (
+                    <div className="text-xs text-ink-muted truncate">{song.artist}</div>
+                  )}
+                  {!editMode && item.notes && (
+                    <div className="text-xs text-ink-faint italic truncate">{item.notes}</div>
+                  )}
                 </div>
-                {song?.artist && (
-                  <div className="text-xs text-ink-muted truncate">{song.artist}</div>
+
+                {song?.transcription.key && (
+                  <span className="text-xs font-mono text-chord bg-chord/10 px-2 py-0.5 rounded shrink-0">
+                    {song.transcription.key}
+                  </span>
+                )}
+
+                {!editMode && item.transposeOffset !== 0 && (
+                  <span className="text-xs font-mono text-ink-muted shrink-0">
+                    {item.transposeOffset > 0 ? `+${item.transposeOffset}` : item.transposeOffset}
+                  </span>
+                )}
+
+                {editMode && (
+                  <button
+                    onClick={e => { e.stopPropagation(); handleDelete(item.id) }}
+                    className="p-1 text-ink-faint hover:text-red-400 transition-colors shrink-0"
+                    title="Remove song"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 )}
               </div>
 
-              {song?.transcription.key && (
-                <span className="text-xs font-mono text-chord bg-chord/10 px-2 py-0.5 rounded shrink-0">
-                  {song.transcription.key}
-                </span>
-              )}
-
-              {item.transposeOffset !== 0 && (
-                <span className="text-xs font-mono text-ink-muted shrink-0">
-                  {item.transposeOffset > 0 ? `+${item.transposeOffset}` : item.transposeOffset}
-                </span>
-              )}
-
+              {/* Per-slot overrides row — edit mode only */}
               {editMode && (
-                <button
-                  onClick={e => { e.stopPropagation(); handleDelete(item.id) }}
-                  className="p-1 text-ink-faint hover:text-red-400 transition-colors shrink-0"
-                  title="Remove song"
-                >
-                  <Trash2 size={15} />
-                </button>
+                <div className="flex items-center gap-2 pl-6 mt-2 flex-wrap">
+                  {/* Transpose */}
+                  <div className="flex items-center gap-0 bg-surface-2 rounded overflow-hidden border border-surface-3">
+                    <button
+                      onClick={e => { e.stopPropagation(); adjustTranspose(item.id, item.transposeOffset - 1) }}
+                      className="px-1 py-0.5 text-ink-faint hover:text-ink"
+                    >
+                      <ChevronDown size={12} />
+                    </button>
+                    <span className="text-xs font-mono w-7 text-center text-ink-muted select-none">
+                      {item.transposeOffset > 0 ? `+${item.transposeOffset}` : item.transposeOffset}
+                    </span>
+                    <button
+                      onClick={e => { e.stopPropagation(); adjustTranspose(item.id, item.transposeOffset + 1) }}
+                      className="px-1 py-0.5 text-ink-faint hover:text-ink"
+                    >
+                      <ChevronUp size={12} />
+                    </button>
+                  </div>
+
+                  {/* Column override */}
+                  <div className="flex overflow-hidden rounded border border-surface-3">
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button
+                        key={n}
+                        onClick={e => { e.stopPropagation(); setItemColumns(item.id, item.columnCount === n ? undefined : n) }}
+                        className={`px-1.5 py-0.5 text-xs ${item.columnCount === n ? 'bg-chord/20 text-chord' : 'text-ink-faint hover:text-ink'}`}
+                        title={`${n} column${n > 1 ? 's' : ''}`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Notes */}
+                  <input
+                    type="text"
+                    defaultValue={item.notes ?? ''}
+                    onBlur={e => setItemNotes(item.id, e.currentTarget.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                    placeholder="notes…"
+                    onClick={e => e.stopPropagation()}
+                    className="flex-1 min-w-24 bg-surface-2 border border-surface-3 focus:border-chord/40 rounded px-2 py-0.5 text-xs text-ink placeholder:text-ink-faint outline-none"
+                  />
+                </div>
               )}
             </li>
           )

@@ -32,6 +32,7 @@ export default function PerformancePage() {
   const contentRef = useRef<HTMLDivElement>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const appliedItemRef = useRef<string | null>(null)
 
   const transposedKey = useMemo(
     () => transposeKey(song?.transcription.key ?? '', transpose),
@@ -47,6 +48,15 @@ export default function PerformancePage() {
     [setlistItems]
   )
   const nextSongId = songItems[currentPos + 1]?.songId
+  const currentSetlistItem = songItems[currentPos]
+
+  // ── Per-slot overrides ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!currentSetlistItem || currentSetlistItem.id === appliedItemRef.current) return
+    appliedItemRef.current = currentSetlistItem.id
+    setTranspose(currentSetlistItem.transposeOffset ?? 0)
+    if (currentSetlistItem.columnCount) setColumns(currentSetlistItem.columnCount)
+  }, [currentSetlistItem])
 
   // ── Wake Lock ─────────────────────────────────────────────────────────────
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react'
@@ -44,6 +44,16 @@ export default function ViewerPage() {
   )
   const prevSongId = songItems[currentPos - 1]?.songId
   const nextSongId = songItems[currentPos + 1]?.songId
+  const currentSetlistItem = songItems[currentPos]
+
+  // Apply per-slot overrides once when the setlist item changes
+  const appliedItemRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!currentSetlistItem || currentSetlistItem.id === appliedItemRef.current) return
+    appliedItemRef.current = currentSetlistItem.id
+    setTranspose(currentSetlistItem.transposeOffset ?? 0)
+    if (currentSetlistItem.columnCount) setColumns(currentSetlistItem.columnCount)
+  }, [currentSetlistItem])
 
   // Transposed key and first-3-chords for musician preview
   const transposedKey = useMemo(
