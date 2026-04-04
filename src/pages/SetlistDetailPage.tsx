@@ -48,7 +48,8 @@ export default function SetlistDetailPage() {
   const addPanelSongs = useLiveQuery(async (): Promise<Song[]> => {
     if (!editMode) return []
     if (searchQuery.trim() === '') {
-      return db.songs.orderBy('accessedAt').reverse().limit(12).toArray()
+      const all = await db.songs.toArray()
+      return all.sort((a, b) => (b.accessedAt ?? 0) - (a.accessedAt ?? 0)).slice(0, 12)
     }
     const q = searchQuery.toLowerCase()
     const all = await db.songs.toArray()

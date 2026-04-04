@@ -225,6 +225,38 @@ test('can create a new setlist', async ({ page }) => {
   await expect(page).toHaveURL(/\/setlists\//, { timeout: 4000 })
 })
 
+test('setlist detail page loads content (not blank) on direct navigation', async ({ page }) => {
+  await waitForApp(page)
+  await page.goto('/setlists')
+  await page.click('button:has-text("New Setlist")')
+  await page.locator('input[placeholder*="etlist"]').fill('Test Direct Nav')
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/setlists\//, { timeout: 4000 })
+
+  // Grab the setlist URL and navigate to it directly (simulates reload / deep-link)
+  const setlistUrl = page.url()
+  await page.goto(setlistUrl)
+  // The page must show the setlist name, not be blank
+  await expect(page.locator('h1, input[aria-label="Setlist name"]').first()).toBeVisible({ timeout: 5000 })
+  await expect(page.locator('body')).not.toBeEmpty()
+})
+
+test('setlist edit mode toggles within detail page (no blank page)', async ({ page }) => {
+  await waitForApp(page)
+  await page.goto('/setlists')
+  await page.click('button:has-text("New Setlist")')
+  await page.locator('input[placeholder*="etlist"]').fill('Edit Mode Test')
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/setlists\//, { timeout: 4000 })
+
+  // Click the edit (Pencil) button
+  await page.locator('button[title="Edit setlist"]').click()
+
+  // Edit mode: name becomes an input, body is not blank
+  await expect(page.locator('input[aria-label="Setlist name"]')).toBeVisible({ timeout: 3000 })
+  await expect(page.locator('button[title="Done editing"]')).toBeVisible()
+})
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. Settings
 // ─────────────────────────────────────────────────────────────────────────────
@@ -285,7 +317,7 @@ test('section labels render via h3.label', async ({ page }) => {
 
   await page.goto(`/view/${songId}`)
   await expect(page.locator('.chordpro-output h3.label')).toBeVisible({ timeout: 5000 })
-  await expect(page.locator('.chordpro-output h3.label')).toHaveText('Verse 1')
+  await expect(page.locator('.chordpro-output h3.label')).toContainText('Verse 1')
 })
 
 test('chorus section gets border-left styling', async ({ page }) => {

@@ -316,13 +316,13 @@ export default function ViewerPage() {
         {/* Transpose */}
         <div className="flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1">
-            <button onClick={() => setTranspose(t => t - 1)} className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
+            <button onClick={() => setTranspose(t => t - 1)} aria-label="Transpose down" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
               <ChevronDown size={16} />
             </button>
             <span className="text-xs font-mono w-8 text-center">
               {transpose > 0 ? `+${transpose}` : transpose === 0 ? '0' : transpose}
             </span>
-            <button onClick={() => setTranspose(t => t + 1)} className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
+            <button onClick={() => setTranspose(t => t + 1)} aria-label="Transpose up" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
               <ChevronUp size={16} />
             </button>
           </div>
