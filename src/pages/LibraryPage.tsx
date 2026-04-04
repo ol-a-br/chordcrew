@@ -2,8 +2,12 @@ import { useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users, CheckSquare, Square, Share2 } from 'lucide-react'
+import {
+  Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users,
+  CheckSquare, Square, Trash2, FolderInput,
+} from 'lucide-react'
 import { db, generateId, markPending, getTeamRole } from '@/db'
+import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { Button } from '@/components/shared/Button'
 import { buildSearchText } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
@@ -47,7 +51,7 @@ export default function LibraryPage() {
   // Bulk selection state
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [showBulkMenu, setShowBulkMenu] = useState(false)
+  const [showOrganizeMenu, setShowOrganizeMenu] = useState(false)
   const [bulkToast, setBulkToast] = useState<string | null>(null)
   const bulkToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -67,7 +71,7 @@ export default function LibraryPage() {
     )
   }, [teams, user])
 
-  // Teams where user can contribute (owner or contributor) — for share targets
+  // Teams where user can contribute (for share targets)
   const contributorTeams = useMemo(() => {
     if (!teams || !user) return []
     return teams.filter(t => {
@@ -91,7 +95,6 @@ export default function LibraryPage() {
     return getTeamRole(team, user.id, user.email)
   }, [activeTeamId, user, teams])
 
-  // Read-only when viewing a team as a reader, OR a personal readOnly book
   const isActiveReadOnly = useMemo(() => {
     if (activeTeamId) return activeTeamRole === 'reader'
     if (activeBookId === 'all' || activeBookId === 'favorites') return false
@@ -117,14 +120,12 @@ export default function LibraryPage() {
     if (!allSongs) return []
     let songs = allSongs
     if (activeTeamId) {
-      // Show all songs from books that belong to this team
       songs = songs.filter(s => bookTeamMap[s.bookId] === activeTeamId)
     } else if (activeBookId === 'favorites') {
       songs = songs.filter(s => s.isFavorite)
     } else if (activeBookId !== 'all') {
       songs = songs.filter(s => s.bookId === activeBookId)
     } else {
-      // "All songs" — exclude team songs (they belong to their team view)
       songs = songs.filter(s => !bookTeamMap[s.bookId])
     }
     if (activeTag) songs = songs.filter(s => s.tags.some(t => t.toLowerCase() === activeTag))
@@ -147,11 +148,30 @@ export default function LibraryPage() {
     }
   }, [filteredSongs, sortBy])
 
+  // Organize dropdown targets: personal books + contributor teams, minus current context
+  const organizeTargets = useMemo(() => {
+    const targets: Array<{ type: 'book' | 'team'; id: string; label: string }> = []
+    // Personal books (excluding current book if in a specific book)
+    personalBooks.forEach(b => {
+      if (activeTeamId || activeBookId !== b.id) {
+        targets.push({ type: 'book', id: b.id, label: b.title })
+      }
+    })
+    // Contributor teams (excluding current team)
+    contributorTeams.forEach(t => {
+      if (t.id !== activeTeamId) {
+        targets.push({ type: 'team', id: t.id, label: t.name })
+      }
+    })
+    return targets
+  }, [personalBooks, contributorTeams, activeTeamId, activeBookId])
+
+  const showOrganizeButton = organizeTargets.length > 0 || true // always show (delete is always available)
+
   const createSong = async () => {
     if (!user) return
     let bookId: string
     if (activeTeamId) {
-      // New song in the active team — auto-create team book if needed
       const teamBook = (books ?? []).find(b => b.sharedTeamId === activeTeamId)
       if (teamBook) {
         bookId = teamBook.id
@@ -175,15 +195,12 @@ export default function LibraryPage() {
 
     const id = generateId()
     await db.songs.add({
-      id,
-      bookId,
-      title: 'New Song',
-      artist: '',
+      id, bookId,
+      title: 'New Song', artist: '',
       tags: [],
       searchText: buildSearchText('New Song', '', [], EMPTY_CHORDPRO),
       isFavorite: false,
-      savedAt: Date.now(),
-      updatedAt: Date.now(),
+      savedAt: Date.now(), updatedAt: Date.now(),
       transcription: {
         content: EMPTY_CHORDPRO,
         key: 'G', capo: 0, tempo: 120,
@@ -197,7 +214,7 @@ export default function LibraryPage() {
     navigate(`/editor/${id}`)
   }
 
-  // ─── Bulk selection helpers ───────────────────────────────────────────────────
+  // ─── Bulk helpers ─────────────────────────────────────────────────────────────
 
   const showBulkToast = (msg: string) => {
     if (bulkToastTimer.current) clearTimeout(bulkToastTimer.current)
@@ -208,7 +225,7 @@ export default function LibraryPage() {
   const toggleSelectMode = () => {
     setSelectMode(s => !s)
     setSelectedIds(new Set())
-    setShowBulkMenu(false)
+    setShowOrganizeMenu(false)
   }
 
   const toggleSong = (id: string) => {
@@ -219,8 +236,28 @@ export default function LibraryPage() {
     })
   }
 
-  const selectAll = () => {
-    setSelectedIds(new Set(sortedSongs.map(s => s.id)))
+  const selectAll = () => setSelectedIds(new Set(sortedSongs.map(s => s.id)))
+
+  const exitSelectMode = () => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+    setShowOrganizeMenu(false)
+  }
+
+  const bulkDelete = async () => {
+    const count = selectedIds.size
+    if (!confirm(`Delete ${count} song${count !== 1 ? 's' : ''}? This cannot be undone.`)) return
+    const songs = sortedSongs.filter(s => selectedIds.has(s.id))
+    for (const song of songs) {
+      await db.songs.delete(song.id)
+      await db.syncStates.delete(`song:${song.id}`)
+      if (user) {
+        const teamId = bookTeamMap[song.bookId]
+        deleteSongFromCloud(song.id, user.id, teamId).catch(() => {})
+      }
+    }
+    exitSelectMode()
+    showBulkToast(`Deleted ${count} song${count !== 1 ? 's' : ''}`)
   }
 
   const ensureTeamBook = async (teamId: string, teamName: string): Promise<string> => {
@@ -239,44 +276,45 @@ export default function LibraryPage() {
     return bookId
   }
 
-  const bulkCopyToTeam = async (teamId: string, teamName: string) => {
+  const bulkCopyTo = async (targetId: string, targetType: 'book' | 'team', targetLabel: string) => {
     const songs = sortedSongs.filter(s => selectedIds.has(s.id))
-    if (!songs.length) return
-    setShowBulkMenu(false)
-    const bookId = await ensureTeamBook(teamId, teamName)
+    setShowOrganizeMenu(false)
+    const bookId = targetType === 'team'
+      ? await ensureTeamBook(targetId, targetLabel)
+      : targetId
     const now = Date.now()
     const newSongs = songs.map(song => ({
       ...song,
       id: generateId(),
       bookId,
-      savedAt: now,
-      updatedAt: now,
+      savedAt: now, updatedAt: now,
       accessedAt: undefined as number | undefined,
       searchText: buildSearchText(song.title, song.artist, song.tags, song.transcription.content),
     }))
     await db.songs.bulkAdd(newSongs)
     for (const s of newSongs) await markPending('song', s.id)
-    setSelectMode(false)
-    setSelectedIds(new Set())
-    // Switch to the team view so the user can confirm the songs arrived
-    handleTeamClick(teamId)
-    showBulkToast(`Copied ${songs.length} song${songs.length !== 1 ? 's' : ''} to ${teamName}`)
+    exitSelectMode()
+    // Navigate to the target context
+    if (targetType === 'team') handleTeamClick(targetId)
+    else handleNavClick(targetId)
+    showBulkToast(`Copied ${songs.length} song${songs.length !== 1 ? 's' : ''} to ${targetLabel}`)
   }
 
-  const bulkMoveToTeam = async (teamId: string, teamName: string) => {
+  const bulkMoveTo = async (targetId: string, targetType: 'book' | 'team', targetLabel: string) => {
     const songs = sortedSongs.filter(s => selectedIds.has(s.id))
-    if (!songs.length) return
-    setShowBulkMenu(false)
-    const bookId = await ensureTeamBook(teamId, teamName)
+    setShowOrganizeMenu(false)
+    const bookId = targetType === 'team'
+      ? await ensureTeamBook(targetId, targetLabel)
+      : targetId
     const now = Date.now()
     for (const song of songs) {
       await db.songs.update(song.id, { bookId, updatedAt: now })
       await markPending('song', song.id)
     }
-    setSelectMode(false)
-    setSelectedIds(new Set())
-    handleTeamClick(teamId)
-    showBulkToast(`Moved ${songs.length} song${songs.length !== 1 ? 's' : ''} to ${teamName}`)
+    exitSelectMode()
+    if (targetType === 'team') handleTeamClick(targetId)
+    else handleNavClick(targetId)
+    showBulkToast(`Moved ${songs.length} song${songs.length !== 1 ? 's' : ''} to ${targetLabel}`)
   }
 
   // ─── Navigation handlers ──────────────────────────────────────────────────────
@@ -286,7 +324,7 @@ export default function LibraryPage() {
     setActiveTeamId(null)
     setActiveTag(null)
     setActiveKey(null)
-    if (selectMode) { setSelectMode(false); setSelectedIds(new Set()) }
+    if (selectMode) exitSelectMode()
   }
 
   const handleTeamClick = (teamId: string) => {
@@ -294,7 +332,7 @@ export default function LibraryPage() {
     setActiveBookId('all')
     setActiveTag(null)
     setActiveKey(null)
-    if (selectMode) { setSelectMode(false); setSelectedIds(new Set()) }
+    if (selectMode) exitSelectMode()
   }
 
   const handleTagClick = (tag: string) => {
@@ -309,7 +347,7 @@ export default function LibraryPage() {
 
   return (
     <div className="flex h-full">
-      {/* Left panel — navigation */}
+      {/* Left panel */}
       <aside className="hidden md:flex flex-col w-52 border-r border-surface-3 bg-surface-1 py-3 px-2 gap-0.5 shrink-0 overflow-y-auto">
         <NavItem label={t('library.allSongs')} icon={<Music size={15} />} active={activeBookId === 'all' && !activeTag && !activeTeamId} onClick={() => handleNavClick('all')} count={allSongs?.filter(s => !bookTeamMap[s.bookId]).length} />
         <NavItem label={t('library.favorites')} icon={<Star size={15} />} active={activeBookId === 'favorites' && !activeTeamId} onClick={() => handleNavClick('favorites')} count={allSongs?.filter(s => s.isFavorite).length} />
@@ -366,55 +404,79 @@ export default function LibraryPage() {
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-3 flex-wrap">
           {selectMode ? (
-            // Select-mode header
             <>
               <span className="text-sm font-medium flex-1">
-                {selectedIds.size > 0
-                  ? `${selectedIds.size} selected`
-                  : 'Tap songs to select'}
+                {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Tap songs to select'}
               </span>
               {selectedIds.size < sortedSongs.length && (
-                <button onClick={selectAll} className="text-xs text-chord hover:text-chord/80">
+                <button onClick={selectAll} className="text-xs text-chord hover:text-chord/80 shrink-0">
                   Select all
                 </button>
               )}
-              {/* Bulk share dropdown */}
               {selectedIds.size > 0 && (
-                <div className="relative">
-                  <Button variant="primary" size="sm" onClick={() => setShowBulkMenu(v => !v)}>
-                    <Share2 size={14} />
-                    Share to team
-                  </Button>
-                  {showBulkMenu && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setShowBulkMenu(false)} />
-                      <div className="absolute right-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl py-1 min-w-[180px]">
-                        {contributorTeams.map(team => (
-                          <div key={team.id} className="px-2 py-1">
-                            <div className="text-xs text-ink-faint px-1 py-0.5 font-medium">{team.name}</div>
-                            <button
-                              onClick={() => bulkCopyToTeam(team.id, team.name)}
-                              className="block w-full text-left px-2 py-1.5 text-xs text-ink hover:bg-surface-3 rounded"
-                            >
-                              Copy {selectedIds.size} song{selectedIds.size !== 1 ? 's' : ''} here
-                            </button>
-                            <button
-                              onClick={() => bulkMoveToTeam(team.id, team.name)}
-                              className="block w-full text-left px-2 py-1.5 text-xs text-ink hover:bg-surface-3 rounded"
-                            >
-                              Move {selectedIds.size} song{selectedIds.size !== 1 ? 's' : ''} here
-                            </button>
+                <>
+                  {/* Delete */}
+                  <button
+                    onClick={bulkDelete}
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-400/10 transition-colors shrink-0"
+                    title="Delete selected songs"
+                  >
+                    <Trash2 size={14} />
+                    Delete
+                  </button>
+                  {/* Organize (copy/move) */}
+                  {showOrganizeButton && (
+                    <div className="relative shrink-0">
+                      <button
+                        onClick={() => setShowOrganizeMenu(v => !v)}
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-ink-muted hover:bg-surface-2 hover:text-ink transition-colors border border-surface-3"
+                      >
+                        <FolderInput size={14} />
+                        Organize
+                      </button>
+                      {showOrganizeMenu && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setShowOrganizeMenu(false)} />
+                          <div className="absolute right-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl py-1 min-w-[200px]">
+                            {organizeTargets.length > 0 ? (
+                              <>
+                                <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">Copy to</div>
+                                {organizeTargets.map(target => (
+                                  <button
+                                    key={`copy-${target.id}`}
+                                    onClick={() => bulkCopyTo(target.id, target.type, target.label)}
+                                    className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
+                                  >
+                                    {target.type === 'team' ? <Users size={11} className="text-ink-faint" /> : <BookOpen size={11} className="text-ink-faint" />}
+                                    {target.label}
+                                  </button>
+                                ))}
+                                <hr className="border-surface-3 my-1" />
+                                <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">Move to</div>
+                                {organizeTargets.map(target => (
+                                  <button
+                                    key={`move-${target.id}`}
+                                    onClick={() => bulkMoveTo(target.id, target.type, target.label)}
+                                    className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
+                                  >
+                                    {target.type === 'team' ? <Users size={11} className="text-ink-faint" /> : <BookOpen size={11} className="text-ink-faint" />}
+                                    {target.label}
+                                  </button>
+                                ))}
+                              </>
+                            ) : (
+                              <p className="px-3 py-2 text-xs text-ink-faint">No other books or teams available</p>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    </>
+                        </>
+                      )}
+                    </div>
                   )}
-                </div>
+                </>
               )}
               <Button variant="ghost" size="sm" onClick={toggleSelectMode}>Cancel</Button>
             </>
           ) : (
-            // Normal header
             <>
               <div className="relative flex-1 min-w-[120px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
@@ -427,7 +489,6 @@ export default function LibraryPage() {
                 />
               </div>
 
-              {/* Sort selector */}
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value as SortKey)}
@@ -438,12 +499,12 @@ export default function LibraryPage() {
                 ))}
               </select>
 
-              {/* Bulk select button — only when there are teams to share to */}
-              {contributorTeams.length > 0 && !activeTeamId && sortedSongs.length > 0 && (
+              {/* Select mode button — always available when there are songs */}
+              {sortedSongs.length > 0 && (
                 <button
                   onClick={toggleSelectMode}
                   className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-surface-2"
-                  title="Select songs to share"
+                  title="Select songs"
                 >
                   <CheckSquare size={16} />
                 </button>
@@ -476,7 +537,7 @@ export default function LibraryPage() {
               {activeTeamId && !isActiveReadOnly ? (
                 <>
                   <p>No team songs yet.</p>
-                  <p className="text-xs text-ink-faint">Add a new song, or use the select mode to bulk-copy songs here.</p>
+                  <p className="text-xs text-ink-faint">Add a new song, or use select mode to copy songs here.</p>
                 </>
               ) : activeTeamId && isActiveReadOnly ? (
                 <>
@@ -536,19 +597,11 @@ function SongRow({
   selected?: boolean
   onToggleSelect?: () => void
 }) {
-  const handleClick = () => {
-    if (selectMode) {
-      onToggleSelect?.()
-    } else {
-      navigate(`/view/${song.id}`)
-    }
-  }
-
   return (
     <li
       className={`flex items-center gap-3 px-4 py-3 border-b border-surface-3/50 cursor-pointer group transition-colors
         ${selected ? 'bg-chord/5' : 'hover:bg-surface-2'}`}
-      onClick={handleClick}
+      onClick={() => selectMode ? onToggleSelect?.() : navigate(`/view/${song.id}`)}
     >
       {selectMode && (
         <div className="shrink-0 text-chord">
@@ -568,9 +621,7 @@ function SongRow({
           </span>
         )}
         {song.tags.length > 0 && (
-          <span className="text-xs text-ink-faint truncate max-w-[80px]">
-            {song.tags[0]}
-          </span>
+          <span className="text-xs text-ink-faint truncate max-w-[80px]">{song.tags[0]}</span>
         )}
         {song.isFavorite && <Star size={13} className="text-chord fill-chord" />}
         {!readOnly && !selectMode && (
@@ -599,9 +650,7 @@ function NavItem({ label, icon, active, onClick, count }: {
     >
       {icon}
       <span className="flex-1 truncate">{label}</span>
-      {count !== undefined && (
-        <span className="text-xs text-ink-faint">{count}</span>
-      )}
+      {count !== undefined && <span className="text-xs text-ink-faint">{count}</span>}
     </button>
   )
 }

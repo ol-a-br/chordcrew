@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Github, RefreshCw } from 'lucide-react'
+import { Github, RefreshCw, Download, CheckCircle2, Smartphone, Monitor } from 'lucide-react'
 import { db, getSettings, saveSettings } from '@/db'
 import { useCaptureKey } from '@/hooks/useKeyboard'
 import { Button } from '@/components/shared/Button'
@@ -8,14 +8,39 @@ import { useSync } from '@/sync/SyncContext'
 import type { AppSettings } from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 
+// The beforeinstallprompt event is Chrome/Edge-specific and not in standard lib.d.ts
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+}
+
 export default function SettingsPage() {
   const { t, i18n } = useTranslation()
   const { status, pendingCount, lastSync, error: syncError, syncNow } = useSync()
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [capturingKey, setCapturingKey] = useState<'next' | 'prev' | null>(null)
 
+  // PWA install state
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [isInstalled, setIsInstalled] = useState(false)
+
+  // Platform detection
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window)
+  const isMacOS = /Mac/.test(navigator.userAgent) && !isIOS
+  const isAndroid = /Android/.test(navigator.userAgent)
+  const isWindows = /Win/.test(navigator.userAgent)
+
   useEffect(() => {
     getSettings().then(setSettings)
+    // Check if already running as installed PWA
+    setIsInstalled(window.matchMedia('(display-mode: standalone)').matches)
+    // Listen for Chrome/Edge/Android install prompt
+    const handler = (e: Event) => {
+      e.preventDefault()
+      setDeferredPrompt(e as BeforeInstallPromptEvent)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
   }, [])
 
   const update = async (patch: Partial<AppSettings>) => {
@@ -188,6 +213,99 @@ export default function SettingsPage() {
           >
             Clear local database
           </Button>
+        </div>
+      </section>
+
+      {/* Install App */}
+      <section>
+        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Install App</h2>
+        <div className="bg-surface-1 rounded-xl px-4 py-4 space-y-4">
+          {isInstalled ? (
+            <div className="flex items-center gap-2 text-sm text-green-400">
+              <CheckCircle2 size={16} />
+              ChordCrew is installed on this device
+            </div>
+          ) : deferredPrompt ? (
+            // Chrome / Edge / Android Chrome: native install prompt available
+            <div className="space-y-2">
+              <p className="text-xs text-ink-muted">Install ChordCrew as a native app for offline use, a home screen icon, and no browser chrome.</p>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={async () => {
+                  if (!deferredPrompt) return
+                  await deferredPrompt.prompt()
+                  const { outcome } = await deferredPrompt.userChoice
+                  if (outcome === 'accepted') setIsInstalled(true)
+                  setDeferredPrompt(null)
+                }}
+              >
+                <Download size={14} />
+                Install ChordCrew
+              </Button>
+            </div>
+          ) : isIOS ? (
+            // Safari on iPhone / iPad
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Smartphone size={15} className="text-chord" />
+                iOS — Safari
+              </div>
+              <ol className="text-xs text-ink-muted space-y-1.5 list-decimal list-inside">
+                <li>Tap the <strong className="text-ink">Share</strong> button (<span className="font-mono">⬆</span>) at the bottom of the screen</li>
+                <li>Scroll down and tap <strong className="text-ink">Add to Home Screen</strong></li>
+                <li>Tap <strong className="text-ink">Add</strong> to confirm</li>
+              </ol>
+              <p className="text-xs text-ink-faint">The app must be opened in Safari (not Chrome) for this to work.</p>
+            </div>
+          ) : isAndroid ? (
+            // Android — Chrome without prompt (e.g. already dismissed)
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Smartphone size={15} className="text-chord" />
+                Android — Chrome
+              </div>
+              <ol className="text-xs text-ink-muted space-y-1.5 list-decimal list-inside">
+                <li>Tap the <strong className="text-ink">⋮</strong> menu in the top-right corner</li>
+                <li>Tap <strong className="text-ink">Add to Home screen</strong> or <strong className="text-ink">Install app</strong></li>
+                <li>Tap <strong className="text-ink">Install</strong> to confirm</li>
+              </ol>
+            </div>
+          ) : isMacOS ? (
+            // macOS — Safari or Chrome
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Monitor size={15} className="text-chord" />
+                macOS
+              </div>
+              <div className="space-y-2 text-xs text-ink-muted">
+                <p><strong className="text-ink">Safari:</strong> File menu → <strong className="text-ink">Add to Dock</strong></p>
+                <p><strong className="text-ink">Chrome / Edge:</strong> Click the install icon <span className="font-mono bg-surface-2 px-1 rounded">⊕</span> in the address bar, or open the browser menu → <strong className="text-ink">Install ChordCrew…</strong></p>
+              </div>
+            </div>
+          ) : isWindows ? (
+            // Windows — Chrome or Edge
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Monitor size={15} className="text-chord" />
+                Windows
+              </div>
+              <div className="space-y-2 text-xs text-ink-muted">
+                <p><strong className="text-ink">Chrome / Edge:</strong> Click the install icon <span className="font-mono bg-surface-2 px-1 rounded">⊕</span> in the address bar, or open the browser menu → <strong className="text-ink">Install ChordCrew…</strong></p>
+                <p><strong className="text-ink">Edge:</strong> Click <span className="font-mono bg-surface-2 px-1 rounded">…</span> → Apps → Install this site as an app</p>
+              </div>
+            </div>
+          ) : (
+            // Generic fallback
+            <div className="space-y-2 text-xs text-ink-muted">
+              <p>ChordCrew is a Progressive Web App (PWA). Install it via your browser menu:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li><strong className="text-ink">Chrome / Edge:</strong> address bar install icon or browser menu → Install</li>
+                <li><strong className="text-ink">Safari (iOS):</strong> Share → Add to Home Screen</li>
+                <li><strong className="text-ink">Safari (macOS):</strong> File → Add to Dock</li>
+              </ul>
+            </div>
+          )}
         </div>
       </section>
 

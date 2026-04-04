@@ -21,7 +21,7 @@
  */
 
 import {
-  collection, doc, setDoc, getDocs, getDoc,
+  collection, doc, setDoc, getDocs, getDoc, deleteDoc,
 } from 'firebase/firestore'
 import { firestore } from '@/firebase'
 import { db } from '@/db'
@@ -195,6 +195,40 @@ export async function syncNow(userId: string, userEmail: string): Promise<void> 
 export async function syncTeam(team: Team): Promise<void> {
   if (!firestore) return
   await setDoc(doc(firestore, 'teams', team.id), stripUndefined(team))
+}
+
+// ─── Delete helpers (best-effort, non-blocking) ────────────────────────────────
+
+/**
+ * Delete a song from Firestore (personal space + optional team space).
+ * Called after `db.songs.delete` so the cloud copy is removed on next opportunity.
+ * Failures are swallowed — the local delete already happened.
+ */
+export async function deleteSongFromCloud(
+  songId: string,
+  userId: string,
+  teamId?: string
+): Promise<void> {
+  if (!firestore) return
+  try {
+    await deleteDoc(doc(firestore, 'users', userId, 'songs', songId))
+    if (teamId) await deleteDoc(doc(firestore, 'teams', teamId, 'songs', songId))
+  } catch { /* best-effort */ }
+}
+
+/**
+ * Delete a setlist (and its items) from Firestore.
+ */
+export async function deleteSetlistFromCloud(
+  setlistId: string,
+  userId: string,
+  teamId?: string
+): Promise<void> {
+  if (!firestore) return
+  try {
+    const base = teamId ? ['teams', teamId] as const : ['users', userId] as const
+    await deleteDoc(doc(firestore, base[0], base[1], 'setlists', setlistId))
+  } catch { /* best-effort */ }
 }
 
 // ─── Util ─────────────────────────────────────────────────────────────────────

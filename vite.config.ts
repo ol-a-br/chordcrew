@@ -24,6 +24,11 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // SPA fallback: serve index.html for all navigation requests that don't
+        // match a cached file. Without this, deep links (e.g. /setlists/:id)
+        // return 404 when the installed PWA or a hard-reload intercepts the request.
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api\//, /\.json$/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
