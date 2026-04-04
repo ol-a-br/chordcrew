@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users } from 'lucide-react'
+import { Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users, CheckSquare, Square, Share2 } from 'lucide-react'
 import { db, generateId, markPending, getTeamRole } from '@/db'
 import { Button } from '@/components/shared/Button'
 import { buildSearchText } from '@/utils/chordpro'
@@ -44,6 +44,13 @@ export default function LibraryPage() {
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<SortKey>('title')
 
+  // Bulk selection state
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showBulkMenu, setShowBulkMenu] = useState(false)
+  const [bulkToast, setBulkToast] = useState<string | null>(null)
+  const bulkToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const books    = useLiveQuery(() => db.books.toArray(), [])
   const allSongs = useLiveQuery(() => db.songs.toArray(), [])
   const teams    = useLiveQuery(() => db.teams.toArray(), [])
@@ -58,6 +65,15 @@ export default function LibraryPage() {
       t.ownerId === user.id ||
       t.members.some(m => m.userId === user.id || m.email === user.email)
     )
+  }, [teams, user])
+
+  // Teams where user can contribute (owner or contributor) — for share targets
+  const contributorTeams = useMemo(() => {
+    if (!teams || !user) return []
+    return teams.filter(t => {
+      const role = getTeamRole(t, user.id, user.email)
+      return role === 'owner' || role === 'contributor'
+    })
   }, [teams, user])
 
   // Map bookId → teamId for role/filter lookups
@@ -181,11 +197,96 @@ export default function LibraryPage() {
     navigate(`/editor/${id}`)
   }
 
+  // ─── Bulk selection helpers ───────────────────────────────────────────────────
+
+  const showBulkToast = (msg: string) => {
+    if (bulkToastTimer.current) clearTimeout(bulkToastTimer.current)
+    setBulkToast(msg)
+    bulkToastTimer.current = setTimeout(() => setBulkToast(null), 3000)
+  }
+
+  const toggleSelectMode = () => {
+    setSelectMode(s => !s)
+    setSelectedIds(new Set())
+    setShowBulkMenu(false)
+  }
+
+  const toggleSong = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const selectAll = () => {
+    setSelectedIds(new Set(sortedSongs.map(s => s.id)))
+  }
+
+  const ensureTeamBook = async (teamId: string, teamName: string): Promise<string> => {
+    const existing = await db.books.where('sharedTeamId').equals(teamId).first()
+    if (existing) return existing.id
+    const bookId = generateId()
+    await db.books.add({
+      id: bookId, title: `${teamName} Songs`,
+      author: user?.displayName ?? 'Team',
+      ownerId: user?.id ?? '',
+      sharedTeamId: teamId,
+      readOnly: false, shareable: true,
+      createdAt: Date.now(), updatedAt: Date.now(),
+    })
+    await markPending('book', bookId)
+    return bookId
+  }
+
+  const bulkCopyToTeam = async (teamId: string, teamName: string) => {
+    const songs = sortedSongs.filter(s => selectedIds.has(s.id))
+    if (!songs.length) return
+    setShowBulkMenu(false)
+    const bookId = await ensureTeamBook(teamId, teamName)
+    const now = Date.now()
+    const newSongs = songs.map(song => ({
+      ...song,
+      id: generateId(),
+      bookId,
+      savedAt: now,
+      updatedAt: now,
+      accessedAt: undefined as number | undefined,
+      searchText: buildSearchText(song.title, song.artist, song.tags, song.transcription.content),
+    }))
+    await db.songs.bulkAdd(newSongs)
+    for (const s of newSongs) await markPending('song', s.id)
+    setSelectMode(false)
+    setSelectedIds(new Set())
+    // Switch to the team view so the user can confirm the songs arrived
+    handleTeamClick(teamId)
+    showBulkToast(`Copied ${songs.length} song${songs.length !== 1 ? 's' : ''} to ${teamName}`)
+  }
+
+  const bulkMoveToTeam = async (teamId: string, teamName: string) => {
+    const songs = sortedSongs.filter(s => selectedIds.has(s.id))
+    if (!songs.length) return
+    setShowBulkMenu(false)
+    const bookId = await ensureTeamBook(teamId, teamName)
+    const now = Date.now()
+    for (const song of songs) {
+      await db.songs.update(song.id, { bookId, updatedAt: now })
+      await markPending('song', song.id)
+    }
+    setSelectMode(false)
+    setSelectedIds(new Set())
+    handleTeamClick(teamId)
+    showBulkToast(`Moved ${songs.length} song${songs.length !== 1 ? 's' : ''} to ${teamName}`)
+  }
+
+  // ─── Navigation handlers ──────────────────────────────────────────────────────
+
   const handleNavClick = (bookId: typeof activeBookId) => {
     setActiveBookId(bookId)
     setActiveTeamId(null)
     setActiveTag(null)
     setActiveKey(null)
+    if (selectMode) { setSelectMode(false); setSelectedIds(new Set()) }
   }
 
   const handleTeamClick = (teamId: string) => {
@@ -193,6 +294,7 @@ export default function LibraryPage() {
     setActiveBookId('all')
     setActiveTag(null)
     setActiveKey(null)
+    if (selectMode) { setSelectMode(false); setSelectedIds(new Set()) }
   }
 
   const handleTagClick = (tag: string) => {
@@ -263,33 +365,97 @@ export default function LibraryPage() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-3 flex-wrap">
-          <div className="relative flex-1 min-w-[120px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder={t('library.searchPlaceholder')}
-              className="w-full bg-surface-2 rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-1 focus:ring-chord/50"
-            />
-          </div>
+          {selectMode ? (
+            // Select-mode header
+            <>
+              <span className="text-sm font-medium flex-1">
+                {selectedIds.size > 0
+                  ? `${selectedIds.size} selected`
+                  : 'Tap songs to select'}
+              </span>
+              {selectedIds.size < sortedSongs.length && (
+                <button onClick={selectAll} className="text-xs text-chord hover:text-chord/80">
+                  Select all
+                </button>
+              )}
+              {/* Bulk share dropdown */}
+              {selectedIds.size > 0 && (
+                <div className="relative">
+                  <Button variant="primary" size="sm" onClick={() => setShowBulkMenu(v => !v)}>
+                    <Share2 size={14} />
+                    Share to team
+                  </Button>
+                  {showBulkMenu && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setShowBulkMenu(false)} />
+                      <div className="absolute right-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl py-1 min-w-[180px]">
+                        {contributorTeams.map(team => (
+                          <div key={team.id} className="px-2 py-1">
+                            <div className="text-xs text-ink-faint px-1 py-0.5 font-medium">{team.name}</div>
+                            <button
+                              onClick={() => bulkCopyToTeam(team.id, team.name)}
+                              className="block w-full text-left px-2 py-1.5 text-xs text-ink hover:bg-surface-3 rounded"
+                            >
+                              Copy {selectedIds.size} song{selectedIds.size !== 1 ? 's' : ''} here
+                            </button>
+                            <button
+                              onClick={() => bulkMoveToTeam(team.id, team.name)}
+                              className="block w-full text-left px-2 py-1.5 text-xs text-ink hover:bg-surface-3 rounded"
+                            >
+                              Move {selectedIds.size} song{selectedIds.size !== 1 ? 's' : ''} here
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              <Button variant="ghost" size="sm" onClick={toggleSelectMode}>Cancel</Button>
+            </>
+          ) : (
+            // Normal header
+            <>
+              <div className="relative flex-1 min-w-[120px]">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder={t('library.searchPlaceholder')}
+                  className="w-full bg-surface-2 rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-1 focus:ring-chord/50"
+                />
+              </div>
 
-          {/* Sort selector */}
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as SortKey)}
-            className="bg-surface-2 text-xs text-ink-muted rounded-lg px-2 py-2 border border-surface-3 focus:outline-none focus:ring-1 focus:ring-chord/50 cursor-pointer"
-          >
-            {(Object.keys(SORT_LABELS) as SortKey[]).map(k => (
-              <option key={k} value={k}>{SORT_LABELS[k]}</option>
-            ))}
-          </select>
+              {/* Sort selector */}
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value as SortKey)}
+                className="bg-surface-2 text-xs text-ink-muted rounded-lg px-2 py-2 border border-surface-3 focus:outline-none focus:ring-1 focus:ring-chord/50 cursor-pointer"
+              >
+                {(Object.keys(SORT_LABELS) as SortKey[]).map(k => (
+                  <option key={k} value={k}>{SORT_LABELS[k]}</option>
+                ))}
+              </select>
 
-          {!isActiveReadOnly && (
-            <Button variant="primary" size="sm" onClick={createSong}>
-              <Plus size={15} />
-              {t('library.newSong')}
-            </Button>
+              {/* Bulk select button — only when there are teams to share to */}
+              {contributorTeams.length > 0 && !activeTeamId && sortedSongs.length > 0 && (
+                <button
+                  onClick={toggleSelectMode}
+                  className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-surface-2"
+                  title="Select songs to share"
+                >
+                  <CheckSquare size={16} />
+                </button>
+              )}
+
+              {!isActiveReadOnly && (
+                <Button variant="primary" size="sm" onClick={createSong}>
+                  <Plus size={15} />
+                  {t('library.newSong')}
+                </Button>
+              )}
+            </>
           )}
         </div>
 
@@ -303,14 +469,14 @@ export default function LibraryPage() {
         )}
 
         {/* Song list */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto relative">
           {sortedSongs.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-ink-muted text-sm space-y-1">
               <Music size={32} className="text-ink-faint mb-2" />
               {activeTeamId && !isActiveReadOnly ? (
                 <>
                   <p>No team songs yet.</p>
-                  <p className="text-xs text-ink-faint">Add a new song, or open a song and use the share button to copy it here.</p>
+                  <p className="text-xs text-ink-faint">Add a new song, or use the select mode to bulk-copy songs here.</p>
                 </>
               ) : activeTeamId && isActiveReadOnly ? (
                 <>
@@ -331,9 +497,28 @@ export default function LibraryPage() {
                 const team = teamId ? teams?.find(t => t.id === teamId) : undefined
                 const role = team && user ? getTeamRole(team, user.id, user.email) : null
                 const readOnly = role === 'reader'
-                return <SongRow key={song.id} song={song} navigate={navigate} readOnly={readOnly} />
+                return (
+                  <SongRow
+                    key={song.id}
+                    song={song}
+                    navigate={navigate}
+                    readOnly={readOnly}
+                    selectMode={selectMode}
+                    selected={selectedIds.has(song.id)}
+                    onToggleSelect={() => toggleSong(song.id)}
+                  />
+                )
               })}
             </ul>
+          )}
+
+          {/* Bulk toast */}
+          {bulkToast && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-none z-10">
+              <div className="bg-surface-2 border border-surface-3 text-ink text-xs px-4 py-2 rounded-full shadow-lg animate-fade-in whitespace-nowrap">
+                {bulkToast}
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -341,12 +526,37 @@ export default function LibraryPage() {
   )
 }
 
-function SongRow({ song, navigate, readOnly }: { song: Song; navigate: (path: string) => void; readOnly?: boolean }) {
+function SongRow({
+  song, navigate, readOnly, selectMode, selected, onToggleSelect
+}: {
+  song: Song
+  navigate: (path: string) => void
+  readOnly?: boolean
+  selectMode?: boolean
+  selected?: boolean
+  onToggleSelect?: () => void
+}) {
+  const handleClick = () => {
+    if (selectMode) {
+      onToggleSelect?.()
+    } else {
+      navigate(`/view/${song.id}`)
+    }
+  }
+
   return (
     <li
-      className="flex items-center gap-3 px-4 py-3 border-b border-surface-3/50 hover:bg-surface-2 cursor-pointer group"
-      onClick={() => navigate(`/view/${song.id}`)}
+      className={`flex items-center gap-3 px-4 py-3 border-b border-surface-3/50 cursor-pointer group transition-colors
+        ${selected ? 'bg-chord/5' : 'hover:bg-surface-2'}`}
+      onClick={handleClick}
     >
+      {selectMode && (
+        <div className="shrink-0 text-chord">
+          {selected
+            ? <CheckSquare size={17} className="text-chord" />
+            : <Square size={17} className="text-ink-faint" />}
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm truncate">{song.title}</div>
         <div className="text-xs text-ink-muted truncate">{song.artist || '—'}</div>
@@ -363,7 +573,7 @@ function SongRow({ song, navigate, readOnly }: { song: Song; navigate: (path: st
           </span>
         )}
         {song.isFavorite && <Star size={13} className="text-chord fill-chord" />}
-        {!readOnly && (
+        {!readOnly && !selectMode && (
           <button
             className="text-ink-faint hover:text-ink opacity-0 group-hover:opacity-100 p-1"
             onClick={e => { e.stopPropagation(); navigate(`/editor/${song.id}`) }}

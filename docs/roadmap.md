@@ -128,6 +128,9 @@ Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
 
 | Item | Req IDs | Priority |
 |------|---------|----------|
+| **Bulk song sharing: select-mode in Library with Copy/Move all to team** | TEAMS-06–07 | ✅ done |
+| **Team setlists: sidebar in SetlistsPage mirrors Library sidebar; role-aware create** | TEAMS-02, 05 | ✅ done |
+| **Key transpose dropdown: click key badge → 12-key picker with chord previews** | VIEW-02 | ✅ done |
 | ZIP bulk export | — | low |
 | Share-link for single song snapshot | — | low |
 
@@ -176,5 +179,8 @@ Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
 | 2026-04-04 | Arrow key nav added to ViewerPage (not just PerformancePage) | Users navigate with pedal in non-fullscreen viewer; same stride calculation as PerformancePage |
 | 2026-04-04 | Setlist boundary feedback via toast, not disabled buttons | Disabled buttons gave no explanation; toast message communicates the boundary clearly |
 | 2026-04-04 | `onSnapshot` in TeamDetailPage for real-time invite sync | Owner's Dexie otherwise stays stale after invitee accepts on their device |
+| 2026-04-04 | Bulk song sharing via select-mode in LibraryPage | One-by-one share via ViewerPage was too slow for 50+ songs; select-mode enables `bulkAdd` + `bulkMove` |
+| 2026-04-04 | Team setlists in SetlistsPage sidebar (mirrors Library pattern) | Setlists needed the same team-scoped context switching as the Library; `Setlist.sharedTeamId` already existed in schema |
+| 2026-04-04 | Key badge opens 12-key transpose picker with chord previews | Users wanted to jump to a target key directly without stepping through semitones; chord previews confirm the right key |
 
 *Last updated: 2026-04-04*
