@@ -149,7 +149,7 @@ Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| Add `public/icons/icon-192.png` + `icon-512.png` | high | Placeholder SVG renders to PNG |
+| ~~Add `public/icons/icon-192.png` + `icon-512.png`~~ | ~~high~~ | ✅ Done — generated from SVG via ImageMagick |
 | Expand Playwright suite with import-then-search flow | medium | Needs DB isolation per test |
 | Add Playwright tests for Performance mode setlist nav | medium | Phase 2 feature |
 | Review chordsheetjs version for paragraph separation fix | low | Named sections currently merge into one `.paragraph` |
@@ -168,11 +168,13 @@ Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
 | 2026-03-30 | Section badges: graphical bordered box with repeat superscript | Matches chords.wiki convention; makes repeated sections (A, B, B², C) instantly recognizable on stage |
 | 2026-03-30 | Horizontal page-flip for multi-column | Eliminates accidental scroll; pedal/tap always advances exactly one column at a time |
 | 2026-03-31 | Teams scoped to Phase 3 alongside Firestore sync | Teams require per-user cloud identity; building on top of Firebase Auth makes natural prerequisite chain |
-
----
-
 | 2026-04-01 | Sync manual-only via SyncContext + firestoreSync.ts | Stage safety guaranteed by absence of sync calls in PerformancePage |
 | 2026-04-01 | Team invite check queries all Firestore /teams docs | Simple approach; scales to small team counts; revisit with inviteIndex if needed |
 | 2026-04-01 | Team books use `Book.sharedTeamId` in same Dexie table | Avoids separate team song table; role enforcement is at read/write layer |
+| 2026-04-04 | `.column` uses `white-space: pre-wrap` not `pre` | `pre` prevented word-wrap; long lines overflowed column width on narrow screens |
+| 2026-04-04 | `.row { break-inside: avoid }` | Prevents CSS column break from orphaning a chord above its lyric in the next column |
+| 2026-04-04 | Arrow key nav added to ViewerPage (not just PerformancePage) | Users navigate with pedal in non-fullscreen viewer; same stride calculation as PerformancePage |
+| 2026-04-04 | Setlist boundary feedback via toast, not disabled buttons | Disabled buttons gave no explanation; toast message communicates the boundary clearly |
+| 2026-04-04 | `onSnapshot` in TeamDetailPage for real-time invite sync | Owner's Dexie otherwise stays stale after invitee accepts on their device |
 
-*Last updated: 2026-04-01*
+*Last updated: 2026-04-04*

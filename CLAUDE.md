@@ -13,7 +13,7 @@ npm run dev       # dev server → localhost:5173
 npm run build     # TypeScript check + Vite build
 npm run preview   # preview production build
 npm run deploy    # build + firebase deploy (needs firebase-tools + login)
-npm test          # Playwright E2E tests (26 tests)
+npm test          # Playwright E2E tests
 npm run test:ui   # Playwright interactive UI
 ```
 
@@ -27,9 +27,11 @@ npm run test:ui   # Playwright interactive UI
 
 **Offline-first**: Dexie.js (IndexedDB) is the source of truth. Firestore is sync-only (Phase 3). All reads and writes go through `src/db/index.ts`.
 
-**Sync is manual**: User presses "Sync Now". Never add automatic or background sync.
+**Sync is manual**: User presses "Sync Now" in Settings. `SyncContext` + `src/sync/firestoreSync.ts` handle upload/download with last-write-wins. Never add automatic or background sync.
 
 **Stage-safe**: Performance mode disables all sync and notifications. Do not add network calls or toasts in `PerformancePage`.
+
+**Teams**: Scoped via `Book.sharedTeamId`. Team songs/setlists live in the same Dexie tables as personal content; role enforcement is at the read/write layer. Firestore paths: `/users/{uid}/songs|books|setlists` (personal) and `/teams/{teamId}/songs|setlists` (shared).
 
 ## Key constraints — never violate these
 
@@ -49,7 +51,7 @@ npm run test:ui   # Playwright interactive UI
 | Local DB | Dexie.js (IndexedDB) |
 | Editor | CodeMirror 6 |
 | Auth | Firebase Auth (Google Sign-In) |
-| Cloud DB | Firestore (Phase 3 only) |
+| Cloud DB | Firestore (manual sync, Phase 3) |
 | Hosting | Firebase Hosting |
 | PWA | vite-plugin-pwa + Workbox |
 | i18n | react-i18next (EN + DE) |
@@ -75,26 +77,35 @@ src/
   index.css                       # Tailwind base + ChordPro renderer CSS
   types.ts                        # All TypeScript types
   auth/AuthContext.tsx             # Google login + local-mode fallback
-  db/index.ts                     # Dexie schema + query helpers
+  db/index.ts                     # Dexie schema + query helpers (getMyTeams, getTeamRole)
   firebase/index.ts               # Firebase init (graceful no-op if unconfigured)
   i18n/{index,en,de}.ts/json      # react-i18next EN+DE
   hooks/useKeyboard.ts            # Pedal/keyboard nav hook
   utils/chordpro.ts               # parse, renderToHtml, extractMeta, buildSearchText
+  sync/
+    firestoreSync.ts              # uploadPending, downloadPersonal, downloadTeams, syncNow
+    SyncContext.tsx               # SyncProvider — status, pendingCount, lastSync, syncNow
   components/
     auth/LoginPage.tsx
-    layout/AppShell.tsx           # Sidebar nav + mobile top bar
+    layout/AppShell.tsx           # Sidebar nav + mobile top bar + SyncBadge + TeamInviteNotification
     shared/Button.tsx
     editor/ChordProEditor.tsx     # CodeMirror 6 with ChordPro syntax highlight
     viewer/SongRenderer.tsx       # dangerouslySetInnerHTML chordsheetjs output
     import/ChordsWikiImporter.tsx # chords.wiki JSON importer
+    teams/TeamInviteNotification.tsx  # Checks Firestore for pending invites on mount
   pages/
-    LibraryPage.tsx
+    LibraryPage.tsx               # Song list; team nav in sidebar; team-aware create
     EditorPage.tsx
-    ViewerPage.tsx
+    ViewerPage.tsx                # Arrow key column navigation + setlist boundary toasts
     PerformancePage.tsx
     SetlistsPage.tsx
+    SetlistDetailPage.tsx         # Reorder, add/remove songs, per-slot overrides
+    TeamsPage.tsx                 # List teams; create team form
+    TeamDetailPage.tsx            # Members, invites, role management; onSnapshot live sync
     ImportPage.tsx
-    SettingsPage.tsx
+    PrintSongPage.tsx             # @media print PDF export for a single song
+    PrintSetlistPage.tsx          # @media print PDF export for a full setlist
+    SettingsPage.tsx              # Includes Cloud Sync section
 ```
 
 ## ChordPro rendering
@@ -108,12 +119,36 @@ const transposed = song.transpose(semitones)  // returns new Song, does not muta
 const html = new ChordSheetJS.HtmlDivFormatter().format(transposed)
 ```
 
+Key CSS rules that must not be removed:
+- `.row { break-inside: avoid; }` — prevents chord/lyric pairs splitting across CSS columns
+- `.column { white-space: pre-wrap; overflow-wrap: break-word; max-width: 100%; }` — word-wraps long lines without losing chord spacing
+- `.paragraph { break-inside: avoid; }` — prevents whole sections from splitting mid-paragraph
+
 ## Pedal navigation (PageFlip Cicada V7)
 
-The pedal pairs as a Bluetooth keyboard — no Web Bluetooth API needed. Set pedal to **Mode 2** (emits Left/Right Arrow). `useKeyboardNav` in `src/hooks/useKeyboard.ts` handles it. Keys are user-configurable in Settings.
+The pedal pairs as a Bluetooth keyboard — no Web Bluetooth API needed. Set pedal to **Mode 2** (emits Left/Right Arrow). Arrow key handling exists in both `PerformancePage` and `ViewerPage`. Keys are user-configurable in Settings.
 
-- `ArrowRight` → next column (or next song in setlist)
-- `ArrowLeft` → previous column
+- `ArrowRight` → next column (or next song in setlist; shows toast at boundary)
+- `ArrowLeft` → previous column (or previous song; shows toast at boundary)
+
+Column stride = `containerWidth / columns`. At the last column, navigating right advances to the next setlist song.
+
+## Sync architecture
+
+`SyncContext` exposes `{ status, pendingCount, lastSync, error, syncNow }`.
+
+- `status`: `'unconfigured' | 'clean' | 'pending' | 'syncing' | 'error'`
+- Every Dexie write calls `markPending(entityType, id)` which inserts/updates a `SyncState` row
+- `syncNow()`: `uploadPending()` → `downloadPersonal()` → `downloadTeams()`
+- `stripUndefined()` in `firestoreSync.ts` strips `undefined` fields before Firestore writes (Firestore rejects them)
+- Team songs are uploaded to both `/users/{uid}/songs/{id}` and `/teams/{teamId}/songs/{id}` when the song's book has `sharedTeamId`
+
+## Teams architecture
+
+- `TeamMemberRole`: `'owner' | 'contributor' | 'reader'`
+- Team invite flow: owner adds email → stored in `team.invites[]` → pushed to Firestore → `TeamInviteNotification` on invitee's AppShell queries all `/teams` docs on mount → accept writes user to `members[]` and removes from `invites[]`
+- `TeamDetailPage` uses `onSnapshot` to keep local Dexie in sync with Firestore in real-time (so owner sees accepted invites without manual sync)
+- `LibraryPage` shows team spaces in the sidebar; `createSong` auto-creates a team book on first use
 
 ## chords.wiki import format
 
@@ -123,11 +158,8 @@ The user's real export file is `chords_wiki_library_export_20260329.json` (4 boo
 
 Copy `.env.example` to `.env.local` and fill in the Firebase config values. The app runs in local-mode (guest user, no sync) when Firebase is not configured — this is intentional.
 
-## Phase 1 status
+## Implementation status
 
-Working through the checklist in `docs/chordcrew-claude-code-prompt.md`. Key gaps remaining:
-- `SetlistDetailPage` (view/edit a setlist's songs)
-- PWA icons (`public/icons/icon-192.png`, `icon-512.png`)
-- Verify chordsheetjs CSS class names match `index.css`
-- Pinch-to-zoom on ViewerPage and PerformancePage
-- Confirm `AppSettings` Dexie seed on first load
+Phases 1, 2, and 3 are complete. See `docs/roadmap.md` for the full list of completed items. The only remaining Phase 1 gap is pinch-to-zoom on Viewer and Performance pages (medium priority).
+
+Phase 4 (Polish) items are deferred.
