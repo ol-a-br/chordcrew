@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { onSnapshot, doc as fsDoc } from 'firebase/firestore'
 import { ArrowLeft, Crown, UserPlus, Trash2, ChevronDown } from 'lucide-react'
 import { db, generateId } from '@/db'
 import { syncTeam } from '@/sync/firestoreSync'
-import { firebaseConfigured } from '@/firebase'
+import { firestore, firebaseConfigured } from '@/firebase'
 import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
 import type { Team, TeamMember, TeamInvite, TeamMemberRole } from '@/types'
@@ -26,6 +27,23 @@ export default function TeamDetailPage() {
   const [inviteError, setInviteError] = useState('')
 
   const team = useLiveQuery(() => id ? db.teams.get(id) : undefined, [id])
+
+  // Real-time Firestore listener: keep local Dexie up to date when other members
+  // change the team (e.g. accept invites, role changes). This lets the owner see
+  // invite acceptances without needing to manually sync.
+  useEffect(() => {
+    if (!id || !firebaseConfigured || !firestore) return
+    const unsub = onSnapshot(fsDoc(firestore, 'teams', id), async snap => {
+      if (!snap.exists()) return
+      const remote = snap.data() as Team
+      // Only update if remote is newer than local
+      const local = await db.teams.get(id)
+      if (!local || remote.updatedAt > local.updatedAt) {
+        await db.teams.put(remote)
+      }
+    })
+    return unsub
+  }, [id])
 
   if (team === undefined) return <div className="p-8 text-ink-muted">Loading…</div>
   if (!team) return <div className="p-8 text-ink-muted">Team not found.</div>

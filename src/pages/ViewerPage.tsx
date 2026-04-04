@@ -30,6 +30,9 @@ export default function ViewerPage() {
   const [lyricsOnly, setLyricsOnly] = useState(false)
   const [fontScale, setFontScale] = useFontScale()
   const [showShareMenu, setShowShareMenu] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   // Teams — for copy/move to team space
   const teams = useLiveQuery(() => db.teams.toArray(), [])
@@ -67,6 +70,73 @@ export default function ViewerPage() {
     setTranspose(currentSetlistItem.transposeOffset ?? 0)
     if (currentSetlistItem.columnCount) setColumns(currentSetlistItem.columnCount)
   }, [currentSetlistItem])
+
+  // Show a brief boundary toast (2 s auto-dismiss)
+  const showToast = (msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast(msg)
+    toastTimer.current = setTimeout(() => setToast(null), 2000)
+  }
+
+  // Setlist navigation helpers (used by buttons AND keyboard)
+  const goPrev = () => {
+    if (!setlistId) return
+    if (prevSongId) navigate(`/view/${prevSongId}?setlistId=${setlistId}&pos=${currentPos - 1}`)
+    else showToast('Beginning of setlist')
+  }
+  const goNext = () => {
+    if (!setlistId) return
+    if (nextSongId) navigate(`/view/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`)
+    else showToast('End of setlist')
+  }
+
+  // Column stride: width of one CSS column (container / columns)
+  const getColumnStride = () => {
+    const el = scrollRef.current
+    if (!el || columns <= 1) return 0
+    return el.clientWidth / columns
+  }
+
+  // Arrow key column navigation (viewer mode — no long-press, no setlist skip)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Ignore when typing in an input
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      const el = scrollRef.current
+      if (!el) return
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        if (columns > 1) {
+          const stride = getColumnStride()
+          const newLeft = el.scrollLeft + stride
+          // At the last column of content → go to next song if in setlist
+          if (newLeft + el.clientWidth >= el.scrollWidth - 10) {
+            goNext()
+          } else {
+            el.scrollTo({ left: newLeft, behavior: 'smooth' })
+          }
+        } else {
+          goNext()
+        }
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        if (columns > 1) {
+          const stride = getColumnStride()
+          if (el.scrollLeft < 10) {
+            goPrev()
+          } else {
+            el.scrollTo({ left: Math.max(0, el.scrollLeft - stride), behavior: 'smooth' })
+          }
+        } else {
+          goPrev()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns, setlistId, prevSongId, nextSongId, currentPos])
 
   // Transposed key and first-3-chords for musician preview
   const transposedKey = useMemo(
@@ -144,9 +214,8 @@ export default function ViewerPage() {
         {/* Setlist prev nav */}
         {setlistId && (
           <button
-            onClick={() => prevSongId && navigate(`/view/${prevSongId}?setlistId=${setlistId}&pos=${currentPos - 1}`)}
-            disabled={!prevSongId}
-            className="p-1.5 rounded text-ink-muted hover:text-ink disabled:opacity-30"
+            onClick={goPrev}
+            className="p-1.5 rounded text-ink-muted hover:text-ink"
             title="Previous song"
           >
             <ChevronLeft size={16} />
@@ -166,9 +235,8 @@ export default function ViewerPage() {
               {currentPos + 1}/{songItems.length}
             </span>
             <button
-              onClick={() => nextSongId && navigate(`/view/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`)}
-              disabled={!nextSongId}
-              className="p-1.5 rounded text-ink-muted hover:text-ink disabled:opacity-30"
+              onClick={goNext}
+              className="p-1.5 rounded text-ink-muted hover:text-ink"
               title="Next song"
             >
               <ChevronRight size={16} />
@@ -313,30 +381,41 @@ export default function ViewerPage() {
 
       {/* Song content — multi-column: wrap to columns (no vertical scroll);
           single-column: normal vertical scroll */}
-      {columns > 1 ? (
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
-          <div className="h-full px-6 py-5">
+      <div className="flex-1 min-h-0 relative">
+        {columns > 1 ? (
+          <div ref={scrollRef} className="h-full overflow-x-auto overflow-y-hidden hide-scrollbar">
+            <div className="h-full px-6 py-5">
+              <SongRenderer
+                content={song.transcription.content}
+                transposeOffset={transpose}
+                columns={columns}
+                lyricsOnly={lyricsOnly}
+                fontScale={fontScale}
+                pageFlip
+              />
+            </div>
+          </div>
+        ) : (
+          <div ref={scrollRef} className="h-full overflow-y-auto overflow-x-hidden px-6 py-5">
             <SongRenderer
               content={song.transcription.content}
               transposeOffset={transpose}
-              columns={columns}
+              columns={1}
               lyricsOnly={lyricsOnly}
               fontScale={fontScale}
-              pageFlip
             />
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-5">
-          <SongRenderer
-            content={song.transcription.content}
-            transposeOffset={transpose}
-            columns={1}
-            lyricsOnly={lyricsOnly}
-            fontScale={fontScale}
-          />
-        </div>
-      )}
+        )}
+
+        {/* Setlist boundary toast */}
+        {toast && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-none">
+            <div className="bg-surface-2 border border-surface-3 text-ink-muted text-xs px-4 py-2 rounded-full shadow-lg animate-fade-in">
+              {toast}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

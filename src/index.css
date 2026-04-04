@@ -6,6 +6,12 @@
   html { font-family: 'Outfit', sans-serif; }
   body { @apply bg-surface-0 text-ink; }
 
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px) translateX(-50%); }
+    to   { opacity: 1; transform: translateY(0)   translateX(-50%); }
+  }
+  .animate-fade-in { animation: fade-in 0.15s ease-out both; }
+
   /* Scrollbar styling */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { @apply bg-surface-1; }
@@ -95,21 +101,28 @@
   line-height: 1;
 }
 
-/* Each chord+lyric row — flex-start so all chord tops align at the same height */
+/* Each chord+lyric row — flex-start so all chord tops align at the same height.
+   break-inside:avoid prevents a CSS column break from splitting chord off its lyric. */
 .chordpro-output .row {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   min-height: 2.8em;
   column-gap: 0.3em;
+  break-inside: avoid;
+  page-break-inside: avoid; /* legacy */
 }
 
-/* Each chord+lyric column pair */
+/* Each chord+lyric column pair.
+   pre-wrap preserves intentional spaces but allows wrapping at column edges.
+   max-width:100% prevents a single pair from overflowing the CSS column. */
 .chordpro-output .column {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 /* Song title — chordsheetjs outputs <h1> (no class) for {title:}.
