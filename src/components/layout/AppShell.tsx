@@ -18,21 +18,29 @@ const bottomNavItems = [
   { to: '/settings', labelKey: 'nav.settings', Icon: Settings },
 ]
 
+const STALE_MS = 60 * 60 * 1000  // 1 hour
+
 /** Compact sync status dot shown in the sidebar user section. */
 function SyncBadge() {
-  const { status, pendingCount, syncNow } = useSync()
+  const { status, pendingCount, lastSync, syncNow } = useSync()
 
   if (status === 'unconfigured') return null
 
+  // Treat clean-but-stale (never synced or >1 h ago) as a soft pending indicator
+  const isStale = status === 'clean' && (lastSync === null || Date.now() - lastSync > STALE_MS)
+
   const dotClass =
-    status === 'clean'   ? 'bg-green-500' :
-    status === 'pending' ? 'bg-amber-400' :
-    status === 'error'   ? 'bg-red-500'   : 'bg-blue-400'
+    status === 'syncing'          ? 'bg-blue-400' :
+    status === 'error'            ? 'bg-red-500'  :
+    (status === 'pending' || isStale) ? 'bg-amber-400' :
+    'bg-green-500'
 
   const label =
     status === 'syncing' ? 'Syncing…' :
     status === 'error'   ? 'Sync error' :
-    status === 'pending' ? `${pendingCount} unsynced` : 'Synced'
+    status === 'pending' ? `${pendingCount} unsynced` :
+    isStale              ? 'Sync recommended' :
+    'Synced'
 
   return (
     <button

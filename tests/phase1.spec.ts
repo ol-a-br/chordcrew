@@ -117,7 +117,7 @@ test('typing in editor updates preview', async ({ page }) => {
   await expect(page.locator('.chordpro-output .chord').filter({ hasText: 'Am' })).toBeVisible({ timeout: 3000 })
 })
 
-test('save button persists song (no longer shows "unsaved")', async ({ page }) => {
+test('changes are auto-saved without a Save button', async ({ page }) => {
   await waitForApp(page)
   await createSong(page)
 
@@ -127,9 +127,14 @@ test('save button persists song (no longer shows "unsaved")', async ({ page }) =
   await page.keyboard.press('Enter')
   await editor.pressSequentially('[G]Test lyrics')
 
-  await expect(page.locator('text=unsaved')).toBeVisible()
-  await page.click('button:has-text("Save")')
-  await expect(page.locator('text=unsaved')).toBeHidden({ timeout: 3000 })
+  // No explicit Save button — auto-save fires after 1 s idle
+  await expect(page.locator('button:has-text("Save")')).toHaveCount(0)
+  // After the debounce delay, navigating away and back should show the saved content
+  await page.waitForTimeout(1500)
+  const url = page.url()
+  const songId = url.split('/editor/')[1]
+  await page.goto(`/view/${songId}`)
+  await expect(page.locator('.chordpro-output')).toBeVisible({ timeout: 5000 })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

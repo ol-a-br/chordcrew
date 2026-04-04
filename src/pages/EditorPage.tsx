@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Save, Eye, X, RotateCcw, Tag, History } from 'lucide-react'
+import { Eye, X, RotateCcw, Tag, History } from 'lucide-react'
 import { db, upsertSongVersions, markPending } from '@/db'
 import { buildSearchText, extractMeta } from '@/utils/chordpro'
 import { ChordProEditor } from '@/components/editor/ChordProEditor'
@@ -9,6 +9,9 @@ import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
 import type { SongVersion } from '@/types'
+
+const AUTOSAVE_DELAY_MS = 1000
+const VERSION_INTERVAL_MS = 5 * 60 * 1000  // create a version at most every 5 min
 
 /** Replace or insert a ChordPro directive in the content string. */
 function updateDirective(content: string, directive: string, value: string): string {
@@ -28,10 +31,16 @@ export default function EditorPage() {
 
   const [content, setContent] = useState('')
   const [tags, setTags] = useState<string[]>([])
-  const [dirty, setDirty] = useState(false)
   const [showPreview, setShowPreview] = useState(true)
   const [showHistory, setShowHistory] = useState(false)
   const tagInputRef = useRef<HTMLInputElement>(null)
+
+  // Refs so the auto-save timer always reads the latest values without stale closures
+  const contentRef = useRef(content)
+  const tagsRef = useRef(tags)
+  const songRef = useRef(song)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastVersionSavedRef = useRef<number>(0)
 
   const versions = useLiveQuery(
     async (): Promise<SongVersion[]> => id
@@ -39,12 +48,6 @@ export default function EditorPage() {
       : [],
     [id]
   )
-
-  const restoreVersion = useCallback((versionContent: string) => {
-    setContent(versionContent)
-    setDirty(true)
-    setShowHistory(false)
-  }, [])
 
   // ── Tap-tempo ─────────────────────────────────────────────────────────────
   const tapTimesRef = useRef<number[]>([])
@@ -69,6 +72,11 @@ export default function EditorPage() {
     tapResetTimer.current = setTimeout(() => { tapTimesRef.current = [] }, 3000)
   }
 
+  // Keep refs in sync with latest state/props so the save timer reads fresh values
+  contentRef.current = content
+  tagsRef.current = tags
+  songRef.current = song
+
   // Derive metadata from content for display; updated reactively
   const derivedMeta = useMemo(() => extractMeta(content), [content])
 
@@ -79,56 +87,77 @@ export default function EditorPage() {
     }
   }, [song?.id])
 
+  // Flush any pending auto-save on unmount
+  useEffect(() => () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+  }, [])
+
+  const save = useCallback(async () => {
+    const s = songRef.current
+    if (!s || !user) return
+    const currentContent = contentRef.current
+    const currentTags = tagsRef.current
+    const meta = extractMeta(currentContent)
+
+    // Create a version at most every VERSION_INTERVAL_MS to avoid flooding history
+    const now = Date.now()
+    if (now - lastVersionSavedRef.current > VERSION_INTERVAL_MS) {
+      await upsertSongVersions(s.id, s.transcription.content, user.id, user.displayName)
+      lastVersionSavedRef.current = now
+    }
+
+    await db.songs.update(s.id, {
+      title:      meta.title ?? s.title,
+      artist:     meta.artist ?? s.artist,
+      tags:       currentTags,
+      searchText: buildSearchText(meta.title ?? s.title, meta.artist ?? s.artist, currentTags, currentContent),
+      updatedAt:  now,
+      transcription: {
+        ...s.transcription,
+        content:       currentContent,
+        key:           meta.key ?? s.transcription.key,
+        tempo:         meta.tempo ?? s.transcription.tempo,
+        capo:          meta.capo ?? s.transcription.capo,
+        timeSignature: meta.time ?? s.transcription.timeSignature,
+      },
+    })
+    await markPending('song', s.id)
+  }, [user])
+
+  const scheduleAutoSave = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(save, AUTOSAVE_DELAY_MS)
+  }, [save])
+
+  const restoreVersion = useCallback((versionContent: string) => {
+    setContent(versionContent)
+    setShowHistory(false)
+    scheduleAutoSave()
+  }, [scheduleAutoSave])
+
   const commitMetaField = (directive: string, value: string) => {
     setContent(prev => {
       const updated = updateDirective(prev, directive, value)
-      setDirty(true)
       return updated
     })
+    scheduleAutoSave()
   }
 
   const handleChange = (val: string) => {
     setContent(val)
-    setDirty(true)
-  }
-
-  const save = async () => {
-    if (!song || !user) return
-    const meta = extractMeta(content)
-    await upsertSongVersions(song.id, song.transcription.content, user.id, user.displayName)
-    await db.songs.update(song.id, {
-      title:      meta.title ?? song.title,
-      artist:     meta.artist ?? song.artist,
-      tags,
-      searchText: buildSearchText(meta.title ?? song.title, meta.artist ?? song.artist, tags, content),
-      updatedAt:  Date.now(),
-      transcription: {
-        ...song.transcription,
-        content,
-        key:           meta.key ?? song.transcription.key,
-        tempo:         meta.tempo ?? song.transcription.tempo,
-        capo:          meta.capo ?? song.transcription.capo,
-        timeSignature: meta.time ?? song.transcription.timeSignature,
-      },
-    })
-    await markPending('song', song.id)
-    setDirty(false)
+    scheduleAutoSave()
   }
 
   const addTag = (value: string) => {
     const tag = value.trim().toLowerCase()
     if (!tag || tags.includes(tag)) return
-    const newTags = [...tags, tag]
-    setTags(newTags)
-    setDirty(true)
+    setTags(prev => [...prev, tag])
+    scheduleAutoSave()
   }
 
   const removeTag = (tag: string) => {
-    setTags(t => {
-      const updated = t.filter(x => x !== tag)
-      setDirty(true)
-      return updated
-    })
+    setTags(t => t.filter(x => x !== tag))
+    scheduleAutoSave()
   }
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -153,7 +182,6 @@ export default function EditorPage() {
         </button>
         <div className="flex-1 min-w-0">
           <span className="font-medium text-sm truncate">{song.title}</span>
-          {dirty && <span className="ml-2 text-xs text-ink-faint">unsaved</span>}
         </div>
         <button
           onClick={() => setShowPreview(p => !p)}
@@ -174,10 +202,6 @@ export default function EditorPage() {
         <Button variant="ghost" size="sm" onClick={() => navigate(`/view/${song.id}`)}>
           <RotateCcw size={14} />
           View
-        </Button>
-        <Button variant="primary" size="sm" onClick={save} disabled={!dirty}>
-          <Save size={14} />
-          Save
         </Button>
       </div>
 
@@ -300,7 +324,7 @@ export default function EditorPage() {
                 })}
               </div>
               <p className="px-4 py-2 text-xs text-ink-faint border-t border-surface-3 shrink-0">
-                Restoring replaces the editor content. Save to keep it.
+                Restoring replaces the editor content. Changes are auto-saved.
               </p>
             </div>
           </>

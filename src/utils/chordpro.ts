@@ -14,9 +14,12 @@ export function preprocessChordPro(content: string): string {
     .replace(/\{start_of_part\s*:\s*([^}]+)\}/gi, '{start_of_verse: $1}')
     .replace(/\{eop\b[^}]*\}/gi, '{end_of_verse}')
     .replace(/\{end_of_part\b[^}]*\}/gi, '{end_of_verse}')
-    // Anonymous chorus/verse directives → add default label so badge tracking works.
+    // Anonymous section directives → add default label so badge tracking works.
+    // {start_of_verse} → {start_of_verse: Verse}
     // {start_of_chorus} → {start_of_chorus: Chorus} (keeps .paragraph.chorus CSS class)
     // Must run before named variants to avoid double-matching.
+    .replace(/\{start_of_verse\s*\}/gi, '{start_of_verse: Verse}')
+    .replace(/\{start_of_bridge\s*\}/gi, '{start_of_bridge: Bridge}')
     .replace(/\{(start_of_chorus)\s*\}/gi, '{$1: Chorus}')
     .replace(/\{(soc)\s*\}/gi, '{start_of_chorus: Chorus}')
     // {soc: Name} shorthand with explicit name
@@ -140,7 +143,13 @@ export function buildSearchText(
 // ─── Standard chord names (for validation hints) ─────────────────────────────
 
 const ROOTS = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
-const QUALITIES = ['', 'm', 'maj7', 'm7', '7', 'sus2', 'sus4', 'dim', 'aug', 'add9', '6', '9', '11', '13', 'maj9', 'm9', 'mmaj7', 'dim7', 'm7b5', '5', '2', '4']
+const QUALITIES = [
+  '', 'm', 'maj7', 'm7', '7', 'sus', 'sus2', 'sus4', 'dim', 'aug',
+  'add9', 'add2', 'add4', 'add11', '6', '9', '11', '13',
+  'maj9', 'maj11', 'maj13', 'm6', 'm9', 'm11', 'm13',
+  'mmaj7', 'dim7', 'm7b5', '7sus4', '7sus2',
+  '5', '2', '4',
+]
 
 export function isKnownChord(chord: string): boolean {
   const base = chord.split('/')[0]

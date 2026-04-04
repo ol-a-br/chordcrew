@@ -130,12 +130,13 @@ export function SongRenderer({
       }
 
       // Case 2: Bracket-notation section header
-      // Pattern: first .row has exactly one .column with section-name in .chord and empty .lyrics
+      // Pattern: first .row has a first column whose .chord is a non-chord name (e.g. Intro, Verse)
+      // and whose .lyrics is empty. Subsequent chord columns (if any) are moved to a new row.
       const firstRow = para.querySelector<HTMLElement>(':scope > .row')
       if (!firstRow) return
 
-      const cols = firstRow.querySelectorAll(':scope > .column')
-      if (cols.length !== 1) return
+      const cols = Array.from(firstRow.querySelectorAll<HTMLElement>(':scope > .column'))
+      if (cols.length === 0) return
 
       const chordEl = cols[0].querySelector<HTMLElement>('.chord')
       const lyricsEl = cols[0].querySelector<HTMLElement>('.lyrics')
@@ -146,12 +147,19 @@ export function SongRenderer({
       if (isKnownChord(chordText)) return
 
       firstRow.classList.add('section-header-row')
-      // Inject badge directly before first child of the row
       const { letter, count } = assignBadge(chordText)
       const badge = document.createElement('span')
       badge.className = 'section-badge'
       badge.innerHTML = makeBadgeHtml(letter, count)
       firstRow.insertBefore(badge, firstRow.firstChild)
+
+      // If additional chord columns follow the section name, move them to a new row
+      if (cols.length > 1) {
+        const newRow = document.createElement('div')
+        newRow.className = 'row'
+        cols.slice(1).forEach(col => newRow.appendChild(col))
+        firstRow.after(newRow)
+      }
 
       if (isChorusLabel(chordText)) {
         para.classList.add('chorus-section')
@@ -183,6 +191,24 @@ export function SongRenderer({
         (quality ? `<span class="chord-quality">${quality}</span>` : '') +
         (bass    ? `<span class="chord-bass">${bass}</span>` : '')
     })
+    // ── Mid-word column spacing fix ───────────────────────────────────────────
+    // The .row flex container has column-gap:0.3em between ALL .column children.
+    // For chords placed inside a word (e.g. Vat[A]er), the gap inserts a visual
+    // space between "Vat" and "er". Detect these and cancel the gap with a
+    // negative margin-left. Gap is preserved when previous lyrics end in space
+    // (word boundary) or both lyric sides are empty (chord-only lines).
+    container.querySelectorAll<HTMLElement>('.row').forEach(row => {
+      const rowCols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
+      rowCols.forEach((col, i) => {
+        if (i === 0) return
+        const prevLyrics = rowCols[i - 1].querySelector('.lyrics')?.textContent ?? ''
+        const thisLyrics = col.querySelector('.lyrics')?.textContent ?? ''
+        if (prevLyrics && !prevLyrics.endsWith(' ') && !thisLyrics.startsWith(' ')) {
+          col.style.marginLeft = '-0.3em'
+        }
+      })
+    })
+
     // ── Pass 2: Repeat indicators (↺ SectionName) → look up section letter ───
     // These are injected by preprocessChordPro from {repeat: SectionName}.
     // Since Pass 1 has already assigned letters to real sections, we can now
