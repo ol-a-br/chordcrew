@@ -239,6 +239,28 @@ export default function EditorPage() {
         ))}
       </div>
 
+      {/* Metadata bar — attribution (CCLI / copyright / URL) */}
+      <div className="flex items-center gap-3 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
+        {([
+          { label: 'CCLI',      directive: 'ccli',      value: derivedMeta.ccli      ?? '', width: 'w-24',  type: 'text',  placeholder: '5281015' },
+          { label: 'Copyright', directive: 'copyright', value: derivedMeta.copyright ?? '', width: 'w-64',  type: 'text',  placeholder: '© Year Author' },
+          { label: 'URL',       directive: 'url',       value: derivedMeta.url       ?? '', width: 'w-64',  type: 'url',   placeholder: 'https://…' },
+        ] as const).map(({ label, directive, value, width, type, placeholder }) => (
+          <label key={directive} className="flex items-center gap-1 text-xs">
+            <span className="text-ink-faint shrink-0">{label}</span>
+            <input
+              type={type}
+              defaultValue={value}
+              key={`${directive}-${song?.id}-${value}`}
+              placeholder={placeholder}
+              onBlur={e => commitMetaField(directive, e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+              className={`${width} bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50 placeholder:text-ink-faint/40`}
+            />
+          </label>
+        ))}
+      </div>
+
       {/* Metadata bar — tags */}
       <div className="flex items-center gap-2 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0">
         <Tag size={13} className="text-ink-faint shrink-0" />

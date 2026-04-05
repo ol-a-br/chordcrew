@@ -156,6 +156,13 @@ function convertLyrics(lyricsContent: string): string {
 
     // Chord line
     if (line.startsWith('.')) {
+      // Skip inline metadata annotations embedded in chord lines:
+      // e.g. ".Key - C | Tempo - 77 | Time - 4/4" or ". Tonart - E | ..."
+      const afterDot = line.slice(1).trim()
+      if (/^(Key|Tonart|Tempo|Time|Taktart)\s*[-|:]/i.test(afterDot)) {
+        i++
+        continue
+      }
       const nextLine = i + 1 < lines.length ? lines[i + 1] : ''
       if (nextLine.startsWith(' ') && nextLine.trim()) {
         out.push(mergeChordLyric(line, nextLine))
@@ -177,8 +184,8 @@ function convertLyrics(lyricsContent: string): string {
     }
 
     // Free-text line (no '.' or ' ' prefix)
-    // Skip pure metadata annotations like "Key - A | Tempo - 70"
-    if (/^(Key|Tempo|Time)\s*[-|]/i.test(trimmed)) {
+    // Skip pure metadata annotations like "Key - A | Tempo - 70" or German "Tonart - E | Taktart - 4/4"
+    if (/^(Key|Tonart|Tempo|Time|Taktart)\s*[-|:]/i.test(trimmed)) {
       i++
       continue
     }
@@ -199,6 +206,29 @@ interface OpenSongMeta {
   tempo: string
   timeSig: string
   capo: string
+  ccli: string
+  copyright: string
+}
+
+/** Extract key/tempo/time from inline annotations like "Key - C | Tempo - 77 | Time - 4/4"
+ *  or the German variant "Tonart - E | Tempo - 160 | Taktart - 4/4". */
+function extractInlineMeta(lyrics: string): { key?: string; tempo?: string; timeSig?: string } {
+  const result: { key?: string; tempo?: string; timeSig?: string } = {}
+  for (const line of lyrics.split('\n')) {
+    // Strip leading '.' (chord-line prefix) or spaces
+    const t = line.startsWith('.') ? line.slice(1).trim() : line.trim()
+    if (!/(Key|Tonart|Tempo|Taktart|Time)\s*[-|:]/i.test(t)) continue
+
+    const keyM = t.match(/(?:Key|Tonart)\s*[-:]\s*([A-G][#b]?m?)\b/i)
+    if (keyM && !result.key) result.key = keyM[1]
+
+    const tempoM = t.match(/Tempo\s*[-:]\s*(\d+)/i)
+    if (tempoM && !result.tempo) result.tempo = tempoM[1]
+
+    const timeM = t.match(/(?:Time|Taktart)\s*[-:]\s*([\d\/]+)/i)
+    if (timeM && !result.timeSig) result.timeSig = timeM[1]
+  }
+  return result
 }
 
 function parseOpenSongXml(text: string): { meta: OpenSongMeta; lyrics: string } | null {
@@ -208,16 +238,26 @@ function parseOpenSongXml(text: string): { meta: OpenSongMeta; lyrics: string } 
 
   const get = (tag: string) => doc.querySelector(tag)?.textContent?.trim() ?? ''
 
+  const lyrics  = get('lyrics')
+  const xmlKey  = get('key')
+  const xmlTempo = get('tempo')
+  const xmlTime = get('time_sig')
+
+  // Fall back to inline annotations when XML tags are absent
+  const inline  = (!xmlKey || !xmlTempo) ? extractInlineMeta(lyrics) : {}
+
   return {
     meta: {
-      title:   get('title'),
-      author:  get('author'),
-      key:     get('key'),
-      tempo:   get('tempo'),
-      timeSig: get('time_sig'),
-      capo:    get('capo'),
+      title:     get('title'),
+      author:    get('author'),
+      key:       xmlKey   || inline.key    || '',
+      tempo:     xmlTempo || inline.tempo  || '',
+      timeSig:   xmlTime  || inline.timeSig || '',
+      capo:      get('capo'),
+      ccli:      get('ccli'),
+      copyright: get('copyright'),
     },
-    lyrics: get('lyrics'),
+    lyrics,
   }
 }
 
@@ -231,6 +271,8 @@ function toChordPro(meta: OpenSongMeta, lyrics: string): string {
   if (meta.timeSig.trim())                    header.push(`{time: ${meta.timeSig}}`)
   const capo = parseInt(meta.capo, 10)
   if (capo > 0)                               header.push(`{capo: ${capo}}`)
+  if (meta.ccli.trim())                       header.push(`{ccli: ${meta.ccli}}`)
+  if (meta.copyright.trim())                  header.push(`{copyright: ${meta.copyright}}`)
   header.push('')
 
   return header.join('\n') + convertLyrics(lyrics)

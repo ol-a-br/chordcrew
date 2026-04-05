@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2 } from 'lucide-react'
+import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash } from 'lucide-react'
 import { db, generateId, markPending, getTeamRole } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
-import { transposeKey, getFirstChords, buildSearchText } from '@/utils/chordpro'
+import { transposeKey, getFirstChords, buildSearchText, extractMeta } from '@/utils/chordpro'
 import { useFontScale } from '@/hooks/useFontScale'
 import { useAuth } from '@/auth/AuthContext'
 import type { SetlistItem, Book } from '@/types'
@@ -168,6 +168,12 @@ export default function ViewerPage() {
   const soundingKey = useMemo(
     () => (capo > 0 && song?.transcription.key) ? transposeKey(song.transcription.key, capo) : '',
     [capo, song?.transcription.key]
+  )
+
+  // Extra metadata (CCLI, copyright, URL) extracted from ChordPro content
+  const derivedMeta = useMemo(
+    () => extractMeta(song?.transcription.content ?? ''),
+    [song?.transcription.content]
   )
 
   const toggleFavorite = async () => {
@@ -372,6 +378,32 @@ export default function ViewerPage() {
         <button onClick={toggleFavorite} className="p-1.5 hover:bg-surface-2 rounded">
           <Star size={16} className={song.isFavorite ? 'text-chord fill-chord' : 'text-ink-muted'} />
         </button>
+
+        {/* External URL link */}
+        {derivedMeta.url && (
+          <a
+            href={derivedMeta.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 text-ink-muted hover:text-ink rounded shrink-0"
+            title="Open link"
+          >
+            <ExternalLink size={16} />
+          </a>
+        )}
+
+        {/* CCLI SongSelect link */}
+        {derivedMeta.ccli && (
+          <a
+            href={`https://songselect.ccli.com/songs/${derivedMeta.ccli}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 text-ink-muted hover:text-ink rounded shrink-0"
+            title={`CCLI #${derivedMeta.ccli} — open in SongSelect`}
+          >
+            <Hash size={16} />
+          </a>
+        )}
 
         {/* Print / PDF */}
         <button

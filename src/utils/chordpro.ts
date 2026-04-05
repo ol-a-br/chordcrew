@@ -90,6 +90,9 @@ export interface ChordProMeta {
   tempo?: number
   capo?: number
   time?: string
+  ccli?: string
+  copyright?: string
+  url?: string
 }
 
 export function extractMeta(content: string): ChordProMeta {
@@ -100,11 +103,14 @@ export function extractMeta(content: string): ChordProMeta {
     return content.match(re)?.[1]?.trim()
   }
 
-  meta.title    = match('title') ?? match('t')
-  meta.subtitle = match('subtitle') ?? match('st')
-  meta.artist   = match('artist')
-  meta.key      = match('key')
-  meta.time     = match('time')
+  meta.title     = match('title') ?? match('t')
+  meta.subtitle  = match('subtitle') ?? match('st')
+  meta.artist    = match('artist')
+  meta.key       = match('key')
+  meta.time      = match('time')
+  meta.ccli      = match('ccli')
+  meta.copyright = match('copyright')
+  meta.url       = match('url')
 
   const tempo = match('tempo')
   if (tempo) meta.tempo = parseInt(tempo, 10)
