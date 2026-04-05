@@ -89,7 +89,7 @@ Useful once there are multiple contributors who can merge PRs.
 | Task | Status | Notes |
 |------|--------|-------|
 | Auto-deploy disabled on push | ✅ done | `workflow_dispatch` only in deploy.yml |
-| `develop` branch as default | ⬜ pending | Set in GitHub repo settings → Default branch |
+| `develop` branch as default | ✅ done | |
 | `main` branch protection | ⬜ pending | Require PR + review before merge |
 | `FIREBASE_SERVICE_ACCOUNT` secret set | ⬜ pending | Needed before re-enabling CI |
 | Service account scoped to Hosting Admin only | ⬜ pending | Downgrade from Editor in GCP IAM |

@@ -175,7 +175,7 @@ To be completed before onboarding any additional contributors. Full details and 
 
 | Item | Priority | Status | Notes |
 |------|----------|--------|-------|
-| Set `develop` as default GitHub branch | high | ⬜ pending | GitHub repo → Settings → Default branch |
+| Set `develop` as default GitHub branch | high | ✅ done | |
 | Add `main` branch protection rule | high | ⬜ pending | Require PR + 1 review; block direct push; no admin bypass |
 | Set `FIREBASE_SERVICE_ACCOUNT` GitHub secret | high | ⬜ pending | Required before re-enabling CI deploy |
 | Scope Firebase service account to Hosting Admin only | high | ⬜ pending | GCP IAM → downgrade from Editor to `roles/firebasehosting.admin` |
