@@ -1,6 +1,8 @@
 import { useMemo, useRef, useEffect } from 'react'
 import { renderToHtml, isKnownChord } from '@/utils/chordpro'
+import type { ChordProError } from '@/utils/chordpro'
 import { clsx } from 'clsx'
+import { AlertTriangle } from 'lucide-react'
 
 interface SongRendererProps {
   content: string
@@ -10,6 +12,8 @@ interface SongRendererProps {
   fontScale?: number
   pageFlip?: boolean
   className?: string
+  errors?: ChordProError[]
+  onJumpToLine?: (line: number) => void
 }
 
 /** Terms (lowercase) that identify a chorus section by label text */
@@ -45,6 +49,8 @@ export function SongRenderer({
   fontScale = 1,
   pageFlip = false,
   className,
+  errors,
+  onJumpToLine,
 }: SongRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -262,6 +268,34 @@ export function SongRenderer({
   }, [html])
 
   return (
+    <>
+    {errors && errors.length > 0 && (
+      <div className="mx-4 mt-3 mb-1 bg-red-900/20 border border-red-700/40 rounded-lg overflow-hidden text-sm">
+        <div className="flex items-center gap-2 px-3 py-2 bg-red-900/30 text-red-300 font-medium">
+          <AlertTriangle size={14} />
+          {errors.length} parse {errors.length === 1 ? 'error' : 'errors'}
+        </div>
+        <ul className="divide-y divide-red-900/20">
+          {errors.map((err, i) => (
+            <li key={i} className="flex items-start gap-3 px-3 py-2">
+              <span className="text-red-400 font-mono text-xs shrink-0 mt-0.5">Line {err.line}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-red-200 text-xs">{err.message}</div>
+                <div className="text-red-400/70 font-mono text-xs truncate mt-0.5">{err.text}</div>
+              </div>
+              {onJumpToLine && (
+                <button
+                  onClick={() => onJumpToLine(err.line)}
+                  className="shrink-0 text-xs text-chord hover:text-chord/80 transition-colors mt-0.5"
+                >
+                  Fix →
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
     <div
       ref={containerRef}
       className={clsx(
@@ -274,5 +308,6 @@ export function SongRenderer({
       style={{ fontSize: `${fontScale}rem` }}
       dangerouslySetInnerHTML={{ __html: html }}
     />
+    </>
   )
 }

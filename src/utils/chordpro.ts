@@ -121,6 +121,36 @@ export function extractMeta(content: string): ChordProMeta {
   return meta
 }
 
+// ─── ChordPro lint: per-line brace / bracket mismatch detection ──────────────
+
+export interface ChordProError {
+  line: number
+  message: string
+  text: string
+}
+
+export function lintChordPro(content: string): ChordProError[] {
+  const errors: ChordProError[] = []
+  const lines = content.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = i + 1
+    const text = lines[i]
+    const opens  = (text.match(/\{/g) ?? []).length
+    const closes = (text.match(/\}/g) ?? []).length
+    if (opens > closes)
+      errors.push({ line: lineNum, message: 'Unclosed directive brace — add a closing }', text })
+    else if (closes > opens)
+      errors.push({ line: lineNum, message: 'Unexpected } — no matching {', text })
+    const openBr  = (text.match(/\[/g) ?? []).length
+    const closeBr = (text.match(/\]/g) ?? []).length
+    if (openBr > closeBr)
+      errors.push({ line: lineNum, message: 'Unclosed chord bracket — add a closing ]', text })
+    else if (closeBr > openBr)
+      errors.push({ line: lineNum, message: 'Unexpected ] — no matching [', text })
+  }
+  return errors
+}
+
 // ─── Detect if a title looks like a raw filename ─────────────────────────────
 
 export function looksLikeFilename(title: string): boolean {

@@ -5,7 +5,7 @@ import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft
 import { db, generateId, markPending, getTeamRole } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
-import { transposeKey, getFirstChords, buildSearchText, extractMeta } from '@/utils/chordpro'
+import { transposeKey, getFirstChords, buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
 import { useFontScale } from '@/hooks/useFontScale'
 import { useAuth } from '@/auth/AuthContext'
 import type { SetlistItem, Book } from '@/types'
@@ -173,6 +173,10 @@ export default function ViewerPage() {
   // Extra metadata (CCLI, copyright, URL) extracted from ChordPro content
   const derivedMeta = useMemo(
     () => extractMeta(song?.transcription.content ?? ''),
+    [song?.transcription.content]
+  )
+  const lintErrors = useMemo(
+    () => lintChordPro(song?.transcription.content ?? ''),
     [song?.transcription.content]
   )
 
@@ -476,6 +480,7 @@ export default function ViewerPage() {
                 lyricsOnly={lyricsOnly}
                 fontScale={fontScale}
                 pageFlip
+                errors={lintErrors}
               />
             </div>
           </div>
@@ -487,6 +492,8 @@ export default function ViewerPage() {
               columns={1}
               lyricsOnly={lyricsOnly}
               fontScale={fontScale}
+              errors={lintErrors}
+              onJumpToLine={() => navigate(`/editor/${id}`)}
             />
           </div>
         )}

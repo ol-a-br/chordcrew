@@ -18,6 +18,8 @@ const PrintSongPage      = lazy(() => import('@/pages/PrintSongPage'))
 const PrintSetlistPage   = lazy(() => import('@/pages/PrintSetlistPage'))
 const TeamsPage          = lazy(() => import('@/pages/TeamsPage'))
 const TeamDetailPage     = lazy(() => import('@/pages/TeamDetailPage'))
+const CurationPage       = lazy(() => import('@/pages/CurationPage'))
+const HelpPage           = lazy(() => import('@/pages/HelpPage'))
 
 function PageLoader() {
   return (
@@ -60,6 +62,8 @@ export default function App() {
               <Route path="/teams"           element={<TeamsPage />} />
               <Route path="/teams/:id"      element={<TeamDetailPage />} />
               <Route path="/import"         element={<ImportPage />} />
+              <Route path="/curation"       element={<CurationPage />} />
+              <Route path="/help"           element={<HelpPage />} />
               <Route path="/settings"       element={<SettingsPage />} />
               <Route path="*"               element={<Navigate to="/library" replace />} />
             </Route>

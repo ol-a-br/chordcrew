@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, historyKeymap, history } from '@codemirror/commands'
@@ -38,11 +38,29 @@ interface ChordProEditorProps {
   readOnly?: boolean
 }
 
-export function ChordProEditor({ value, onChange, readOnly = false }: ChordProEditorProps) {
+export interface ChordProEditorHandle {
+  jumpToLine: (lineNum: number) => void
+}
+
+export const ChordProEditor = forwardRef<ChordProEditorHandle, ChordProEditorProps>(
+function ChordProEditor({ value, onChange, readOnly = false }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+
+  useImperativeHandle(ref, () => ({
+    jumpToLine: (lineNum: number) => {
+      const view = viewRef.current
+      if (!view) return
+      const line = view.state.doc.line(Math.min(lineNum, view.state.doc.lines))
+      view.dispatch({
+        selection: { anchor: line.from },
+        effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
+      })
+      view.focus()
+    },
+  }))
 
   const initEditor = useCallback(() => {
     if (!containerRef.current) return
@@ -101,4 +119,4 @@ export function ChordProEditor({ value, onChange, readOnly = false }: ChordProEd
       className="h-full w-full overflow-hidden rounded-lg border border-surface-3"
     />
   )
-}
+})

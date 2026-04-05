@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Library, ListMusic, Users, Download, Settings, Menu, X, Music2, RefreshCw } from 'lucide-react'
+import { Library, ListMusic, Users, Download, Settings, Menu, X, Music2, RefreshCw, Wand2, HelpCircle } from 'lucide-react'
 import { useAuth } from '@/auth/AuthContext'
 import { useSync } from '@/sync/SyncContext'
 import { firebaseConfigured } from '@/firebase'
@@ -14,8 +14,10 @@ const baseNavItems = [
 ]
 
 const bottomNavItems = [
-  { to: '/import',   labelKey: 'nav.import',   Icon: Download },
-  { to: '/settings', labelKey: 'nav.settings', Icon: Settings },
+  { to: '/import',    labelKey: 'nav.import',    Icon: Download },
+  { to: '/curation',  labelKey: 'nav.curation',  Icon: Wand2 },
+  { to: '/help',      labelKey: 'nav.help',      Icon: HelpCircle },
+  { to: '/settings',  labelKey: 'nav.settings',  Icon: Settings },
 ]
 
 const STALE_MS = 60 * 60 * 1000  // 1 hour — fallback when cloud check fails

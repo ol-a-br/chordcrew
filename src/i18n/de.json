@@ -4,6 +4,8 @@
     "library": "Bibliothek",
     "setlists": "Setlisten",
     "import": "Importieren",
+    "curation": "Pflege",
+    "help": "Hilfe",
     "settings": "Einstellungen"
   },
   "auth": {

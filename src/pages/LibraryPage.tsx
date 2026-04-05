@@ -47,6 +47,9 @@ export default function LibraryPage() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<SortKey>('title')
+  const [newBookName, setNewBookName] = useState('')
+  const [showNewBook, setShowNewBook] = useState(false)
+  const newBookInputRef = useRef<HTMLInputElement>(null)
 
   // Bulk selection state
   const [selectMode, setSelectMode] = useState(false)
@@ -317,6 +320,33 @@ export default function LibraryPage() {
     showBulkToast(`Moved ${songs.length} song${songs.length !== 1 ? 's' : ''} to ${targetLabel}`)
   }
 
+  // ─── Create book ──────────────────────────────────────────────────────────────
+
+  const createBook = async () => {
+    const name = newBookName.trim()
+    if (!name || !user) return
+    const id = generateId()
+    await db.books.put({
+      id,
+      title: name,
+      description: '',
+      author: user.displayName,
+      ownerId: user.id,
+      readOnly: false,
+      shareable: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    setNewBookName('')
+    setShowNewBook(false)
+    handleNavClick(id)
+  }
+
+  const openNewBook = () => {
+    setShowNewBook(true)
+    setTimeout(() => newBookInputRef.current?.focus(), 50)
+  }
+
   // ─── Navigation handlers ──────────────────────────────────────────────────────
 
   const handleNavClick = (bookId: typeof activeBookId) => {
@@ -352,14 +382,37 @@ export default function LibraryPage() {
         <NavItem label={t('library.allSongs')} icon={<Music size={15} />} active={activeBookId === 'all' && !activeTag && !activeTeamId} onClick={() => handleNavClick('all')} count={allSongs?.filter(s => !bookTeamMap[s.bookId]).length} />
         <NavItem label={t('library.favorites')} icon={<Star size={15} />} active={activeBookId === 'favorites' && !activeTeamId} onClick={() => handleNavClick('favorites')} count={allSongs?.filter(s => s.isFavorite).length} />
 
-        {personalBooks.length > 0 && (
-          <>
-            <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">{t('library.books')}</div>
-            {personalBooks.map(book => (
-              <NavItem key={book.id} label={book.title} icon={<BookOpen size={15} />} active={activeBookId === book.id && !activeTeamId} onClick={() => handleNavClick(book.id)} count={allSongs?.filter(s => s.bookId === book.id).length} />
-            ))}
-          </>
-        )}
+        <>
+          <div className="px-2 pt-3 pb-1 flex items-center">
+            <span className="text-[11px] text-ink-faint uppercase tracking-wider flex-1">{t('library.books')}</span>
+            <button
+              onClick={openNewBook}
+              title="New book"
+              className="text-ink-faint hover:text-ink-muted transition-colors p-0.5"
+            >
+              <Plus size={13} />
+            </button>
+          </div>
+          {personalBooks.map(book => (
+            <NavItem key={book.id} label={book.title} icon={<BookOpen size={15} />} active={activeBookId === book.id && !activeTeamId} onClick={() => handleNavClick(book.id)} count={allSongs?.filter(s => s.bookId === book.id).length} />
+          ))}
+          {showNewBook && (
+            <div className="px-2 pb-1">
+              <input
+                ref={newBookInputRef}
+                value={newBookName}
+                onChange={e => setNewBookName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') createBook()
+                  if (e.key === 'Escape') { setShowNewBook(false); setNewBookName('') }
+                }}
+                onBlur={() => { if (!newBookName.trim()) { setShowNewBook(false) } }}
+                placeholder="Book name…"
+                className="w-full bg-surface-2 border border-chord/40 rounded-md px-2 py-1 text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-1 focus:ring-chord/60"
+              />
+            </div>
+          )}
+        </>
 
         {myTeams.length > 0 && (
           <>

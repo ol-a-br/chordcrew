@@ -4,6 +4,8 @@
     "library": "Library",
     "setlists": "Setlists",
     "import": "Import",
+    "curation": "Curation",
+    "help": "Help",
     "settings": "Settings"
   },
   "auth": {

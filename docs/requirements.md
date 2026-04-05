@@ -240,4 +240,17 @@
 
 ---
 
-*Last updated: 2026-04-05*
+## REQ-TOOLS — Library Tools
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| TOOLS-01 | Parse error display: show line number and message in the live preview panel and Viewer; "Fix →" button jumps to the offending line in the editor. | done |
+| TOOLS-02 | Create new songbook: inline "+" form in the Library sidebar Books section; confirmed with Enter, dismissed with Escape. | done |
+| TOOLS-03 | Curation page — Duplicates tab: Jaccard word-similarity detection (≥ 75% threshold); groups displayed with Edit links. | done |
+| TOOLS-04 | Curation page — Parse Errors tab: scan all songs for brace/bracket mismatches; filterable by title; Fix → navigates to editor. | done |
+| TOOLS-05 | Curation page — Export CSV: download all song metadata (title, artist, key, tempo, capo, tags, CCLI, copyright, book, updated) as CSV. | done |
+| TOOLS-06 | Help page with Getting Started, ChordPro format reference, chords.wiki migration guide, OpenSong migration guide, Performance/pedal guide, Teams guide, Sync & backup guide, Curation guide, Troubleshooting. | done |
+
+---
+
+*Last updated: 2026-04-06*

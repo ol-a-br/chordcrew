@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Eye, X, RotateCcw, Tag, History, ChevronDown } from 'lucide-react'
 import { db, upsertSongVersions, markPending } from '@/db'
-import { buildSearchText, extractMeta } from '@/utils/chordpro'
+import { buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
 import { ChordProEditor } from '@/components/editor/ChordProEditor'
+import type { ChordProEditorHandle } from '@/components/editor/ChordProEditor'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
@@ -35,6 +36,7 @@ export default function EditorPage() {
   const [showHistory, setShowHistory] = useState(false)
   const [showExtraMeta, setShowExtraMeta] = useState(false)
   const tagInputRef = useRef<HTMLInputElement>(null)
+  const editorRef = useRef<ChordProEditorHandle>(null)
 
   // Refs so the auto-save timer always reads the latest values without stale closures
   const contentRef = useRef(content)
@@ -80,6 +82,7 @@ export default function EditorPage() {
 
   // Derive metadata from content for display; updated reactively
   const derivedMeta = useMemo(() => extractMeta(content), [content])
+  const lintErrors  = useMemo(() => lintChordPro(content), [content])
 
   useEffect(() => {
     if (song) {
@@ -317,7 +320,7 @@ export default function EditorPage() {
       <div className="flex flex-1 min-h-0 relative">
         {/* Editor */}
         <div className={`flex flex-col min-h-0 ${showPreview ? 'w-1/2' : 'w-full'}`}>
-          <ChordProEditor value={content} onChange={handleChange} />
+          <ChordProEditor ref={editorRef} value={content} onChange={handleChange} />
         </div>
 
         {/* Preview */}
@@ -325,7 +328,13 @@ export default function EditorPage() {
           <>
             <div className="w-px bg-surface-3 shrink-0" />
             <div className="flex-1 overflow-y-auto p-6">
-              <SongRenderer content={content} columns={1} fontScale={0.95} />
+              <SongRenderer
+                content={content}
+                columns={1}
+                fontScale={0.95}
+                errors={lintErrors}
+                onJumpToLine={line => editorRef.current?.jumpToLine(line)}
+              />
             </div>
           </>
         )}

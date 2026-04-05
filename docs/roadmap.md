@@ -139,12 +139,25 @@ Focus: richer song metadata, multiple import sources, library backup/restore.
 
 ---
 
-## Phase 5 — Polish · *next*
+## Phase 5 — Polish & Tools · *complete*
 
 | Item | Req IDs | Notes |
 |------|---------|-------|
-| Pinch-to-zoom on Viewer and Performance pages | VIEW-10, PERF-11 | Only remaining Phase 1 gap |
-| BPM range filter in Library sidebar | LIB-08 | Partial — key filter done |
+| **Parse error display: line number + "Fix →" jump in editor** | TOOLS-01 | ✅ done — `lintChordPro()` in chordpro.ts; error panel in SongRenderer; `forwardRef`/`jumpToLine` in ChordProEditor |
+| **Create new songbook: inline "+" form in Library sidebar** | TOOLS-02 | ✅ done |
+| **Curation page: Duplicates tab (Jaccard similarity)** | TOOLS-03 | ✅ done |
+| **Curation page: Parse Errors tab (all songs scan)** | TOOLS-04 | ✅ done |
+| **Curation page: Export CSV (all song metadata)** | TOOLS-05 | ✅ done |
+| **Help page: Getting Started, ChordPro, import guides, pedal, teams, sync, troubleshooting** | TOOLS-06 | ✅ done |
+
+---
+
+## Phase 6 — Remaining · *next*
+
+| Item | Req IDs | Priority |
+|------|---------|----------|
+| Pinch-to-zoom on Viewer and Performance pages | VIEW-10, PERF-11 | medium |
+| BPM range filter in Library sidebar | LIB-08 | low |
 | Autoscroll with `{@mm:ss}` time-tag support | — | low |
 | Annotations: text, highlight, symbol (private + shared) | — | low |
 | ZIP bulk export | — | low |
@@ -194,5 +207,8 @@ Focus: richer song metadata, multiple import sources, library backup/restore.
 | 2026-04-05 | Duplicate resolution is batch-level (skip all / overwrite all) | Per-song choice creates too much friction for 100+ file imports; batch decision covers most real-world scenarios |
 | 2026-04-05 | Non-chord chord-position text → `.chord-annotation` (italic/muted) | Keeps the ChordPro content unchanged; renderer detects and re-styles non-chord tokens post-render |
 | 2026-04-05 | Editor extra metadata rows collapsed by default | Keeps the editor clean for everyday editing; amber dot signals when attribution fields hold data |
+| 2026-04-06 | `lintChordPro` in chordpro.ts, error panel in SongRenderer | Per-line brace/bracket check; "Fix →" jumps editor via `forwardRef`/`jumpToLine` on ChordProEditor |
+| 2026-04-06 | Jaccard word similarity for duplicate detection (0.75 threshold) | Catches "Amazing Grace" vs "Amazing Grace (Key of G)" without false positives on short common words |
+| 2026-04-06 | CSV export (no external dependency) | Browser-native Blob download; avoids adding xlsx library to bundle |
 
-*Last updated: 2026-04-05*
+*Last updated: 2026-04-06*

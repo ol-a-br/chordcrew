@@ -103,6 +103,8 @@ src/
     TeamsPage.tsx                 # List teams; create team form
     TeamDetailPage.tsx            # Members, invites, role management; onSnapshot live sync
     ImportPage.tsx
+    CurationPage.tsx              # Duplicates (Jaccard), parse errors scan, CSV export
+    HelpPage.tsx                  # User documentation, migration guides, troubleshooting
     PrintSongPage.tsx             # @media print PDF export for a single song
     PrintSetlistPage.tsx          # @media print PDF export for a full setlist
     SettingsPage.tsx              # Includes Cloud Sync section
@@ -160,6 +162,4 @@ Copy `.env.example` to `.env.local` and fill in the Firebase config values. The 
 
 ## Implementation status
 
-Phases 1, 2, and 3 are complete. See `docs/roadmap.md` for the full list of completed items. The only remaining Phase 1 gap is pinch-to-zoom on Viewer and Performance pages (medium priority).
-
-Phase 4 (Polish) items are deferred.
+Phases 1–5 are complete. See `docs/roadmap.md` for the full list of completed items. The only remaining gap is pinch-to-zoom on Viewer and Performance pages (medium priority).
