@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Eye, X, RotateCcw, Tag, History } from 'lucide-react'
+import { Eye, X, RotateCcw, Tag, History, ChevronDown } from 'lucide-react'
 import { db, upsertSongVersions, markPending } from '@/db'
 import { buildSearchText, extractMeta } from '@/utils/chordpro'
 import { ChordProEditor } from '@/components/editor/ChordProEditor'
@@ -33,6 +33,7 @@ export default function EditorPage() {
   const [tags, setTags] = useState<string[]>([])
   const [showPreview, setShowPreview] = useState(true)
   const [showHistory, setShowHistory] = useState(false)
+  const [showExtraMeta, setShowExtraMeta] = useState(false)
   const tagInputRef = useRef<HTMLInputElement>(null)
 
   // Refs so the auto-save timer always reads the latest values without stale closures
@@ -205,7 +206,7 @@ export default function EditorPage() {
         </Button>
       </div>
 
-      {/* Metadata bar — song fields */}
+      {/* Metadata bar — row 1: core song fields + expand toggle */}
       <div className="flex items-center gap-3 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
         {([
           { label: 'Title',  directive: 'title',  value: derivedMeta.title  ?? '', width: 'w-36', type: 'text' },
@@ -237,59 +238,80 @@ export default function EditorPage() {
             )}
           </label>
         ))}
-      </div>
 
-      {/* Metadata bar — attribution (CCLI / copyright / URL) */}
-      <div className="flex items-center gap-3 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
-        {([
-          { label: 'CCLI',      directive: 'ccli',      value: derivedMeta.ccli      ?? '', width: 'w-24',  type: 'text',  placeholder: '5281015' },
-          { label: 'Copyright', directive: 'copyright', value: derivedMeta.copyright ?? '', width: 'w-64',  type: 'text',  placeholder: '© Year Author' },
-          { label: 'URL',       directive: 'url',       value: derivedMeta.url       ?? '', width: 'w-64',  type: 'url',   placeholder: 'https://…' },
-        ] as const).map(({ label, directive, value, width, type, placeholder }) => (
-          <label key={directive} className="flex items-center gap-1 text-xs">
-            <span className="text-ink-faint shrink-0">{label}</span>
-            <input
-              type={type}
-              defaultValue={value}
-              key={`${directive}-${song?.id}-${value}`}
-              placeholder={placeholder}
-              onBlur={e => commitMetaField(directive, e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-              className={`${width} bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50 placeholder:text-ink-faint/40`}
-            />
-          </label>
-        ))}
-      </div>
-
-      {/* Metadata bar — tags */}
-      <div className="flex items-center gap-2 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0">
-        <Tag size={13} className="text-ink-faint shrink-0" />
-        <div className="flex flex-wrap items-center gap-1 flex-1">
-          {tags.map(tag => (
-            <span
-              key={tag}
-              className="flex items-center gap-1 bg-surface-3 text-ink-muted text-xs px-2 py-0.5 rounded-full"
-            >
-              {tag}
-              <button
-                onClick={() => removeTag(tag)}
-                className="text-ink-faint hover:text-ink leading-none"
-                title="Remove tag"
-              >
-                ✕
-              </button>
-            </span>
-          ))}
-          <input
-            ref={tagInputRef}
-            type="text"
-            placeholder={tags.length === 0 ? 'add tags (press Enter or ,)' : 'add tag…'}
-            className="bg-transparent text-xs text-ink placeholder:text-ink-faint outline-none min-w-[100px] py-0.5"
-            onKeyDown={handleTagKeyDown}
-            onBlur={e => { if (e.target.value.trim()) { addTag(e.target.value); e.target.value = '' } }}
+        {/* Expand toggle — shows rows 2+3; dot when hidden rows have content */}
+        <button
+          type="button"
+          onClick={() => setShowExtraMeta(v => !v)}
+          title={showExtraMeta ? 'Hide CCLI / copyright / tags' : 'Show CCLI / copyright / tags'}
+          className="ml-auto relative p-1 text-ink-faint hover:text-ink rounded transition-colors"
+        >
+          <ChevronDown
+            size={14}
+            className={`transition-transform duration-150 ${showExtraMeta ? 'rotate-180' : ''}`}
           />
-        </div>
+          {!showExtraMeta && !!(derivedMeta.ccli || derivedMeta.copyright || derivedMeta.url || tags.length > 0) && (
+            <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400 pointer-events-none" />
+          )}
+        </button>
       </div>
+
+      {/* Metadata rows 2+3 — hidden by default, shown when expanded */}
+      {showExtraMeta && (
+        <>
+          {/* Row 2: attribution (CCLI / copyright / URL) */}
+          <div className="flex items-center gap-3 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
+            {([
+              { label: 'CCLI',      directive: 'ccli',      value: derivedMeta.ccli      ?? '', width: 'w-24', type: 'text', placeholder: '5281015' },
+              { label: 'Copyright', directive: 'copyright', value: derivedMeta.copyright ?? '', width: 'w-64', type: 'text', placeholder: '© Year Author' },
+              { label: 'URL',       directive: 'url',       value: derivedMeta.url       ?? '', width: 'w-64', type: 'url',  placeholder: 'https://…' },
+            ] as const).map(({ label, directive, value, width, type, placeholder }) => (
+              <label key={directive} className="flex items-center gap-1 text-xs">
+                <span className="text-ink-faint shrink-0">{label}</span>
+                <input
+                  type={type}
+                  defaultValue={value}
+                  key={`${directive}-${song?.id}-${value}`}
+                  placeholder={placeholder}
+                  onBlur={e => commitMetaField(directive, e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                  className={`${width} bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50 placeholder:text-ink-faint/40`}
+                />
+              </label>
+            ))}
+          </div>
+
+          {/* Row 3: tags */}
+          <div className="flex items-center gap-2 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0">
+            <Tag size={13} className="text-ink-faint shrink-0" />
+            <div className="flex flex-wrap items-center gap-1 flex-1">
+              {tags.map(tag => (
+                <span
+                  key={tag}
+                  className="flex items-center gap-1 bg-surface-3 text-ink-muted text-xs px-2 py-0.5 rounded-full"
+                >
+                  {tag}
+                  <button
+                    onClick={() => removeTag(tag)}
+                    className="text-ink-faint hover:text-ink leading-none"
+                    title="Remove tag"
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+              <input
+                ref={tagInputRef}
+                type="text"
+                placeholder={tags.length === 0 ? 'add tags (press Enter or ,)' : 'add tag…'}
+                className="bg-transparent text-xs text-ink placeholder:text-ink-faint outline-none min-w-[100px] py-0.5"
+                onKeyDown={handleTagKeyDown}
+                onBlur={e => { if (e.target.value.trim()) { addTag(e.target.value); e.target.value = '' } }}
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Split pane */}
       <div className="flex flex-1 min-h-0 relative">

@@ -181,7 +181,11 @@ export function SongRenderer({
         el.classList.add('chord-optional')
       }
 
-      if (!isKnownChord(text)) return
+      if (!isKnownChord(text)) {
+        // Not a chord — treat as inline performance instruction (e.g. "To Bridge")
+        el.classList.add('chord-annotation')
+        return
+      }
 
       // Split into root + quality modifier (slightly smaller, slightly raised)
       const { root, quality, bass } = splitChordName(text)

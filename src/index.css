@@ -166,6 +166,14 @@
 .chordpro-output .chord.chord-optional {
   opacity: 0.45;
 }
+/* Inline performance instruction in chord position (e.g. "(To Bridge)") — not a real chord.
+   Override the yellow/mono/bold styling from .chord and render as italic prose text. */
+.chordpro-output .chord.chord-annotation {
+  @apply text-ink-muted;
+  font-weight: normal;
+  font-family: inherit;
+  font-style: italic;
+}
 /* Bass note after slash: "/G" in C/G */
 .chordpro-output .chord-bass {
   font-size: 0.8em;

@@ -16,7 +16,7 @@
 
 import { useState, useRef } from 'react'
 import { Upload, Check, AlertCircle, FileText } from 'lucide-react'
-import { db, generateId } from '@/db'
+import { db, generateId, markPending } from '@/db'
 import { extractMeta, buildSearchText } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
 import type { Book, Song, Transcription } from '@/types'
@@ -71,9 +71,15 @@ function parseChordPositions(chordLine: string): ChordPos[] {
   while (i < chordLine.length) {
     if (chordLine[i] !== ' ') {
       const start = i
-      while (i < chordLine.length && chordLine[i] !== ' ') i++
+      let depth = 0
+      // Advance past one token; track paren depth so "(To Bridge)" stays intact
+      while (i < chordLine.length) {
+        if (chordLine[i] === '(') depth++
+        else if (chordLine[i] === ')') depth--
+        if (chordLine[i] === ' ' && depth === 0) break
+        i++
+      }
       const ch = chordLine.slice(start, i)
-      // Skip bar markers
       if (ch !== '|' && ch !== '-' && ch.length > 0) {
         result.push({ pos: start, chord: ch })
       }
@@ -297,70 +303,82 @@ async function ensureOpenSongBook(ownerId: string, displayName: string): Promise
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+type ImportPhase = 'idle' | 'scanning' | 'conflict' | 'importing' | 'done' | 'error'
+
 export function OpenSongImporter() {
   const { user } = useAuth()
-  const [status,   setStatus]   = useState<'idle' | 'importing' | 'done' | 'error'>('idle')
-  const [imported, setImported] = useState(0)
-  const [dupes,    setDupes]    = useState(0)
-  const [skipped,  setSkipped]  = useState(0)
-  const [message,  setMessage]  = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [phase,         setPhase]         = useState<ImportPhase>('idle')
+  const [conflictTitles, setConflictTitles] = useState<string[]>([])
+  const [countNew,      setCountNew]      = useState(0)
+  const [countUpdated,  setCountUpdated]  = useState(0)
+  const [countSkip,     setCountSkip]     = useState(0)
+  const [message,       setMessage]       = useState('')
+  const inputRef       = useRef<HTMLInputElement>(null)
+  const pendingFilesRef = useRef<File[]>([])
 
-  const importFiles = async (files: File[]) => {
+  const doImport = async (files: File[], mode: 'skip' | 'overwrite') => {
     if (!user) return
-    setStatus('importing')
-    setMessage('')
+    setPhase('importing')
 
     try {
       const bookId = await ensureOpenSongBook(user.id, user.displayName)
-      const existingTitles = new Set(
-        (await db.songs.toArray()).map(s => s.title.toLowerCase().trim())
-      )
-      let countOk   = 0
-      let countDupe = 0
-      let countSkip = 0
+      const allSongs = await db.songs.toArray()
+      const existingByTitle = new Map(allSongs.map(s => [s.title.toLowerCase().trim(), s]))
+      let nNew = 0, nUpdated = 0, nSkip = 0
 
       for (const file of files) {
         const text = await file.text()
-
-        // Must be an OpenSong XML song
-        if (!text.includes('<song') || !text.includes('<lyrics')) {
-          countSkip++
-          continue
-        }
+        if (!text.includes('<song') || !text.includes('<lyrics')) { nSkip++; continue }
 
         const parsed = parseOpenSongXml(text)
-        if (!parsed) { countSkip++; continue }
+        if (!parsed) { nSkip++; continue }
 
         const { meta, lyrics } = parsed
         const title = meta.title || file.name
-
-        if (existingTitles.has(title.toLowerCase().trim())) {
-          countDupe++
-          continue
-        }
-        existingTitles.add(title.toLowerCase().trim())
+        const titleKey = title.toLowerCase().trim()
+        const existing = existingByTitle.get(titleKey)
 
         const content = toChordPro(meta, lyrics)
         const metaParsed = extractMeta(content)
 
+        if (existing) {
+          if (mode === 'skip') { nSkip++; continue }
+          // overwrite — update transcription + metadata
+          await db.songs.update(existing.id, {
+            artist:     meta.author || existing.artist,
+            updatedAt:  Date.now(),
+            searchText: buildSearchText(title, meta.author || '', existing.tags, content),
+            transcription: {
+              ...existing.transcription,
+              content,
+              key:           metaParsed.key    ?? meta.key    ?? existing.transcription.key,
+              capo:          (metaParsed.capo  ?? parseInt(meta.capo,  10)) || existing.transcription.capo,
+              tempo:         (metaParsed.tempo ?? parseInt(meta.tempo, 10)) || existing.transcription.tempo,
+              timeSignature: metaParsed.time   ?? meta.timeSig ?? existing.transcription.timeSignature,
+            },
+          })
+          await markPending('song', existing.id)
+          nUpdated++
+          continue
+        }
+
+        // new song
+        existingByTitle.set(titleKey, { id: '' } as Song)  // guard against intra-batch dupes
+        const newId = generateId()
         const transcription: Transcription = {
           content,
-          key:           metaParsed.key  ?? meta.key  ?? '',
-          capo:          metaParsed.capo ?? parseInt(meta.capo, 10) ?? 0,
-          tempo:         metaParsed.tempo ?? parseInt(meta.tempo, 10) ?? 0,
-          timeSignature: metaParsed.time ?? meta.timeSig ?? '4/4',
+          key:           metaParsed.key   ?? meta.key    ?? '',
+          capo:          (metaParsed.capo  ?? parseInt(meta.capo,  10)) || 0,
+          tempo:         (metaParsed.tempo ?? parseInt(meta.tempo, 10)) || 0,
+          timeSignature: metaParsed.time  ?? meta.timeSig ?? '4/4',
           duration:      0,
           chordNotation: 'standard',
           instrument:    'guitar',
           tuning:        'standard',
           format:        'chordpro',
         }
-
-        const song: Song = {
-          id:         generateId(),
-          bookId,
-          title,
+        await db.songs.put({
+          id: newId, bookId, title,
           artist:     meta.author ?? '',
           tags:       [],
           searchText: buildSearchText(title, meta.author ?? '', [], content),
@@ -368,33 +386,59 @@ export function OpenSongImporter() {
           savedAt:    Date.now(),
           updatedAt:  Date.now(),
           transcription,
-        }
-
-        await db.songs.put(song)
-        countOk++
+        })
+        await markPending('song', newId)
+        nNew++
       }
 
-      setImported(countOk)
-      setDupes(countDupe)
-      setSkipped(countSkip)
-      setStatus('done')
+      setCountNew(nNew); setCountUpdated(nUpdated); setCountSkip(nSkip)
+      setPhase('done')
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Import failed')
-      setStatus('error')
+      setPhase('error')
+    }
+  }
+
+  const scanFiles = async (files: File[]) => {
+    if (!user) return
+    setPhase('scanning')
+    pendingFilesRef.current = files
+
+    const existingTitles = new Set(
+      (await db.songs.toArray()).map(s => s.title.toLowerCase().trim())
+    )
+    const dupes: string[] = []
+
+    for (const file of files) {
+      const text = await file.text()
+      if (!text.includes('<song') || !text.includes('<lyrics')) continue
+      const parsed = parseOpenSongXml(text)
+      if (!parsed) continue
+      const title = parsed.meta.title || file.name
+      if (existingTitles.has(title.toLowerCase().trim())) dupes.push(title)
+    }
+
+    if (dupes.length === 0) {
+      await doImport(files, 'skip')
+    } else {
+      setConflictTitles(dupes)
+      setPhase('conflict')
     }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
-    if (files.length) importFiles(files)
+    if (files.length) scanFiles(files)
     e.target.value = ''
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     const files = Array.from(e.dataTransfer.files)
-    if (files.length) importFiles(files)
+    if (files.length) scanFiles(files)
   }
+
+  const reset = () => { setPhase('idle'); setConflictTitles([]) }
 
   return (
     <div className="space-y-4">
@@ -406,53 +450,94 @@ export function OpenSongImporter() {
         </p>
       </div>
 
-      <div
-        onDrop={handleDrop}
-        onDragOver={e => e.preventDefault()}
-        onClick={() => inputRef.current?.click()}
-        className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-surface-3 hover:border-chord/50 rounded-xl p-8 cursor-pointer transition-colors group"
-      >
-        <Upload size={28} className="text-ink-faint group-hover:text-chord transition-colors" />
-        <div className="text-center">
-          <p className="text-sm font-medium text-ink-muted">Drop OpenSong files here or click to browse</p>
-          <p className="text-xs text-ink-faint mt-0.5">Multiple files supported</p>
+      {(phase === 'idle' || phase === 'scanning') && (
+        <div
+          onDrop={handleDrop}
+          onDragOver={e => e.preventDefault()}
+          onClick={() => inputRef.current?.click()}
+          className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-surface-3 hover:border-chord/50 rounded-xl p-8 cursor-pointer transition-colors group"
+        >
+          <Upload size={28} className="text-ink-faint group-hover:text-chord transition-colors" />
+          <div className="text-center">
+            <p className="text-sm font-medium text-ink-muted">
+              {phase === 'scanning' ? 'Scanning…' : 'Drop OpenSong files here or click to browse'}
+            </p>
+            <p className="text-xs text-ink-faint mt-0.5">Multiple files supported</p>
+          </div>
+          <input ref={inputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
         </div>
-        <input ref={inputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
-      </div>
+      )}
 
-      {status === 'importing' && (
+      {phase === 'conflict' && (
+        <div className="bg-surface-2 border border-amber-500/30 rounded-xl p-4 space-y-3">
+          <p className="text-sm font-medium text-amber-400">
+            {conflictTitles.length} song{conflictTitles.length !== 1 ? 's' : ''} already exist in your library
+          </p>
+          <ul className="text-xs text-ink-muted space-y-0.5 max-h-32 overflow-y-auto font-mono">
+            {conflictTitles.map(t => <li key={t} className="truncate">· {t}</li>)}
+          </ul>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => doImport(pendingFilesRef.current, 'skip')}
+              className="px-3 py-1.5 text-xs rounded-lg bg-surface-3 text-ink hover:bg-surface-3/80 transition-colors"
+            >
+              Skip existing
+            </button>
+            <button
+              onClick={() => doImport(pendingFilesRef.current, 'overwrite')}
+              className="px-3 py-1.5 text-xs rounded-lg bg-chord/15 text-chord hover:bg-chord/25 transition-colors"
+            >
+              Overwrite existing
+            </button>
+            <button onClick={reset} className="ml-auto text-xs text-ink-faint hover:text-ink">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {phase === 'importing' && (
         <div className="flex items-center gap-2 text-sm text-ink-muted">
           <div className="w-4 h-4 border-2 border-chord border-t-transparent rounded-full animate-spin shrink-0" />
           Importing…
         </div>
       )}
 
-      {status === 'done' && (
+      {phase === 'done' && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm text-green-400">
             <Check size={16} className="shrink-0" />
             <span>
-              Imported {imported} song{imported !== 1 ? 's' : ''} into the "OpenSong" book
+              {countNew > 0 && `${countNew} new song${countNew !== 1 ? 's' : ''} imported`}
+              {countNew > 0 && countUpdated > 0 && ', '}
+              {countUpdated > 0 && `${countUpdated} song${countUpdated !== 1 ? 's' : ''} updated`}
+              {countNew === 0 && countUpdated === 0 && 'Done'}
             </span>
           </div>
-          {(dupes > 0 || skipped > 0) && (
+          {countSkip > 0 && (
             <p className="text-xs text-ink-muted pl-6">
-              {dupes > 0 && `${dupes} duplicate${dupes !== 1 ? 's' : ''} skipped`}
-              {dupes > 0 && skipped > 0 && ', '}
-              {skipped > 0 && `${skipped} non-OpenSong file${skipped !== 1 ? 's' : ''} ignored`}
+              {countSkip} file{countSkip !== 1 ? 's' : ''} skipped
             </p>
           )}
+          <button onClick={reset} className="text-xs text-ink-faint hover:text-ink underline">
+            Import more files
+          </button>
         </div>
       )}
 
-      {status === 'error' && (
-        <div className="flex items-start gap-2 text-sm text-red-400">
-          <AlertCircle size={16} className="shrink-0 mt-0.5" />
-          {message || 'Import failed'}
+      {phase === 'error' && (
+        <div className="space-y-2">
+          <div className="flex items-start gap-2 text-sm text-red-400">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+            {message || 'Import failed'}
+          </div>
+          <button onClick={reset} className="text-xs text-ink-faint hover:text-ink underline">
+            Try again
+          </button>
         </div>
       )}
 
-      {status === 'idle' && (
+      {phase === 'idle' && (
         <div className="flex items-start gap-2 text-xs text-ink-faint">
           <FileText size={13} className="shrink-0 mt-0.5" />
           Section types V (Verse), C (Chorus), B (Bridge), P (Pre-Chorus) are detected automatically.
