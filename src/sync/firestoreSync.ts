@@ -22,6 +22,7 @@
 
 import {
   collection, doc, setDoc, getDocs, getDoc, deleteDoc,
+  query, where, limit,
 } from 'firebase/firestore'
 import { firestore } from '@/firebase'
 import { db } from '@/db'
@@ -229,6 +230,28 @@ export async function deleteSetlistFromCloud(
     const base = teamId ? ['teams', teamId] as const : ['users', userId] as const
     await deleteDoc(doc(firestore, base[0], base[1], 'setlists', setlistId))
   } catch { /* best-effort */ }
+}
+
+// ─── Cloud update check ────────────────────────────────────────────────────────
+
+/**
+ * Lightweight check: does Firestore have any personal entity (book/song/setlist)
+ * with updatedAt > lastSync? Fetches at most 1 document per collection.
+ * Returns true if an update is found.
+ */
+export async function checkForCloudUpdates(userId: string, lastSync: number): Promise<boolean> {
+  if (!firestore) return false
+  const colls = ['books', 'songs', 'setlists'] as const
+  for (const coll of colls) {
+    const q = query(
+      collection(firestore, 'users', userId, coll),
+      where('updatedAt', '>', lastSync),
+      limit(1)
+    )
+    const snap = await getDocs(q)
+    if (!snap.empty) return true
+  }
+  return false
 }
 
 // ─── Util ─────────────────────────────────────────────────────────────────────

@@ -18,7 +18,7 @@ const bottomNavItems = [
   { to: '/settings', labelKey: 'nav.settings', Icon: Settings },
 ]
 
-const STALE_MS = 60 * 60 * 1000  // 1 hour
+const STALE_MS = 60 * 60 * 1000  // 1 hour — fallback when cloud check fails
 
 /** Compact sync status dot shown in the sidebar user section. */
 function SyncBadge() {
@@ -26,27 +26,32 @@ function SyncBadge() {
 
   if (status === 'unconfigured') return null
 
-  // Treat clean-but-stale (never synced or >1 h ago) as a soft pending indicator
   const isStale = status === 'clean' && (lastSync === null || Date.now() - lastSync > STALE_MS)
 
   const dotClass =
-    status === 'syncing'          ? 'bg-blue-400' :
-    status === 'error'            ? 'bg-red-500'  :
+    status === 'syncing'            ? 'bg-blue-400' :
+    status === 'offline'            ? 'bg-surface-3' :
+    status === 'error'              ? 'bg-red-500'  :
+    status === 'updates-available'  ? 'bg-amber-400' :
     (status === 'pending' || isStale) ? 'bg-amber-400' :
     'bg-green-500'
 
   const label =
-    status === 'syncing' ? 'Syncing…' :
-    status === 'error'   ? 'Sync error' :
-    status === 'pending' ? `${pendingCount} unsynced` :
-    isStale              ? 'Sync recommended' :
+    status === 'syncing'           ? 'Syncing…' :
+    status === 'offline'           ? 'Offline' :
+    status === 'error'             ? 'Sync error' :
+    status === 'updates-available' ? 'Updates available' :
+    status === 'pending'           ? `${pendingCount} unsynced` :
+    isStale                        ? 'Sync recommended' :
     'Synced'
+
+  const canSync = status !== 'syncing' && status !== 'offline'
 
   return (
     <button
-      onClick={syncNow}
-      disabled={status === 'syncing'}
-      title={`${label} — click to sync`}
+      onClick={canSync ? syncNow : undefined}
+      disabled={!canSync}
+      title={canSync ? `${label} — click to sync` : label}
       className="flex items-center gap-1.5 text-xs text-ink-faint hover:text-ink-muted transition-colors disabled:cursor-default px-1 py-0.5"
     >
       {status === 'syncing'

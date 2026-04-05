@@ -162,6 +162,8 @@ export function isKnownChord(chord: string): boolean {
     if (QUALITIES.includes(normalized)) return true
     // Accept pure numeric modifiers (number-notation style: D4, C2, G(4))
     if (/^\d{1,2}$/.test(normalized)) return true
+    // Accept compound numeric+quality modifiers (e.g. 2sus → Esus2, 9sus4, 4add9)
+    if (/^\d+(sus|add|maj|min|m)\d*$/.test(normalized)) return true
   }
   return false
 }
