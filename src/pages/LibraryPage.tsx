@@ -51,6 +51,11 @@ export default function LibraryPage() {
   const [showNewBook, setShowNewBook] = useState(false)
   const newBookInputRef = useRef<HTMLInputElement>(null)
 
+  // Bulk tag state
+  const [showTagMenu, setShowTagMenu] = useState(false)
+  const [bulkTagInput, setBulkTagInput] = useState('')
+  const tagMenuRef = useRef<HTMLDivElement>(null)
+
   // Bulk selection state
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -320,6 +325,28 @@ export default function LibraryPage() {
     showBulkToast(`Moved ${songs.length} song${songs.length !== 1 ? 's' : ''} to ${targetLabel}`)
   }
 
+  // ─── Bulk tag ─────────────────────────────────────────────────────────────────
+
+  const bulkAddTag = async (tag: string) => {
+    const normalized = tag.trim().toLowerCase()
+    if (!normalized) return
+    const songs = sortedSongs.filter(s => selectedIds.has(s.id))
+    const now = Date.now()
+    for (const song of songs) {
+      if (song.tags.includes(normalized)) continue
+      const newTags = [...song.tags, normalized]
+      await db.songs.update(song.id, {
+        tags: newTags,
+        searchText: buildSearchText(song.title, song.artist, newTags, song.transcription.content),
+        updatedAt: now,
+      })
+      await markPending('song', song.id)
+    }
+    setBulkTagInput('')
+    setShowTagMenu(false)
+    showBulkToast(`Tagged ${songs.length} song${songs.length !== 1 ? 's' : ''} with "${normalized}"`)
+  }
+
   // ─── Create book ──────────────────────────────────────────────────────────────
 
   const createBook = async () => {
@@ -468,6 +495,60 @@ export default function LibraryPage() {
               )}
               {selectedIds.size > 0 && (
                 <>
+                  {/* Tag */}
+                  <div className="relative shrink-0" ref={tagMenuRef}>
+                    <button
+                      onClick={() => { setShowTagMenu(v => !v); setBulkTagInput('') }}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-ink-muted hover:bg-surface-2 hover:text-ink transition-colors border border-surface-3"
+                    >
+                      <Tag size={14} />
+                      Tag
+                    </button>
+                    {showTagMenu && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowTagMenu(false)} />
+                        <div className="absolute left-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl p-3 min-w-[200px] space-y-2">
+                          <div className="text-[11px] text-ink-faint uppercase tracking-wider">Add tag to {selectedIds.size} song{selectedIds.size !== 1 ? 's' : ''}</div>
+                          <div className="flex gap-1.5">
+                            <input
+                              autoFocus
+                              value={bulkTagInput}
+                              onChange={e => setBulkTagInput(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') bulkAddTag(bulkTagInput)
+                                if (e.key === 'Escape') setShowTagMenu(false)
+                              }}
+                              placeholder="New tag…"
+                              className="flex-1 bg-surface-3 rounded px-2 py-1 text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-1 focus:ring-chord/50"
+                            />
+                            <button
+                              onClick={() => bulkAddTag(bulkTagInput)}
+                              disabled={!bulkTagInput.trim()}
+                              className="px-2 py-1 rounded bg-chord/15 text-chord text-xs disabled:opacity-40 hover:bg-chord/25 transition-colors"
+                            >
+                              Add
+                            </button>
+                          </div>
+                          {allTags.length > 0 && (
+                            <>
+                              <div className="text-[11px] text-ink-faint">Existing tags</div>
+                              <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
+                                {allTags.map(tag => (
+                                  <button
+                                    key={tag}
+                                    onClick={() => bulkAddTag(tag)}
+                                    className="px-2 py-0.5 rounded-full bg-surface-3 text-ink-muted text-xs hover:bg-chord/15 hover:text-chord transition-colors"
+                                  >
+                                    {tag}
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                   {/* Delete */}
                   <button
                     onClick={bulkDelete}

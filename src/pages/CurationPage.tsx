@@ -110,15 +110,26 @@ export default function CurationPage() {
   const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('duplicates')
   const [errorFilter, setErrorFilter] = useState('')
+  const [sameBookOnly, setSameBookOnly] = useState(false)
 
   const songs = useLiveQuery(() => db.songs.toArray(), [])
   const books = useLiveQuery<Book[]>(() => db.books.toArray(), [])
+
+  const bookMap = useMemo(() => new Map((books ?? []).map(b => [b.id, b.title])), [books])
 
   // ── Duplicates ────────────────────────────────────────────────────────────
   const duplicateGroups = useMemo(() => {
     if (!songs) return []
     return findDuplicates(songs)
   }, [songs])
+
+  const visibleDuplicateGroups = useMemo(() => {
+    if (!sameBookOnly) return duplicateGroups
+    return duplicateGroups.filter(g => {
+      const bookIds = new Set(g.songs.map(s => s.bookId))
+      return bookIds.size === 1
+    })
+  }, [duplicateGroups, sameBookOnly])
 
   // ── Parse errors ──────────────────────────────────────────────────────────
   const songErrors = useMemo(() => {
@@ -157,7 +168,7 @@ export default function CurationPage() {
         <button className={tabClass('duplicates')} onClick={() => setTab('duplicates')}>
           Duplicates
           {duplicateGroups.length > 0 && (
-            <span className="ml-2 bg-amber-500/20 text-amber-400 text-xs px-1.5 py-0.5 rounded-full">{duplicateGroups.length}</span>
+            <span className="ml-2 bg-amber-500/20 text-amber-400 text-xs px-1.5 py-0.5 rounded-full">{visibleDuplicateGroups.length}</span>
           )}
         </button>
         <button className={tabClass('errors')} onClick={() => setTab('errors')}>
@@ -174,10 +185,27 @@ export default function CurationPage() {
       {/* Duplicates tab */}
       {tab === 'duplicates' && (
         <div className="space-y-3">
-          {duplicateGroups.length === 0 ? (
-            <div className="text-ink-muted text-sm py-8 text-center">No duplicate titles found.</div>
+          {/* Filter toggle */}
+          {duplicateGroups.length > 0 && (
+            <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={sameBookOnly}
+                onChange={e => setSameBookOnly(e.target.checked)}
+                className="accent-amber-400 rounded"
+              />
+              Show only duplicates within the same book
+            </label>
+          )}
+
+          {visibleDuplicateGroups.length === 0 ? (
+            <div className="text-ink-muted text-sm py-8 text-center">
+              {duplicateGroups.length === 0
+                ? 'No duplicate titles found.'
+                : 'No duplicates within the same book.'}
+            </div>
           ) : (
-            duplicateGroups.map((group, i) => (
+            visibleDuplicateGroups.map((group, i) => (
               <div key={i} className="bg-surface-1 border border-surface-3 rounded-xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2 bg-surface-2 border-b border-surface-3">
                   <Copy size={13} className="text-amber-400" />
@@ -190,7 +218,9 @@ export default function CurationPage() {
                     <li key={song.id} className="flex items-center gap-3 px-4 py-2.5">
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{song.title}</div>
-                        {song.artist && <div className="text-xs text-ink-muted">{song.artist}</div>}
+                        <div className="text-xs text-ink-muted truncate">
+                          {[song.artist, bookMap.get(song.bookId)].filter(Boolean).join(' · ')}
+                        </div>
                       </div>
                       <button
                         onClick={() => navigate(`/editor/${song.id}`)}

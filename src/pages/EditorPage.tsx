@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Eye, X, RotateCcw, Tag, History, ChevronDown } from 'lucide-react'
+import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2 } from 'lucide-react'
 import { db, upsertSongVersions, markPending } from '@/db'
+import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
 import { ChordProEditor } from '@/components/editor/ChordProEditor'
 import type { ChordProEditorHandle } from '@/components/editor/ChordProEditor'
@@ -35,6 +36,9 @@ export default function EditorPage() {
   const [showPreview, setShowPreview] = useState(true)
   const [showHistory, setShowHistory] = useState(false)
   const [showExtraMeta, setShowExtraMeta] = useState(false)
+  const [deletePhase, setDeletePhase] = useState<'idle' | 'confirm' | 'deleted'>('idle')
+  const deletedSongRef = useRef<typeof song | null>(null)
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<ChordProEditorHandle>(null)
 
@@ -152,6 +156,26 @@ export default function EditorPage() {
     scheduleAutoSave()
   }
 
+  const confirmDelete = async () => {
+    if (!song || !user) return
+    deletedSongRef.current = song
+    await db.songs.delete(song.id)
+    await db.syncStates.delete(`song:${song.id}`)
+    deleteSongFromCloud(song.id, user.id, undefined).catch(() => {})
+    setDeletePhase('deleted')
+    deleteTimerRef.current = setTimeout(() => navigate('/library'), 5000)
+  }
+
+  const undoDelete = async () => {
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current)
+    const s = deletedSongRef.current
+    if (!s) return
+    await db.songs.put(s)
+    await markPending('song', s.id)
+    deletedSongRef.current = null
+    setDeletePhase('idle')
+  }
+
   const addTag = (value: string) => {
     const tag = value.trim().toLowerCase()
     if (!tag || tags.includes(tag)) return
@@ -176,6 +200,30 @@ export default function EditorPage() {
   }
 
   if (!song) return <div className="p-8 text-ink-muted">Loading…</div>
+
+  // ── Delete: "deleted" phase shows undo banner instead of normal editor ──────
+  if (deletePhase === 'deleted') {
+    return (
+      <div className="flex flex-col h-full items-center justify-center gap-4 text-center px-6">
+        <p className="text-ink-muted text-sm">Song deleted.</p>
+        <div className="flex gap-3">
+          <button
+            onClick={undoDelete}
+            className="px-4 py-2 rounded-lg bg-chord/10 text-chord text-sm font-medium hover:bg-chord/20 transition-colors"
+          >
+            Undo
+          </button>
+          <button
+            onClick={() => navigate('/library')}
+            className="px-4 py-2 rounded-lg bg-surface-2 text-ink-muted text-sm hover:bg-surface-3 transition-colors"
+          >
+            Go to Library
+          </button>
+        </div>
+        <p className="text-xs text-ink-faint">Auto-redirecting to library in 5 s…</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -203,10 +251,37 @@ export default function EditorPage() {
             <History size={17} />
           </button>
         )}
-        <Button variant="ghost" size="sm" onClick={() => navigate(`/view/${song.id}`)}>
-          <RotateCcw size={14} />
-          View
-        </Button>
+        {deletePhase === 'confirm' ? (
+          <>
+            <span className="text-xs text-red-400 font-medium">Delete this song?</span>
+            <button
+              onClick={confirmDelete}
+              className="px-2.5 py-1 rounded text-xs bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => setDeletePhase('idle')}
+              className="px-2.5 py-1 rounded text-xs text-ink-muted hover:text-ink transition-colors"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setDeletePhase('confirm')}
+              className="p-1.5 rounded text-ink-faint hover:text-red-400 transition-colors"
+              title="Delete song"
+            >
+              <Trash2 size={15} />
+            </button>
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/view/${song.id}`)}>
+              <RotateCcw size={14} />
+              View
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Metadata bar — row 1: core song fields + expand toggle */}
