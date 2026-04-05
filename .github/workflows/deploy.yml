@@ -1,8 +1,7 @@
 name: Deploy to Firebase Hosting
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:  # manual trigger only — deploy locally via `npm run deploy`
 
 jobs:
   deploy:
