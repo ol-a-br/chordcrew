@@ -169,6 +169,20 @@ Focus: richer song metadata, multiple import sources, library backup/restore.
 
 ---
 
+## Collaboration & Security · *pending*
+
+To be completed before onboarding any additional contributors. Full details and instructions in `docs/deployment.md`.
+
+| Item | Priority | Status | Notes |
+|------|----------|--------|-------|
+| Set `develop` as default GitHub branch | high | ⬜ pending | GitHub repo → Settings → Default branch |
+| Add `main` branch protection rule | high | ⬜ pending | Require PR + 1 review; block direct push; no admin bypass |
+| Set `FIREBASE_SERVICE_ACCOUNT` GitHub secret | high | ⬜ pending | Required before re-enabling CI deploy |
+| Scope Firebase service account to Hosting Admin only | high | ⬜ pending | GCP IAM → downgrade from Editor to `roles/firebasehosting.admin` |
+| Re-enable CI deploy trigger on `main` | medium | ⬜ pending | Restore `on: push: branches: [main]` in deploy.yml |
+| Review and fix Dependabot alerts (29 open) | medium | ⬜ pending | Run `npm audit fix`; do not use `--force` |
+| Add GitHub Environment approval gate for deploy | low | ⬜ optional | Useful once multiple contributors can merge PRs |
+
 ## Technical Debt & Infrastructure
 
 | Item | Priority | Notes |
@@ -210,5 +224,7 @@ Focus: richer song metadata, multiple import sources, library backup/restore.
 | 2026-04-06 | `lintChordPro` in chordpro.ts, error panel in SongRenderer | Per-line brace/bracket check; "Fix →" jumps editor via `forwardRef`/`jumpToLine` on ChordProEditor |
 | 2026-04-06 | Jaccard word similarity for duplicate detection (0.75 threshold) | Catches "Amazing Grace" vs "Amazing Grace (Key of G)" without false positives on short common words |
 | 2026-04-06 | CSV export (no external dependency) | Browser-native Blob download; avoids adding xlsx library to bundle |
+| 2026-04-06 | `develop` branch for active work; `main` for milestone releases | Keeps CI deploy silent during solo development; easy to reverse |
+| 2026-04-06 | CI auto-deploy disabled (workflow_dispatch only) | No `FIREBASE_SERVICE_ACCOUNT` secret needed until collaborators join; deploy locally via `npm run deploy` |
 
 *Last updated: 2026-04-06*

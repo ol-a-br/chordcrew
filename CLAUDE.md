@@ -21,7 +21,15 @@ npm run test:ui   # Playwright interactive UI
 
 - `docs/requirements.md` — requirements spec with implementation status (REQ-IDs)
 - `docs/roadmap.md` — phased implementation plan with decision log
+- `docs/deployment.md` — CI/CD setup, branch strategy, security checklist, Dependabot notes
 - `data/chords_wiki_library_export_20260329.json` — real export (4 books, 298 songs, 88 setlists)
+
+## Branch strategy
+
+- **`develop`** — active development; all commits go here (default branch)
+- **`main`** — production-stable; updated via PR at major milestones only; triggers Firebase deploy when CI is re-enabled
+
+Auto-deploy is currently **disabled** (workflow_dispatch only). Deploy manually with `npm run deploy`. See `docs/deployment.md` for the full checklist to re-enable CI/CD safely when adding collaborators.
 
 ## Architecture
 
