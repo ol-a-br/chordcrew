@@ -5,7 +5,7 @@
 
 ---
 
-## Phase 1 — Core (MVP) · *current*
+## Phase 1 — Core (MVP) · *complete*
 
 ### ✅ Completed
 
@@ -17,49 +17,44 @@
 | Local-mode guest user (no Firebase needed) | AUTH-02–03 | |
 | AppShell: sidebar nav + mobile top bar | — | |
 | Song library: list, search, book filter, favorites | LIB-01–07 | |
-| CodeMirror 6 editor + live split-pane preview | ED-01–06 | |
-| Save song: persists to Dexie, extracts ChordPro metadata | ED-03 | |
-| Song version history (last 3 per song) | ED-05 | |
+| CodeMirror 6 editor + live split-pane preview | ED-01–02 | |
+| Auto-save with 1 s debounce; version throttle 5 min | ED-03–04 | Replaces explicit Save button |
+| Song version history (last 3 per song) + slide-over restore panel | ED-04–05 | |
 | ChordPro renderer via chordsheetjs HtmlDivFormatter | RENDER-01–08 | |
-| Viewer: transpose, lyrics-only, columns, font scale | VIEW-01–09 | |
+| Viewer: transpose, lyrics-only, columns (1–5), font scale | VIEW-01–09 | |
 | Performance mode: full-screen, wake lock, pedal nav | PERF-01–06 | |
 | Setlists: list, create | SET-01–03 | |
-| Import: chords.wiki library-backup v1 JSON (298 songs, 88 setlists) | IMP-01–04 | |
+| Import: chords.wiki library-backup v1 JSON | IMP-01–04 | |
 | Settings: language, columns, pedal keys, clear DB | SETTINGS-01–04 | |
 | PWA: Workbox service worker, manifest | PWA-01–02, 04 | |
 | i18n: English + German | I18N-01–04 | |
-| Playwright test suite (26 tests, all passing) | — | |
+| Playwright test suite (27 tests, all passing) | — | |
 | **Visual: Barlow Condensed renderer font** | RENDER-04 | |
 | **Visual: Light yellow chord color (#fde68a)** | RENDER-01 | |
-| **Visual: Section labels [A] [B] [C] via CSS counter** | RENDER-02 | |
+| **Visual: Section labels [A] [B] [C] via JS DOM injection** | RENDER-02 | |
 | **Visual: Chorus vertical bar (anonymous + named)** | RENDER-03 | |
 | **Visual: 𝄞 key and ♩ tempo in Viewer + Performance** | VIEW-08–09, PERF-06 | |
 | **Section labels [A][B][C] on real songs (bracket + directive syntax)** | RENDER-02 | |
-| **Chorus vertical bar on real songs (bracket + directive syntax)** | RENDER-03 | |
+| **Chorus vertical bar on real songs** | RENDER-03 | |
 | **Transpose: key display "G → A" + first-3-chords preview** | VIEW-02 | |
-| **Column count 1–5, orientation-based default (4 landscape, 2 portrait)** | VIEW-04, PERF | |
-| **Performance mode: page-flip navigation (jumps full screen height)** | PERF-03–04 | |
+| **Column count 1–5, orientation-based default** | VIEW-04, SETTINGS-06 | |
+| **Performance mode: horizontal page-flip column navigation** | PERF-03–04, PERF-12 | |
 | **SetlistDetailPage: ordered song list, click → viewer with setlist nav** | SET-04 | |
 | **Sort songs: title / artist / last modified / recently accessed** | LIB-09 | |
-| **Tag browser in Library sidebar + tag editing in Editor** | LIB-10, LIB-11 | |
-| **{start_of_part:}/{sop:} section preprocessing** | RENDER-09 | |
-| **Title/subtitle hidden in renderer (shown in toolbar only)** | RENDER-10 | |
-| **Chord modifier superscript (Dsus4 → D+sup, D4 → D+sup 4, D(4) → D+sup 4)** | RENDER-11 | |
-| **Chord-only line spacing: column-gap preserves spaces between chords** | RENDER-14 | |
+| **Tag browser in Library sidebar + tag editing in Editor** | LIB-10–11 | |
+| **`{start_of_part:}`/`{sop:}` section preprocessing** | RENDER-09 | |
+| **Title hidden in renderer (shown in toolbar only)** | RENDER-10 | |
+| **Chord modifier superscript** | RENDER-11 | |
 | **Column separator lines** | RENDER-12 | |
 | **Section badge: graphical box + repeat tracking (B²)** | RENDER-13 | |
-| **Horizontal column-by-column page flip (no scrollbar)** | PERF-12 | |
 | **Column navigation advances to next setlist song at end** | PERF-07 | |
-| **Recently opened sort for Setlists** | — | |
-| **Firebase Auth (Google Sign-In) + deployed to chordcrew-50c55.web.app** | AUTH-01 | |
+| **Firebase Auth (Google Sign-In) + deployed to chordcrew.app** | AUTH-01 | |
 | **Continuous scroll mode toggle in Settings** | SETTINGS-07 | |
-
-### ✅ Phase 1 gaps — now complete
-
-| Item | Req IDs | Notes |
-|------|---------|-------|
 | **PWA icons: `public/icons/icon-192.png` + `icon-512.png`** | PWA-03 | Generated from SVG via ImageMagick |
-| **CI/CD: GitHub Actions → Firebase deploy on push to `main`** | — | `.github/workflows/deploy.yml`; requires `FIREBASE_SERVICE_ACCOUNT` + `VITE_FIREBASE_*` secrets in repo settings |
+| **CI/CD: GitHub Actions → Firebase deploy on push to `main`** | — | `.github/workflows/deploy.yml` |
+| **Mid-word chord spacing fix (negative margin-left)** | RENDER-14 | Cancels flex gap for intra-word chord positions |
+| **`{start_of_verse}` without label preprocessed → `{start_of_verse: Verse}`** | RENDER-09 | |
+| **Chord quality modifiers extended: sus, m11, maj11, m6, m13, 7sus4/2** | RENDER-11 | |
 
 ### 🔜 Remaining Phase 1 gap
 
@@ -69,80 +64,93 @@
 
 ---
 
-## Phase 2 — Stage · *next up*
+## Phase 2 — Stage · *complete*
 
 Focus: live performance features — setlist management, autoscroll, PDF, metronome.
 
-| Item | Req IDs | Priority |
-|------|---------|----------|
+| Item | Req IDs | Notes |
+|------|---------|-------|
 | **SetlistDetailPage: add songs, dividers, reorder, rename, delete** | SET-04–07 | ✅ done |
 | **Per-setlist-slot overrides: transpose, columns, notes** | SET-08–10 | ✅ done |
 | **Setlist present mode: full-screen, song counter, prev/next song buttons** | SET-13, PERF-09 | ✅ done |
 | **Column navigation across setlist songs** | PERF-07 | ✅ done |
 | **Long-press pedal: skip song / back to start** | PERF-08 | ✅ done |
 | **Quick-jump tray (slide-out song list in present mode)** | PERF-10 | ✅ done |
-| **PDF export: print pages with @media print CSS, single song + setlist** | PDF-01, 04–06 | ✅ done |
-| **BPM tap-tempo in Editor + visual metronome in Performance** | — | ✅ done |
-| Autoscroll with `{@mm:ss}` time-tag support | — | low |
-| Annotations: text, highlight, symbol (private + shared) | — | low |
-| **Song version history + one-tap restore (slide-over panel in Editor)** | ED-05 | ✅ done |
-| **Chord validation: unknown chords highlighted orange in editor** | ED-07 | ✅ done |
+| **PDF export: `@media print` CSS, single song + setlist** | PDF-01–06 | ✅ done |
+| **BPM tap-tempo in Editor** | ED-08 | ✅ done |
+| **Song version history + one-tap restore (slide-over panel in Editor)** | ED-04–05 | ✅ done |
+| **Chord validation: unknown chords highlighted in editor** | ED-07 | ✅ done |
 | **Filter library by key (sidebar "Key" section)** | LIB-08 | ✅ done |
-| **Tag browser + tag editing** | LIB-10–11 | ✅ done (Phase 1) |
-| **Capo helper hint in viewer (Capo 2 → sounds in A)** | VIEW-11 | ✅ done |
-| **Font scale persisted in settings (localStorage via useFontScale)** | SETTINGS-05 | ✅ done |
+| **Capo helper hint in Viewer (Capo 2 → sounds in A)** | VIEW-11 | ✅ done |
+| **Font scale persisted in settings** | SETTINGS-05 | ✅ done |
 | **Setlist planned date/time field** | SET-11 | ✅ done |
+| **Setlist duplication** | SET-12 | ✅ done |
 | **`.cho` / `.chopro` / `.chordpro` single-file import** | IMP-05 | ✅ done |
-| **Deduplication: skip existing titles on import (both importers)** | IMP-06 | ✅ done |
+| **Key transpose dropdown: click key badge → 12-key picker with chord previews** | VIEW-02 | ✅ done |
 
 ---
 
-## Phase 3 — Collaboration · *in progress*
+## Phase 3 — Collaboration · *complete*
 
-Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
+Focus: Firestore sync, teams, shared song/setlist spaces.
 
 ### Sync & Auth
 
-| Item | Req IDs | Priority |
-|------|---------|----------|
+| Item | Req IDs | Notes |
+|------|---------|-------|
 | **Firestore manual sync with last-write-wins** | SYNC-01–02 | ✅ done |
-| **Sync status badge (🟢🟡🔴)** | SYNC-03 | ✅ done |
-| Edit presence banner ("⚠ Lisa is editing") | SYNC-04 | high — deferred |
-| **Stage safety: present mode disables all sync** | SYNC-05 | ✅ done (sync is manual-only; no calls in PerformancePage) |
+| **Sync status badge (🟢🟡🔴⬜)** | SYNC-03 | ✅ done |
+| **Cloud update polling every 5 min (3-read Firestore check)** | SYNC-04 | ✅ done |
+| **Online/offline detection; badge shows "Offline" when disconnected** | SYNC-05 | ✅ done |
+| Edit presence banner ("⚠ Lisa is editing") | SYNC-06 | deferred |
+| **Stage safety: present mode disables all sync** | SYNC-07 | ✅ done |
 
 ### Teams & shared spaces
 
-| Item | Req IDs | Priority |
-|------|---------|----------|
+| Item | Req IDs | Notes |
+|------|---------|-------|
 | **Team creation and management (name, description)** | TEAMS-01 | ✅ done |
 | **Invite members by Google email; accept/decline flow** | TEAMS-04 | ✅ done |
 | **Role system: Owner / Contributor / Reader** | TEAMS-03, 08–10 | ✅ done |
 | **Remove members; change roles (Owner only)** | TEAMS-04 | ✅ done |
 | **Team shared song library — scoped queries in Dexie + Firestore** | TEAMS-02, 05 | ✅ done |
-| **Team shared setlists** | TEAMS-02, 05 | ✅ done (via sharedTeamId on setlists) |
-| **Copy song to another book or team space** | TEAMS-06 | ✅ done |
-| **Move song to another book or team space** | TEAMS-07 | ✅ done |
-| **Reader role enforced in UI (no edit/delete buttons)** | TEAMS-08 | ✅ done |
-
-### Other
-
-| Item | Req IDs | Priority |
-|------|---------|----------|
-| **Bulk song sharing: select-mode in Library with Copy/Move all to team** | TEAMS-06–07 | ✅ done |
-| **Team setlists: sidebar in SetlistsPage mirrors Library sidebar; role-aware create** | TEAMS-02, 05 | ✅ done |
-| **Key transpose dropdown: click key badge → 12-key picker with chord previews** | VIEW-02 | ✅ done |
-| ZIP bulk export | — | low |
-| Share-link for single song snapshot | — | low |
+| **Team shared setlists** | TEAMS-02, 05 | ✅ done |
+| **Copy / Move song to another book or team space** | TEAMS-06–07 | ✅ done |
+| **Reader role enforced in UI** | TEAMS-08 | ✅ done |
+| **Bulk song sharing: select-mode with Copy/Move all to team** | TEAMS-06–07 | ✅ done |
+| **Team setlists sidebar in SetlistsPage** | TEAMS-02, 05 | ✅ done |
 
 ---
 
-## Phase 4 — Polish · *deferred*
+## Phase 4 — Import / Export / Metadata · *complete*
+
+Focus: richer song metadata, multiple import sources, library backup/restore.
 
 | Item | Req IDs | Notes |
 |------|---------|-------|
-| Viewer role (read-only teammates) | — | |
-| Published / locked books and setlists | — | |
-| **Setlist duplication for recurring services** | SET-12 | ✅ done |
+| **Export full library as chords.wiki-compatible JSON** | IMP-08 | ✅ done — downloads all books, songs, setlists with metadata |
+| **OpenSong XML importer** | IMP-07 | ✅ done — positional chord alignment, section types, CCLI/copyright |
+| **OpenSong inline metadata detection** | IMP-09 | ✅ done — parses `Key - C \| Tempo - 77` and German `Tonart - E \| Taktart` from lyrics |
+| **Import duplicate resolution: Skip or Overwrite** | IMP-06 | ✅ done — two-phase scan → conflict UI → batch choice |
+| **Song attribution metadata: CCLI, copyright, URL** | ED-10, VIEW-12 | ✅ done — stored as `{ccli:}` `{copyright:}` `{url:}` directives |
+| **CCLI SongSelect link + external URL link in Viewer** | VIEW-12 | ✅ done — icon buttons appear when fields are populated |
+| **Editor metadata rows collapsed by default** | ED-09 | ✅ done — rows 2+3 hidden; amber dot indicates hidden content |
+| **Non-chord instruction text in chord position** | RENDER-15 | ✅ done — "(To Bridge)" rendered italic/muted, not yellow/bold |
+
+---
+
+## Phase 5 — Polish · *next*
+
+| Item | Req IDs | Notes |
+|------|---------|-------|
+| Pinch-to-zoom on Viewer and Performance pages | VIEW-10, PERF-11 | Only remaining Phase 1 gap |
+| BPM range filter in Library sidebar | LIB-08 | Partial — key filter done |
+| Autoscroll with `{@mm:ss}` time-tag support | — | low |
+| Annotations: text, highlight, symbol (private + shared) | — | low |
+| ZIP bulk export | — | low |
+| Share-link for single song snapshot | — | low |
+| System share sheet for PDF (AirDrop, email) | PDF-07 | deferred |
+| Edit presence banner | SYNC-06 | deferred |
 | Additional UI languages (beyond EN/DE) | — | |
 | Chord diagram rendering for `{chord:}` / `{define:}` | — | Out of scope per spec |
 
@@ -152,7 +160,6 @@ Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| ~~Add `public/icons/icon-192.png` + `icon-512.png`~~ | ~~high~~ | ✅ Done — generated from SVG via ImageMagick |
 | Expand Playwright suite with import-then-search flow | medium | Needs DB isolation per test |
 | Add Playwright tests for Performance mode setlist nav | medium | Phase 2 feature |
 | Review chordsheetjs version for paragraph separation fix | low | Named sections currently merge into one `.paragraph` |
@@ -165,22 +172,27 @@ Focus: Firestore sync, teams, shared song/setlist spaces, edit presence.
 |------|----------|-----------|
 | 2026-03-29 | Renderer font: Barlow Condensed | Narrower letterforms → more lyrics per line on tablet |
 | 2026-03-29 | Chord color: #fde68a (light yellow) | High contrast on dark stage backgrounds vs prior amber |
-| 2026-03-29 | Section labels: CSS counter [A][B][C] | Musician convention for rehearsal ("go to letter B") |
+| 2026-03-29 | Section labels: JS DOM injection [A][B][C] | Musician convention for rehearsal ("go to letter B") |
 | 2026-03-29 | Chorus bar: JS DOM post-process in SongRenderer | chordsheetjs doesn't add `.chorus` class on named sections |
-| 2026-03-29 | Key/tempo: from `song.transcription`, not renderer | chordsheetjs HtmlDivFormatter strips all metadata directives |
-| 2026-03-30 | Section badges: graphical bordered box with repeat superscript | Matches chords.wiki convention; makes repeated sections (A, B, B², C) instantly recognizable on stage |
-| 2026-03-30 | Horizontal page-flip for multi-column | Eliminates accidental scroll; pedal/tap always advances exactly one column at a time |
-| 2026-03-31 | Teams scoped to Phase 3 alongside Firestore sync | Teams require per-user cloud identity; building on top of Firebase Auth makes natural prerequisite chain |
+| 2026-03-29 | Key/tempo from `song.transcription`, not renderer | chordsheetjs HtmlDivFormatter strips all metadata directives |
+| 2026-03-30 | Section badges: graphical bordered box with repeat superscript | Matches chords.wiki convention; repeated sections (A, B, B², C) instantly recognizable on stage |
+| 2026-03-30 | Horizontal page-flip for multi-column | Eliminates accidental scroll; pedal always advances exactly one column |
+| 2026-03-31 | Teams scoped to Phase 3 alongside Firestore sync | Teams require per-user cloud identity; natural prerequisite chain |
 | 2026-04-01 | Sync manual-only via SyncContext + firestoreSync.ts | Stage safety guaranteed by absence of sync calls in PerformancePage |
-| 2026-04-01 | Team invite check queries all Firestore /teams docs | Simple approach; scales to small team counts; revisit with inviteIndex if needed |
-| 2026-04-01 | Team books use `Book.sharedTeamId` in same Dexie table | Avoids separate team song table; role enforcement is at read/write layer |
+| 2026-04-01 | Team invite check queries all Firestore /teams docs | Simple approach; revisit with inviteIndex if team count grows |
+| 2026-04-01 | Team books use `Book.sharedTeamId` in same Dexie table | Avoids separate team song table; role enforcement at read/write layer |
 | 2026-04-04 | `.column` uses `white-space: pre-wrap` not `pre` | `pre` prevented word-wrap; long lines overflowed column width on narrow screens |
-| 2026-04-04 | `.row { break-inside: avoid }` | Prevents CSS column break from orphaning a chord above its lyric in the next column |
-| 2026-04-04 | Arrow key nav added to ViewerPage (not just PerformancePage) | Users navigate with pedal in non-fullscreen viewer; same stride calculation as PerformancePage |
-| 2026-04-04 | Setlist boundary feedback via toast, not disabled buttons | Disabled buttons gave no explanation; toast message communicates the boundary clearly |
-| 2026-04-04 | `onSnapshot` in TeamDetailPage for real-time invite sync | Owner's Dexie otherwise stays stale after invitee accepts on their device |
-| 2026-04-04 | Bulk song sharing via select-mode in LibraryPage | One-by-one share via ViewerPage was too slow for 50+ songs; select-mode enables `bulkAdd` + `bulkMove` |
-| 2026-04-04 | Team setlists in SetlistsPage sidebar (mirrors Library pattern) | Setlists needed the same team-scoped context switching as the Library; `Setlist.sharedTeamId` already existed in schema |
-| 2026-04-04 | Key badge opens 12-key transpose picker with chord previews | Users wanted to jump to a target key directly without stepping through semitones; chord previews confirm the right key |
+| 2026-04-04 | `.row { break-inside: avoid }` | Prevents CSS column break from orphaning a chord above its lyric |
+| 2026-04-04 | Arrow key nav in ViewerPage (not just PerformancePage) | Users navigate with pedal in non-fullscreen viewer |
+| 2026-04-04 | Setlist boundary feedback via toast | Disabled buttons gave no explanation; toast communicates the boundary |
+| 2026-04-04 | `onSnapshot` in TeamDetailPage for real-time invite sync | Owner's Dexie stays stale after invitee accepts on their device |
+| 2026-04-04 | Bulk song sharing via select-mode in LibraryPage | One-by-one share too slow for 50+ songs; select-mode enables `bulkAdd` + `bulkMove` |
+| 2026-04-04 | Key badge opens 12-key transpose picker with chord previews | Jump to target key directly without stepping through semitones |
+| 2026-04-05 | CCLI/copyright/URL stored as ChordPro directives, not Song fields | Consistent with existing metadata pattern; no schema migration; content is the source of truth |
+| 2026-04-05 | Cloud update poll uses 3-read `where('updatedAt', '>', lastSync)` check | Lightweight — 3 Firestore reads per 5-min interval; does not pull data until user triggers Sync Now |
+| 2026-04-05 | OpenSong inline metadata extracted before lyrics conversion | Many files omit XML key/tempo tags and embed them as the first "chord line"; extract once and skip during rendering pass |
+| 2026-04-05 | Duplicate resolution is batch-level (skip all / overwrite all) | Per-song choice creates too much friction for 100+ file imports; batch decision covers most real-world scenarios |
+| 2026-04-05 | Non-chord chord-position text → `.chord-annotation` (italic/muted) | Keeps the ChordPro content unchanged; renderer detects and re-styles non-chord tokens post-render |
+| 2026-04-05 | Editor extra metadata rows collapsed by default | Keeps the editor clean for everyday editing; amber dot signals when attribution fields hold data |
 
-*Last updated: 2026-04-04*
+*Last updated: 2026-04-05*
