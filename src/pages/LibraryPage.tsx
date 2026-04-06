@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users,
-  CheckSquare, Square, Trash2, FolderInput,
+  CheckSquare, Square, Trash2, FolderInput, Pencil, Check, X,
 } from 'lucide-react'
 import { db, generateId, markPending, getTeamRole } from '@/db'
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
@@ -50,6 +50,11 @@ export default function LibraryPage() {
   const [newBookName, setNewBookName] = useState('')
   const [showNewBook, setShowNewBook] = useState(false)
   const newBookInputRef = useRef<HTMLInputElement>(null)
+
+  // Book rename/delete state
+  const [renamingBookId, setRenamingBookId] = useState<string | null>(null)
+  const [renameBookName, setRenameBookName] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
 
   // Bulk tag state
   const [showTagMenu, setShowTagMenu] = useState(false)
@@ -374,6 +379,47 @@ export default function LibraryPage() {
     setTimeout(() => newBookInputRef.current?.focus(), 50)
   }
 
+  const startRenameBook = (book: { id: string; title: string }) => {
+    setRenamingBookId(book.id)
+    setRenameBookName(book.title)
+    setTimeout(() => renameInputRef.current?.focus(), 50)
+  }
+
+  const commitRenameBook = async () => {
+    const name = renameBookName.trim()
+    if (!name || !renamingBookId) { setRenamingBookId(null); return }
+    await db.books.update(renamingBookId, { title: name, updatedAt: Date.now() })
+    await markPending('book', renamingBookId)
+    setRenamingBookId(null)
+  }
+
+  const cancelRenameBook = () => {
+    setRenamingBookId(null)
+    setRenameBookName('')
+  }
+
+  const deleteBook = async (bookId: string, bookTitle: string) => {
+    const songCount = allSongs?.filter(s => s.bookId === bookId).length ?? 0
+    const msg = songCount > 0
+      ? `Delete book "${bookTitle}"? Its ${songCount} song${songCount !== 1 ? 's' : ''} will become unassigned.`
+      : `Delete book "${bookTitle}"?`
+    if (!confirm(msg)) return
+    // Reassign songs to no book (we can't leave dangling bookIds)
+    if (songCount > 0) {
+      const songs = allSongs?.filter(s => s.bookId === bookId) ?? []
+      const defaultBookId = personalBooks.find(b => b.id !== bookId)?.id
+      for (const song of songs) {
+        if (defaultBookId) {
+          await db.songs.update(song.id, { bookId: defaultBookId, updatedAt: Date.now() })
+          await markPending('song', song.id)
+        }
+      }
+    }
+    await db.books.delete(bookId)
+    await db.syncStates.delete(`book:${bookId}`)
+    if (activeBookId === bookId) handleNavClick('all')
+  }
+
   // ─── Navigation handlers ──────────────────────────────────────────────────────
 
   const handleNavClick = (bookId: typeof activeBookId) => {
@@ -421,7 +467,32 @@ export default function LibraryPage() {
             </button>
           </div>
           {personalBooks.map(book => (
-            <NavItem key={book.id} label={book.title} icon={<BookOpen size={15} />} active={activeBookId === book.id && !activeTeamId} onClick={() => handleNavClick(book.id)} count={allSongs?.filter(s => s.bookId === book.id).length} />
+            renamingBookId === book.id ? (
+              <div key={book.id} className="flex items-center gap-1 px-2 pb-1">
+                <input
+                  ref={renameInputRef}
+                  value={renameBookName}
+                  onChange={e => setRenameBookName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') commitRenameBook()
+                    if (e.key === 'Escape') cancelRenameBook()
+                  }}
+                  className="flex-1 bg-surface-2 border border-chord/40 rounded-md px-2 py-1 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-chord/60"
+                />
+                <button onClick={commitRenameBook} className="p-0.5 text-green-400 hover:text-green-300"><Check size={13} /></button>
+                <button onClick={cancelRenameBook} className="p-0.5 text-ink-faint hover:text-ink"><X size={13} /></button>
+              </div>
+            ) : (
+              <BookNavItem
+                key={book.id}
+                book={book}
+                active={activeBookId === book.id && !activeTeamId}
+                count={allSongs?.filter(s => s.bookId === book.id).length}
+                onClick={() => handleNavClick(book.id)}
+                onRename={() => startRenameBook(book)}
+                onDelete={() => deleteBook(book.id, book.title)}
+              />
+            )
           ))}
           {showNewBook && (
             <div className="px-2 pb-1">
@@ -786,6 +857,54 @@ function NavItem({ label, icon, active, onClick, count }: {
       <span className="flex-1 truncate">{label}</span>
       {count !== undefined && <span className="text-xs text-ink-faint">{count}</span>}
     </button>
+  )
+}
+
+function BookNavItem({ book, active, count, onClick, onRename, onDelete }: {
+  book: { id: string; title: string }
+  active: boolean
+  count?: number
+  onClick: () => void
+  onRename: () => void
+  onDelete: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        onClick={onClick}
+        className={`flex items-center gap-2 px-2 py-2 rounded-lg text-sm w-full text-left transition-colors
+          ${active ? 'bg-chord/10 text-chord' : 'text-ink-muted hover:bg-surface-2 hover:text-ink'}`}
+      >
+        <BookOpen size={15} />
+        <span className="flex-1 truncate">{book.title}</span>
+        {!hovered && count !== undefined && <span className="text-xs text-ink-faint">{count}</span>}
+        {hovered && (
+          <span className="flex items-center gap-0.5">
+            <span
+              role="button"
+              onClick={e => { e.stopPropagation(); onRename() }}
+              className="p-0.5 rounded hover:text-ink-muted text-ink-faint"
+              title="Rename book"
+            >
+              <Pencil size={11} />
+            </span>
+            <span
+              role="button"
+              onClick={e => { e.stopPropagation(); onDelete() }}
+              className="p-0.5 rounded hover:text-red-400 text-ink-faint"
+              title="Delete book"
+            >
+              <Trash2 size={11} />
+            </span>
+          </span>
+        )}
+      </button>
+    </div>
   )
 }
 

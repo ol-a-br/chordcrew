@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Library, ListMusic, Users, Download, Settings, Menu, X, Music2, RefreshCw, Wand2, HelpCircle } from 'lucide-react'
+import { Library, ListMusic, Users, Download, Settings, Menu, X, Music2, RefreshCw, Wand2, HelpCircle, MessageSquarePlus } from 'lucide-react'
 import { useAuth } from '@/auth/AuthContext'
 import { useSync } from '@/sync/SyncContext'
 import { firebaseConfigured } from '@/firebase'
 import { TeamInviteNotification } from '@/components/teams/TeamInviteNotification'
+import { FeedbackModal } from '@/components/feedback/FeedbackModal'
 import { clsx } from 'clsx'
 
 const baseNavItems = [
@@ -69,6 +70,7 @@ export function AppShell() {
   const { t } = useTranslation()
   const { user, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-0 text-ink font-ui">
@@ -165,12 +167,22 @@ export function AppShell() {
               <span className="text-xs text-ink-muted truncate">{user.displayName}</span>
             </div>
             <SyncBadge />
-            <button
-              onClick={signOut}
-              className="w-full text-xs text-ink-faint hover:text-ink-muted text-left px-1 mt-1"
-            >
-              {t('auth.signOut')}
-            </button>
+            <div className="flex items-center gap-1 mt-1">
+              <button
+                onClick={() => setShowFeedback(true)}
+                className="flex-1 flex items-center gap-1.5 text-xs text-ink-faint hover:text-ink-muted text-left px-1 py-0.5"
+                title={t('feedback.title')}
+              >
+                <MessageSquarePlus size={12} />
+                {t('feedback.title')}
+              </button>
+              <button
+                onClick={signOut}
+                className="text-xs text-ink-faint hover:text-ink-muted px-1 py-0.5"
+              >
+                {t('auth.signOut')}
+              </button>
+            </div>
           </div>
         )}
       </aside>
@@ -188,6 +200,9 @@ export function AppShell() {
 
         {/* Team invite notifications */}
         <TeamInviteNotification />
+
+        {/* Feedback modal */}
+        {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">

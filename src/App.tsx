@@ -4,6 +4,8 @@ import { useAuth } from '@/auth/AuthContext'
 import { SyncProvider } from '@/sync/SyncContext'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/components/auth/LoginPage'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '@/db'
 
 // Lazy-load pages for better initial load performance
 const LibraryPage        = lazy(() => import('@/pages/LibraryPage'))
@@ -20,6 +22,8 @@ const TeamsPage          = lazy(() => import('@/pages/TeamsPage'))
 const TeamDetailPage     = lazy(() => import('@/pages/TeamDetailPage'))
 const CurationPage       = lazy(() => import('@/pages/CurationPage'))
 const HelpPage           = lazy(() => import('@/pages/HelpPage'))
+const OnboardingPage     = lazy(() => import('@/pages/OnboardingPage'))
+const TeamJoinPage       = lazy(() => import('@/pages/TeamJoinPage'))
 
 function PageLoader() {
   return (
@@ -32,7 +36,19 @@ function PageLoader() {
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
-  if (loading) return <PageLoader />
+  const settings = useLiveQuery(() => db.settings.get('app'), [])
+
+  if (loading || settings === undefined) return <PageLoader />
+
+  // Show onboarding on first visit (before login)
+  if (!settings?.onboardingDone) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <OnboardingPage />
+      </Suspense>
+    )
+  }
+
   if (!user) return <LoginPage />
   return <>{children}</>
 }
@@ -61,6 +77,7 @@ export default function App() {
               <Route path="/setlists/:id"   element={<SetlistDetailPage />} />
               <Route path="/teams"           element={<TeamsPage />} />
               <Route path="/teams/:id"      element={<TeamDetailPage />} />
+              <Route path="/join/:teamId"   element={<TeamJoinPage />} />
               <Route path="/import"         element={<ImportPage />} />
               <Route path="/curation"       element={<CurationPage />} />
               <Route path="/help"           element={<HelpPage />} />

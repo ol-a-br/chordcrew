@@ -116,6 +116,7 @@ export interface TeamInvite {
   email: string
   role: 'contributor' | 'reader'
   invitedAt: number
+  token?: string   // random token for link-based invites (no email match required)
 }
 
 export interface Team {
@@ -153,6 +154,7 @@ export interface AppSettings {
   pedalKeyPrev: string        // keydown event.key, default "ArrowLeft"
   fontScale: number           // multiplier, default 1.0
   continuousScroll: boolean   // false = page-flip (default), true = continuous scroll
+  onboardingDone: boolean     // true after user completes or skips onboarding
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -163,6 +165,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pedalKeyPrev: 'ArrowLeft',
   fontScale: 1.0,
   continuousScroll: false,
+  onboardingDone: false,
 }
 
 // ─── chords.wiki import types ─────────────────────────────────────────────────

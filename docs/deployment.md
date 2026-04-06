@@ -93,16 +93,30 @@ Useful once there are multiple contributors who can merge PRs.
 | `main` branch protection | ⬜ pending | Require PR + review before merge |
 | `FIREBASE_SERVICE_ACCOUNT` secret set | ⬜ pending | Needed before re-enabling CI |
 | Service account scoped to Hosting Admin only | ⬜ pending | Downgrade from Editor in GCP IAM |
-| Dependabot alerts reviewed | ⬜ pending | 29 alerts on main (mostly transitive; low risk for client-side PWA) |
+| Dependabot alerts reviewed | ✅ done | Removed unused `jspdf`/`html2canvas`; 0 critical remaining |
+| Dependabot version updates configured | ✅ done | `.github/dependabot.yml` — grouped weekly PRs |
+| SECURITY.md added | ✅ done | GitHub-standard security policy |
 | GitHub Environment approval gate | ⬜ optional | Add when collaborators join |
 
 ---
 
 ## Dependabot alerts
 
-As of 2026-04-06: 29 vulnerabilities reported (2 critical, 13 high, 13 moderate, 1 low) on `main`.
+As of 2026-04-06 (after cleanup): **0 critical, 4 high, 12 moderate** on `develop`.
 
-These are almost entirely in transitive dev dependencies (build tooling, test runners). The app is a client-side PWA with no server component, so the attack surface is limited. However, the critical and high alerts should be reviewed before onboarding collaborators:
+The 2 previous critical vulnerabilities were in `jspdf` — a dependency that was
+never actually imported in the app (the print pages use `@media print` instead).
+Both `jspdf` and `html2canvas` have been removed.
+
+Remaining alerts are all in **transitive dev/build dependencies** with no
+user-facing runtime exposure:
+
+| Package | Severity | Via | Fix available? |
+|---------|----------|-----|----------------|
+| `serialize-javascript` | High | workbox-build ← vite-plugin-pwa | awaiting upstream |
+| `undici` | High | @firebase/functions, @firebase/storage | awaiting Firebase SDK update |
+| Firebase SDK packages | Moderate | undici | awaiting Firebase SDK update |
+| `vite` / `esbuild` | Moderate | dev build chain | auto-fix applies patches |
 
 ```bash
 npm audit          # see full report

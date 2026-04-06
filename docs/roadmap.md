@@ -176,11 +176,13 @@ To be completed before onboarding any additional contributors. Full details and 
 | Item | Priority | Status | Notes |
 |------|----------|--------|-------|
 | Set `develop` as default GitHub branch | high | ✅ done | |
+| Remove unused deps with critical CVEs (`jspdf`, `html2canvas`) | high | ✅ done | 0 critical remaining |
+| Add `SECURITY.md` with vulnerability reporting policy | high | ✅ done | GitHub-standard security policy |
+| Configure Dependabot version updates | medium | ✅ done | `.github/dependabot.yml` — grouped weekly PRs |
 | Add `main` branch protection rule | high | ⬜ pending | Require PR + 1 review; block direct push; no admin bypass |
 | Set `FIREBASE_SERVICE_ACCOUNT` GitHub secret | high | ⬜ pending | Required before re-enabling CI deploy |
 | Scope Firebase service account to Hosting Admin only | high | ⬜ pending | GCP IAM → downgrade from Editor to `roles/firebasehosting.admin` |
 | Re-enable CI deploy trigger on `main` | medium | ⬜ pending | Restore `on: push: branches: [main]` in deploy.yml |
-| Review and fix Dependabot alerts (29 open) | medium | ⬜ pending | Run `npm audit fix`; do not use `--force` |
 | Add GitHub Environment approval gate for deploy | low | ⬜ optional | Useful once multiple contributors can merge PRs |
 
 ## Technical Debt & Infrastructure

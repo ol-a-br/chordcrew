@@ -2,13 +2,21 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { onSnapshot, doc as fsDoc } from 'firebase/firestore'
-import { ArrowLeft, Crown, UserPlus, Trash2, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Crown, UserPlus, Trash2, ChevronDown, Link2, Share2, Mail, Copy, Check as CheckIcon } from 'lucide-react'
 import { db, generateId } from '@/db'
 import { syncTeam } from '@/sync/firestoreSync'
 import { firestore, firebaseConfigured } from '@/firebase'
 import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
 import type { Team, TeamMember, TeamInvite, TeamMemberRole } from '@/types'
+
+const APP_BASE_URL = 'https://chordcrew.app'
+
+function generateToken(): string {
+  const arr = new Uint8Array(18)
+  crypto.getRandomValues(arr)
+  return btoa(String.fromCharCode(...arr)).replace(/[+/=]/g, c => ({ '+': '-', '/': '_', '=': '' }[c] ?? c))
+}
 
 const ROLE_LABELS: Record<TeamMemberRole, string> = {
   owner:       'Owner',
@@ -25,6 +33,10 @@ export default function TeamDetailPage() {
   const [inviteRole, setInviteRole] = useState<'contributor' | 'reader'>('contributor')
   const [showInviteForm, setShowInviteForm] = useState(false)
   const [inviteError, setInviteError] = useState('')
+  const [showSharePanel, setShowSharePanel] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
+  const [generatingLink, setGeneratingLink] = useState(false)
+  const [shareInvite, setShareInvite] = useState<TeamInvite | null>(null)
 
   const team = useLiveQuery(() => id ? db.teams.get(id) : undefined, [id])
 
@@ -78,13 +90,70 @@ export default function TeamDetailPage() {
     setShowInviteForm(false)
   }
 
-  const handleRevokeInvite = async (email: string) => {
+  const handleRevokeInvite = async (email: string, token?: string) => {
     const updated: Team = {
       ...team,
-      invites: team.invites.filter(i => i.email !== email),
+      invites: team.invites.filter(i =>
+        token ? i.token !== token : i.email !== email
+      ),
       updatedAt: Date.now(),
     }
     await saveTeam(updated)
+    if (shareInvite?.token === token) setShareInvite(null)
+  }
+
+  const generateInviteLink = async (role: 'contributor' | 'reader') => {
+    if (!team) return
+    setGeneratingLink(true)
+    const token = generateToken()
+    const invite: TeamInvite = {
+      email: '',        // link-based invite has no email restriction
+      role,
+      invitedAt: Date.now(),
+      token,
+    }
+    const updated: Team = {
+      ...team,
+      invites: [...team.invites, invite],
+      updatedAt: Date.now(),
+    }
+    await saveTeam(updated)
+    setShareInvite(invite)
+    setShowSharePanel(true)
+    setGeneratingLink(false)
+  }
+
+  const getInviteUrl = (inv: TeamInvite) =>
+    `${APP_BASE_URL}/join/${team!.id}?token=${inv.token}`
+
+  const copyLink = async (url: string) => {
+    await navigator.clipboard.writeText(url)
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 2000)
+  }
+
+  const shareViaWhatsApp = (url: string) => {
+    const text = encodeURIComponent(
+      `Hey! I'd like to invite you to join my ChordCrew team "${team?.name}". Click the link to join:\n${url}`
+    )
+    window.open(`https://wa.me/?text=${text}`, '_blank')
+  }
+
+  const shareViaEmail = (url: string) => {
+    const subject = encodeURIComponent(`You're invited to join ${team?.name} on ChordCrew`)
+    const body = encodeURIComponent(
+      `Hi!\n\nI'd like to invite you to join my ChordCrew team "${team?.name}".\n\nChordCrew is a worship team chord & lyrics app — you can access and perform songs and setlists online and offline.\n\nClick this link to join:\n${url}\n\nSee you there!\n${user?.displayName}`
+    )
+    window.open(`mailto:?subject=${subject}&body=${body}`)
+  }
+
+  const shareViaNative = async (url: string) => {
+    if (!navigator.share) return
+    await navigator.share({
+      title: `Join ${team?.name} on ChordCrew`,
+      text: `I'd like to invite you to join my ChordCrew team "${team?.name}".`,
+      url,
+    })
   }
 
   const handleRemoveMember = async (memberId: string) => {
@@ -124,12 +193,104 @@ export default function TeamDetailPage() {
           {team.description && <p className="text-xs text-ink-muted">{team.description}</p>}
         </div>
         {isOwner && (
-          <Button variant="primary" size="sm" onClick={() => setShowInviteForm(v => !v)}>
-            <UserPlus size={14} />
-            Invite
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="primary" size="sm" onClick={() => setShowSharePanel(v => !v)}>
+              <Share2 size={14} />
+              Share link
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowInviteForm(v => !v)}>
+              <UserPlus size={14} />
+              By email
+            </Button>
+          </div>
         )}
       </div>
+
+      {/* Share invite link panel */}
+      {showSharePanel && isOwner && (
+        <div className="bg-surface-1 rounded-xl p-4 space-y-4 border border-chord/20">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium">Invite via link</h2>
+            <button onClick={() => setShowSharePanel(false)} className="text-ink-faint hover:text-ink text-xs">✕</button>
+          </div>
+          <p className="text-xs text-ink-muted">
+            Anyone with this link can join your team. The link is single-use — generate a new one for each person.
+          </p>
+
+          {!shareInvite ? (
+            <div className="space-y-2">
+              <p className="text-xs text-ink-faint">Choose a role for the invitee:</p>
+              <div className="flex gap-2">
+                <Button
+                  variant="primary" size="sm"
+                  onClick={() => generateInviteLink('contributor')}
+                  disabled={generatingLink}
+                  className="flex-1"
+                >
+                  Generate Contributor link
+                </Button>
+                <Button
+                  variant="ghost" size="sm"
+                  onClick={() => generateInviteLink('reader')}
+                  disabled={generatingLink}
+                  className="flex-1"
+                >
+                  Generate Reader link
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 bg-surface-2 rounded-lg px-3 py-2">
+                <Link2 size={13} className="text-ink-faint shrink-0" />
+                <span className="flex-1 text-xs text-ink-muted truncate font-mono">
+                  {getInviteUrl(shareInvite)}
+                </span>
+                <button
+                  onClick={() => copyLink(getInviteUrl(shareInvite!))}
+                  className="shrink-0 text-xs flex items-center gap-1 text-chord hover:text-chord/80 transition-colors"
+                >
+                  {linkCopied ? <CheckIcon size={13} /> : <Copy size={13} />}
+                  {linkCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => shareViaWhatsApp(getInviteUrl(shareInvite!))}
+                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-[#25D366]/10 border border-[#25D366]/30 text-[#25D366] text-xs hover:bg-[#25D366]/20 transition-colors"
+                >
+                  <WhatsAppIcon />
+                  WhatsApp
+                </button>
+                <button
+                  onClick={() => shareViaEmail(getInviteUrl(shareInvite!))}
+                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-surface-2 border border-surface-3 text-ink-muted text-xs hover:bg-surface-3 transition-colors"
+                >
+                  <Mail size={14} />
+                  Email
+                </button>
+                {typeof navigator.share === 'function' && (
+                  <button
+                    onClick={() => shareViaNative(getInviteUrl(shareInvite!))}
+                    className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-surface-2 border border-surface-3 text-ink-muted text-xs hover:bg-surface-3 transition-colors"
+                  >
+                    <Share2 size={14} />
+                    Share
+                  </button>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShareInvite(null)}
+                className="text-xs text-ink-faint hover:text-ink-muted w-full text-center py-1"
+              >
+                Generate a different link
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Invite form */}
       {showInviteForm && isOwner && (
@@ -202,15 +363,22 @@ export default function TeamDetailPage() {
         <section>
           <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Pending Invites</h2>
           <div className="bg-surface-1 rounded-xl divide-y divide-surface-3">
-            {team.invites.map(invite => (
-              <div key={invite.email} className="flex items-center gap-3 px-4 py-3">
+            {team.invites.map((invite, i) => (
+              <div key={invite.token ?? invite.email ?? i} className="flex items-center gap-3 px-4 py-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-mono truncate">{invite.email}</div>
-                  <div className="text-xs text-ink-faint">{ROLE_LABELS[invite.role]} · invited {new Date(invite.invitedAt).toLocaleDateString()}</div>
+                  {invite.token ? (
+                    <div className="text-sm text-ink-muted flex items-center gap-1.5">
+                      <Link2 size={12} className="shrink-0" />
+                      Link invite
+                    </div>
+                  ) : (
+                    <div className="text-sm font-mono truncate">{invite.email}</div>
+                  )}
+                  <div className="text-xs text-ink-faint">{ROLE_LABELS[invite.role]} · {new Date(invite.invitedAt).toLocaleDateString()}</div>
                 </div>
                 {isOwner && (
                   <button
-                    onClick={() => handleRevokeInvite(invite.email)}
+                    onClick={() => handleRevokeInvite(invite.email, invite.token)}
                     className="p-1.5 text-ink-faint hover:text-red-400 rounded"
                     title="Revoke invite"
                   >
@@ -323,5 +491,14 @@ function MemberRow({ displayName, email, role, isCurrentUser, canManage, onChang
         <span className="text-xs text-ink-faint px-2 py-1">{ROLE_LABELS[role]}</span>
       )}
     </div>
+  )
+}
+
+function WhatsAppIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+      <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.127 1.528 5.856L.057 23.885a.5.5 0 0 0 .614.614l6.115-1.498A11.932 11.932 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.894 0-3.668-.523-5.178-1.432l-.37-.219-3.832.938.962-3.74-.24-.386A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+    </svg>
   )
 }
