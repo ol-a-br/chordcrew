@@ -358,6 +358,7 @@ export default function PerformancePage() {
               columns={columns}
               lyricsOnly={lyricsOnly}
               fontScale={fontScale}
+              expandRepeats
               pageFlip
             />
           </div>
@@ -379,6 +380,7 @@ export default function PerformancePage() {
             columns={1}
             lyricsOnly={lyricsOnly}
             fontScale={fontScale}
+            expandRepeats
           />
         </div>
       )}

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { onSnapshot, doc as fsDoc } from 'firebase/firestore'
-import { ArrowLeft, Crown, UserPlus, Trash2, ChevronDown, Link2, Share2, Mail, Copy, Check as CheckIcon } from 'lucide-react'
+import { ArrowLeft, Crown, UserPlus, Trash2, ChevronDown, Link2, Share2, Mail, Copy, Check as CheckIcon, Pencil } from 'lucide-react'
 import { db, generateId } from '@/db'
 import { syncTeam } from '@/sync/firestoreSync'
 import { firestore, firebaseConfigured } from '@/firebase'
@@ -28,6 +28,10 @@ export default function TeamDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
+
+  const [editingInfo, setEditingInfo] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editDesc, setEditDesc] = useState('')
 
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'contributor' | 'reader'>('contributor')
@@ -69,6 +73,25 @@ export default function TeamDetailPage() {
     if (firebaseConfigured) {
       try { await syncTeam(updated) } catch { /* will retry on next sync */ }
     }
+  }
+
+  const startEditInfo = () => {
+    setEditName(team.name)
+    setEditDesc(team.description ?? '')
+    setEditingInfo(true)
+  }
+
+  const saveInfo = async () => {
+    const name = editName.trim()
+    if (!name) return
+    const updated: Team = {
+      ...team,
+      name,
+      description: editDesc.trim() || undefined,
+      updatedAt: Date.now(),
+    }
+    await saveTeam(updated)
+    setEditingInfo(false)
   }
 
   const handleInvite = async () => {
@@ -188,12 +211,48 @@ export default function TeamDetailPage() {
         <button onClick={() => navigate('/teams')} className="text-ink-muted hover:text-ink">
           <ArrowLeft size={18} />
         </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-semibold truncate">{team.name}</h1>
-          {team.description && <p className="text-xs text-ink-muted">{team.description}</p>}
-        </div>
-        {isOwner && (
-          <div className="flex gap-2">
+
+        {editingInfo ? (
+          <div className="flex-1 space-y-1.5">
+            <input
+              autoFocus
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveInfo(); if (e.key === 'Escape') setEditingInfo(false) }}
+              className="w-full bg-surface-2 border border-chord/40 rounded-lg px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-chord/60"
+            />
+            <input
+              value={editDesc}
+              onChange={e => setEditDesc(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Escape') setEditingInfo(false) }}
+              placeholder="Description (optional)"
+              className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-1.5 text-xs text-ink-muted focus:outline-none focus:ring-1 focus:ring-chord/60"
+            />
+            <div className="flex gap-2">
+              <Button variant="primary" size="sm" onClick={saveInfo} disabled={!editName.trim()}>Save</Button>
+              <Button variant="ghost" size="sm" onClick={() => setEditingInfo(false)}>Cancel</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 min-w-0 group">
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-lg font-semibold truncate">{team.name}</h1>
+              {isOwner && (
+                <button
+                  onClick={startEditInfo}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-ink-faint hover:text-ink p-0.5 shrink-0"
+                  title="Edit team info"
+                >
+                  <Pencil size={13} />
+                </button>
+              )}
+            </div>
+            {team.description && <p className="text-xs text-ink-muted">{team.description}</p>}
+          </div>
+        )}
+
+        {!editingInfo && isOwner && (
+          <div className="flex gap-2 shrink-0">
             <Button variant="primary" size="sm" onClick={() => setShowSharePanel(v => !v)}>
               <Share2 size={14} />
               Share link

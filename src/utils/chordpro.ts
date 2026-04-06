@@ -121,6 +121,98 @@ export function extractMeta(content: string): ChordProMeta {
   return meta
 }
 
+// ─── Expand repeat sections for performance mode ─────────────────────────────
+// In performance mode, a song might contain a section label like [Chorus] with
+// no content following it (just a repeat marker). This function finds those
+// empty repeats and substitutes the full content from the first occurrence,
+// so the performer doesn't have to flip back to see the chorus chords.
+//
+// Handles both bracket-notation ([Chorus]) and directive-notation
+// ({start_of_chorus: Chorus} ... {end_of_chorus}).
+// A section is considered "empty" if it has no chord markers ([X]) and no
+// non-whitespace lyric text (other than directive lines).
+
+function sectionHasContent(lines: string[]): boolean {
+  return lines.some(line => {
+    if (/\{[^}]*\}/.test(line)) return false  // directive-only line
+    if (/\[[A-G][^[\]]*\]/.test(line)) return true  // has a chord
+    const stripped = line.replace(/\[[^\]]*\]/g, '').trim()
+    return stripped.length > 0  // has lyric text
+  })
+}
+
+function canonicalSectionName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\s+\d+$/, '')     // "Verse 2" → "verse"
+    .replace(/\s+×\d+$/i, '')   // "Chorus ×2" → "chorus"
+    .replace(/\s*\([^)]*\)/, '') // "Chorus (2)" → "chorus"
+    .trim()
+}
+
+export function expandRepeatSections(content: string): string {
+  const lines = content.split('\n')
+
+  // Detect a standalone bracket heading: entire line is [SomeName] with no chord chars around it
+  const bracketHeading = (line: string): string | null => {
+    const m = line.match(/^\s*\[([A-Za-z][^\]]+)\]\s*$/)
+    if (!m) return null
+    // Exclude chord lines like [G], [Am7] etc.
+    if (/^[A-G][b#]?[a-z0-9]*$/.test(m[1].trim())) return null
+    return m[1].trim()
+  }
+
+  // Track first-seen content per canonical name
+  const firstContent = new Map<string, string[]>()
+
+  // ── Pass 1: split into segments, collect first-occurrence content ─────────
+  type Seg = { heading: string | null; body: string[] }
+  const segs: Seg[] = []
+  let preamble: string[] = []
+  let cur: Seg | null = null
+
+  for (const line of lines) {
+    const name = bracketHeading(line)
+    if (name !== null) {
+      if (cur) segs.push(cur)
+      else preamble = [...preamble]  // lock preamble
+      cur = { heading: line, body: [] }
+    } else {
+      if (cur) cur.body.push(line)
+      else preamble.push(line)
+    }
+  }
+  if (cur) segs.push(cur)
+
+  for (const seg of segs) {
+    if (!seg.heading) continue
+    const name = bracketHeading(seg.heading)!
+    const key = canonicalSectionName(name)
+    if (sectionHasContent(seg.body) && !firstContent.has(key)) {
+      firstContent.set(key, seg.body)
+    }
+  }
+
+  // ── Pass 2: rebuild, expanding empty sections ─────────────────────────────
+  const out: string[] = [...preamble]
+  for (const seg of segs) {
+    out.push(seg.heading ?? '')
+    if (sectionHasContent(seg.body)) {
+      out.push(...seg.body)
+    } else {
+      const key = seg.heading ? canonicalSectionName(bracketHeading(seg.heading) ?? '') : ''
+      const stored = firstContent.get(key)
+      if (stored && stored.length > 0) {
+        out.push(...stored)
+      } else {
+        out.push(...seg.body)  // no stored content, leave as-is
+      }
+    }
+  }
+
+  return out.join('\n')
+}
+
 // ─── ChordPro lint: per-line brace / bracket mismatch detection ──────────────
 
 export interface ChordProError {

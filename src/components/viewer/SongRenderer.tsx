@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect } from 'react'
-import { renderToHtml, isKnownChord } from '@/utils/chordpro'
+import { renderToHtml, isKnownChord, expandRepeatSections } from '@/utils/chordpro'
 import type { ChordProError } from '@/utils/chordpro'
 import { clsx } from 'clsx'
 import { AlertTriangle } from 'lucide-react'
@@ -11,6 +11,7 @@ interface SongRendererProps {
   lyricsOnly?: boolean
   fontScale?: number
   pageFlip?: boolean
+  expandRepeats?: boolean   // expand empty repeat sections with first-occurrence content
   className?: string
   errors?: ChordProError[]
   onJumpToLine?: (line: number) => void
@@ -48,6 +49,7 @@ export function SongRenderer({
   lyricsOnly = false,
   fontScale = 1,
   pageFlip = false,
+  expandRepeats = false,
   className,
   errors,
   onJumpToLine,
@@ -55,8 +57,8 @@ export function SongRenderer({
   const containerRef = useRef<HTMLDivElement>(null)
 
   const html = useMemo(
-    () => renderToHtml(content, transposeOffset),
-    [content, transposeOffset]
+    () => renderToHtml(expandRepeats ? expandRepeatSections(content) : content, transposeOffset),
+    [content, transposeOffset, expandRepeats]
   )
 
   useEffect(() => {

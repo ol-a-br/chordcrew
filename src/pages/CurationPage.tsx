@@ -125,10 +125,23 @@ export default function CurationPage() {
 
   const visibleDuplicateGroups = useMemo(() => {
     if (!sameBookOnly) return duplicateGroups
-    return duplicateGroups.filter(g => {
-      const bookIds = new Set(g.songs.map(s => s.bookId))
-      return bookIds.size === 1
-    })
+    // For each group, keep only songs that share a book with at least one other
+    // song in the group. A group with 2 songs in "Book A" and 1 in "Book B"
+    // should still appear — showing only the 2 "Book A" songs.
+    return duplicateGroups
+      .map(g => {
+        const byBook = new Map<string, Song[]>()
+        for (const s of g.songs) {
+          const arr = byBook.get(s.bookId) ?? []
+          arr.push(s)
+          byBook.set(s.bookId, arr)
+        }
+        const samebookSongs = [...byBook.values()]
+          .filter(arr => arr.length >= 2)
+          .flat()
+        return samebookSongs.length >= 2 ? { ...g, songs: samebookSongs } : null
+      })
+      .filter(Boolean) as DuplicateGroup[]
   }, [duplicateGroups, sameBookOnly])
 
   // ── Parse errors ──────────────────────────────────────────────────────────
