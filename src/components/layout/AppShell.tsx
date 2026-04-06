@@ -151,6 +151,13 @@ export function AppShell() {
                 {t(labelKey)}
               </NavLink>
             ))}
+            <button
+              onClick={() => { setShowFeedback(true); setSidebarOpen(false) }}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm w-full text-left transition-colors text-ink-muted hover:bg-surface-2 hover:text-ink"
+            >
+              <MessageSquarePlus size={17} />
+              {t('feedback.title')}
+            </button>
           </div>
         </nav>
 
@@ -167,22 +174,12 @@ export function AppShell() {
               <span className="text-xs text-ink-muted truncate">{user.displayName}</span>
             </div>
             <SyncBadge />
-            <div className="flex items-center gap-1 mt-1">
-              <button
-                onClick={() => setShowFeedback(true)}
-                className="flex-1 flex items-center gap-1.5 text-xs text-ink-faint hover:text-ink-muted text-left px-1 py-0.5"
-                title={t('feedback.title')}
-              >
-                <MessageSquarePlus size={12} />
-                {t('feedback.title')}
-              </button>
-              <button
-                onClick={signOut}
-                className="text-xs text-ink-faint hover:text-ink-muted px-1 py-0.5"
-              >
-                {t('auth.signOut')}
-              </button>
-            </div>
+            <button
+              onClick={signOut}
+              className="w-full text-xs text-ink-faint hover:text-ink-muted text-left px-1 mt-1 py-0.5"
+            >
+              {t('auth.signOut')}
+            </button>
           </div>
         )}
       </aside>
