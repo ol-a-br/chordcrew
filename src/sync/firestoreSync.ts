@@ -98,13 +98,16 @@ async function uploadPending(userId: string): Promise<void> {
 
 // ─── Download ─────────────────────────────────────────────────────────────────
 
-async function downloadPersonal(userId: string): Promise<void> {
-  // Books
+async function downloadPersonal(userId: string): Promise<Set<string>> {
+  // Books — return discovered team IDs so downloadTeams can sync them even on
+  // a fresh device where local Dexie has no teams yet.
+  const discoveredTeamIds = new Set<string>()
   const remoteBooks = await getDocs(collection(firestore!, 'users', userId, 'books'))
   for (const snap of remoteBooks.docs) {
     const remote = snap.data() as Book
     const local = await db.books.get(remote.id)
     if (!local || remote.updatedAt > local.updatedAt) await db.books.put(remote)
+    if (remote.sharedTeamId) discoveredTeamIds.add(remote.sharedTeamId)
   }
 
   // Songs
@@ -140,14 +143,18 @@ async function downloadPersonal(userId: string): Promise<void> {
   for (const snap of remoteItems.docs) {
     await db.setlistItems.put(snap.data() as SetlistItem)
   }
+
+  return discoveredTeamIds
 }
 
-async function downloadTeams(userId: string, userEmail: string): Promise<void> {
-  // Get all local teams to know which team spaces to sync
+async function downloadTeams(userId: string, userEmail: string, discoveredTeamIds: Set<string>): Promise<void> {
+  // Merge local known teams + teams discovered from personal books during downloadPersonal.
+  // On a fresh device, localTeams is empty — discoveredTeamIds bridges that gap.
   const localTeams = await db.teams.toArray()
-  const myTeamIds = localTeams
+  const localTeamIds = localTeams
     .filter(t => t.ownerId === userId || t.members.some(m => m.userId === userId || m.email === userEmail))
     .map(t => t.id)
+  const myTeamIds = [...new Set([...localTeamIds, ...discoveredTeamIds])]
 
   // Also check Firestore for teams where this user is an accepted member
   // (they may have accepted an invite on another device)
@@ -188,8 +195,8 @@ async function downloadTeams(userId: string, userEmail: string): Promise<void> {
 export async function syncNow(userId: string, userEmail: string): Promise<void> {
   if (!firestore) throw new Error('Firestore not configured')
   await uploadPending(userId)
-  await downloadPersonal(userId)
-  await downloadTeams(userId, userEmail)
+  const discoveredTeamIds = await downloadPersonal(userId)
+  await downloadTeams(userId, userEmail, discoveredTeamIds)
 }
 
 /** Write a team document to Firestore (called after creating/updating a team). */
