@@ -1,5 +1,44 @@
 import { useMemo, useRef, useEffect } from 'react'
 import { renderToHtml, isKnownChord, expandRepeatSections } from '@/utils/chordpro'
+
+// ─── Module-level render cache ────────────────────────────────────────────────
+// Persists across component remounts for the session lifetime.
+// Key: `${transposeOffset}|${expandRepeats}|${content}` — putting content last
+// means short prefixes separate different settings of the same song quickly.
+const renderCache = new Map<string, string>()
+
+export function isSongCached(content: string, transposeOffset: number, expandRepeats: boolean): boolean {
+  const key = `${transposeOffset}|${expandRepeats ? 1 : 0}|${content}`
+  return renderCache.has(key)
+}
+
+export function getCachedHtml(content: string, transposeOffset: number, expandRepeats: boolean): string {
+  const key = `${transposeOffset}|${expandRepeats ? 1 : 0}|${content}`
+  const cached = renderCache.get(key)
+  if (cached !== undefined) return cached
+  const processed = expandRepeats ? expandRepeatSections(content) : content
+  const html = renderToHtml(processed, transposeOffset)
+  renderCache.set(key, html)
+  return html
+}
+
+/**
+ * Pre-render a song's HTML in the background so the cache is warm before
+ * the user navigates to it. Call after the current song has rendered.
+ */
+export function prewarmSongCache(
+  content: string,
+  transposeOffset: number,
+  expandRepeats: boolean
+): void {
+  const key = `${transposeOffset}|${expandRepeats ? 1 : 0}|${content}`
+  if (renderCache.has(key)) return
+  // Run on next idle frame so it doesn't compete with current paint
+  const schedule = typeof requestIdleCallback !== 'undefined'
+    ? (fn: () => void) => requestIdleCallback(fn, { timeout: 2000 })
+    : (fn: () => void) => setTimeout(fn, 0)
+  schedule(() => getCachedHtml(content, transposeOffset, expandRepeats))
+}
 import type { ChordProError } from '@/utils/chordpro'
 import { clsx } from 'clsx'
 import { AlertTriangle } from 'lucide-react'
@@ -56,8 +95,9 @@ export function SongRenderer({
 }: SongRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // Use module-level cache — cache hits are instant even after component remount
   const html = useMemo(
-    () => renderToHtml(expandRepeats ? expandRepeatSections(content) : content, transposeOffset),
+    () => getCachedHtml(content, transposeOffset, expandRepeats ?? false),
     [content, transposeOffset, expandRepeats]
   )
 

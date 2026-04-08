@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  html { font-family: 'Outfit', sans-serif; }
+  html { font-family: 'Outfit', sans-serif; touch-action: manipulation; }
   body { @apply bg-surface-0 text-ink; }
 
   @keyframes fade-in {

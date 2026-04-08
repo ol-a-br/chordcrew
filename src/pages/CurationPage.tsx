@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, Copy, Download, Search } from 'lucide-react'
+import { AlertTriangle, Copy, Download, Search, Trash2 } from 'lucide-react'
 import { db } from '@/db'
+import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { lintChordPro } from '@/utils/chordpro'
+import { useAuth } from '@/auth/AuthContext'
 import type { Song, Book } from '@/types'
 
 // ─── Jaccard word similarity ──────────────────────────────────────────────────
@@ -108,6 +110,7 @@ type Tab = 'duplicates' | 'errors' | 'export'
 
 export default function CurationPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [tab, setTab] = useState<Tab>('duplicates')
   const [errorFilter, setErrorFilter] = useState('')
   const [sameBookOnly, setSameBookOnly] = useState(false)
@@ -143,6 +146,17 @@ export default function CurationPage() {
       })
       .filter(Boolean) as DuplicateGroup[]
   }, [duplicateGroups, sameBookOnly])
+
+  // ── Delete song ───────────────────────────────────────────────────────────
+  const deleteSong = async (song: Song) => {
+    if (!confirm(`Delete "${song.title}"? This cannot be undone.`)) return
+    await db.songs.delete(song.id)
+    await db.syncStates.delete(`song:${song.id}`)
+    if (user) {
+      const book = books?.find(b => b.id === song.bookId)
+      deleteSongFromCloud(song.id, user.id, book?.sharedTeamId)
+    }
+  }
 
   // ── Parse errors ──────────────────────────────────────────────────────────
   const songErrors = useMemo(() => {
@@ -223,7 +237,9 @@ export default function CurationPage() {
                 <div className="flex items-center gap-2 px-4 py-2 bg-surface-2 border-b border-surface-3">
                   <Copy size={13} className="text-amber-400" />
                   <span className="text-xs text-amber-400 font-medium">
-                    {group.similarity >= 1.0 ? 'Exact duplicate' : `Similar titles (${Math.round(group.similarity * 100)}% match)`}
+                    {group.songs.every(s => s.title.toLowerCase().trim() === group.songs[0].title.toLowerCase().trim())
+                      ? 'Exact duplicate'
+                      : `Similar titles (${Math.round(group.similarity * 100)}% match)`}
                   </span>
                 </div>
                 <ul className="divide-y divide-surface-3">
@@ -240,6 +256,13 @@ export default function CurationPage() {
                         className="text-xs text-chord hover:text-chord/80 shrink-0"
                       >
                         Edit
+                      </button>
+                      <button
+                        onClick={() => deleteSong(song)}
+                        className="text-ink-faint hover:text-red-400 transition-colors shrink-0"
+                        title="Delete song"
+                      >
+                        <Trash2 size={14} />
                       </button>
                     </li>
                   ))}

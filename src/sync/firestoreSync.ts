@@ -101,12 +101,19 @@ async function uploadPending(userId: string): Promise<void> {
 async function downloadPersonal(userId: string): Promise<Set<string>> {
   // Books — return discovered team IDs so downloadTeams can sync them even on
   // a fresh device where local Dexie has no teams yet.
+  //
+  // Books and setlists are always written from Firestore regardless of local
+  // updatedAt: they're small, upload always runs before download in syncNow,
+  // and the updatedAt guard caused stale local copies to survive indefinitely.
+  // The only exception: skip if a 'pending' syncState exists (local unsaved changes).
   const discoveredTeamIds = new Set<string>()
   const remoteBooks = await getDocs(collection(firestore!, 'users', userId, 'books'))
   for (const snap of remoteBooks.docs) {
     const remote = snap.data() as Book
-    const local = await db.books.get(remote.id)
-    if (!local || remote.updatedAt > local.updatedAt) await db.books.put(remote)
+    const syncState = await db.syncStates.get(`book:${remote.id}`)
+    if (syncState?.status !== 'pending') {
+      await db.books.put(remote)
+    }
     if (remote.sharedTeamId) discoveredTeamIds.add(remote.sharedTeamId)
   }
 
@@ -124,12 +131,12 @@ async function downloadPersonal(userId: string): Promise<Set<string>> {
     }
   }
 
-  // Setlists
+  // Setlists — same always-download approach as books
   const remoteSetlists = await getDocs(collection(firestore!, 'users', userId, 'setlists'))
   for (const snap of remoteSetlists.docs) {
     const remote = snap.data() as Setlist
-    const local = await db.setlists.get(remote.id)
-    if (!local || remote.updatedAt > local.updatedAt) {
+    const syncState = await db.syncStates.get(`setlist:${remote.id}`)
+    if (syncState?.status !== 'pending') {
       await db.setlists.put(remote)
       await db.syncStates.put({
         id: `setlist:${remote.id}`, entityType: 'setlist', entityId: remote.id,
@@ -190,10 +197,93 @@ async function downloadTeams(userId: string, userEmail: string, discoveredTeamId
   }
 }
 
+// ─── Repair: upload orphaned local entities ────────────────────────────────────
+//
+// Entities created by the importer before markPending calls were added have no
+// SyncState entry → they were never uploaded to Firestore → invisible on other
+// devices.  This repair runs once (guarded by localStorage) and uploads any
+// book / song / setlist that lacks a SyncState.
+
+// v2: uses getDoc to verify actual Firestore presence instead of trusting syncState history.
+// This handles the case where v1 set its flag on a device before the source device had
+// uploaded, leaving Firestore empty for personal books/setlists.
+const REPAIR_FLAG = 'chordcrew-repair-v2'
+
+async function repairOrphaned(userId: string): Promise<void> {
+  if (localStorage.getItem(REPAIR_FLAG)) return   // already done on this device
+  if (!firestore) return
+
+  // Build myTeamIds from local teams + sharedTeamId refs in local books
+  const allBooks = await db.books.toArray()
+  const allTeams = await db.teams.toArray()
+  const myTeamIds = new Set([
+    ...allTeams
+      .filter(t => t.ownerId === userId || t.members.some(m => m.userId === userId))
+      .map(t => t.id),
+    ...allBooks.map(b => b.sharedTeamId).filter(Boolean) as string[],
+  ])
+
+  // ── Books: upload any book not present in Firestore ──
+  for (const book of allBooks) {
+    const snap = await getDoc(doc(firestore, 'users', userId, 'books', book.id))
+    if (snap.exists()) continue   // already in Firestore — nothing to do
+    await setDoc(doc(firestore, 'users', userId, 'books', book.id), stripUndefined(book))
+    if (book.sharedTeamId && myTeamIds.has(book.sharedTeamId)) {
+      await setDoc(doc(firestore, 'teams', book.sharedTeamId, 'books', book.id), stripUndefined(book))
+    }
+    await db.syncStates.put({
+      id: `book:${book.id}`, entityType: 'book', entityId: book.id,
+      localVersion: 1, syncedVersion: 1, status: 'clean', updatedAt: Date.now(),
+    })
+  }
+
+  // ── Songs: upload any song not present in Firestore ──
+  const allSongs = await db.songs.toArray()
+  const bookTeamMap = new Map(allBooks.filter(b => b.sharedTeamId).map(b => [b.id, b.sharedTeamId!]))
+  for (const song of allSongs) {
+    const snap = await getDoc(doc(firestore, 'users', userId, 'songs', song.id))
+    if (snap.exists()) continue
+    await setDoc(doc(firestore, 'users', userId, 'songs', song.id), stripUndefined(song))
+    const teamId = bookTeamMap.get(song.bookId)
+    if (teamId && myTeamIds.has(teamId)) {
+      await setDoc(doc(firestore, 'teams', teamId, 'songs', song.id), stripUndefined(song))
+    }
+    await db.syncStates.put({
+      id: `song:${song.id}`, entityType: 'song', entityId: song.id,
+      localVersion: 1, syncedVersion: 1, status: 'clean', updatedAt: Date.now(),
+    })
+  }
+
+  // ── Setlists: upload any setlist not present in Firestore ──
+  const allSetlists = await db.setlists.toArray()
+  for (const setlist of allSetlists) {
+    const target = setlist.sharedTeamId && myTeamIds.has(setlist.sharedTeamId)
+      ? doc(firestore, 'teams', setlist.sharedTeamId, 'setlists', setlist.id)
+      : doc(firestore, 'users', userId, 'setlists', setlist.id)
+    const snap = await getDoc(target)
+    if (snap.exists()) continue
+    await setDoc(target, stripUndefined(setlist))
+    const items = await db.setlistItems.where('setlistId').equals(setlist.id).toArray()
+    const itemsBase = setlist.sharedTeamId && myTeamIds.has(setlist.sharedTeamId)
+      ? `teams/${setlist.sharedTeamId}`
+      : `users/${userId}`
+    await Promise.all(items.map(item =>
+      setDoc(doc(firestore!, itemsBase, 'setlistItems', item.id), stripUndefined(item))
+    ))
+    await db.syncStates.put({
+      id: `setlist:${setlist.id}`, entityType: 'setlist', entityId: setlist.id,
+      localVersion: 1, syncedVersion: 1, status: 'clean', updatedAt: Date.now(),
+    })
+  }
+
+  localStorage.setItem(REPAIR_FLAG, '1')
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function syncNow(userId: string, userEmail: string): Promise<void> {
   if (!firestore) throw new Error('Firestore not configured')
+  await repairOrphaned(userId)
   await uploadPending(userId)
   const discoveredTeamIds = await downloadPersonal(userId)
   await downloadTeams(userId, userEmail, discoveredTeamIds)

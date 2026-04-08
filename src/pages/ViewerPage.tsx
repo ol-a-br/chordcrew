@@ -34,6 +34,7 @@ export default function ViewerPage() {
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
 
   // Teams — for copy/move to team space
   const teams = useLiveQuery(() => db.teams.toArray(), [])
@@ -230,10 +231,29 @@ export default function ViewerPage() {
     setShowShareMenu(false)
   }
 
-  if (!song) return <div className="p-8 text-ink-muted">Loading…</div>
+  // Horizontal swipe in single-column setlist mode → prev/next song
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || !setlistId || columns > 1) return
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y
+    touchStartRef.current = null
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) goNext()
+      else goPrev()
+    }
+  }
+
+  if (!song) return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="w-7 h-7 border-2 border-chord border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
 

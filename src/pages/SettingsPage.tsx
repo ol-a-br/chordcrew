@@ -314,7 +314,9 @@ export default function SettingsPage() {
         <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">{t('settings.about')}</h2>
         <div className="bg-surface-1 rounded-xl px-4 divide-y divide-surface-3">
           <Row label={t('settings.version')}>
-            <span className="text-sm text-ink-muted font-mono">0.1.0</span>
+            <span className="text-sm text-ink-muted font-mono">
+              0.1.0 · <span title={__BUILD_TIME__}>{__BUILD_TIME__.slice(0, 10)} {__BUILD_TIME__.slice(11, 16)}Z</span>
+            </span>
           </Row>
           <Row label={t('settings.openSource')}>
             <a

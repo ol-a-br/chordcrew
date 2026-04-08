@@ -29,5 +29,18 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'android-tablet',
+      use: {
+        // Samsung Galaxy Tab S4 — 10.5" 2560×1600, ~2.25× DPR, Android 10
+        userAgent:
+          'Mozilla/5.0 (Linux; Android 10; SM-T835) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        viewport: { width: 712, height: 1138 },
+        deviceScaleFactor: 2.25,
+        isMobile: true,
+        hasTouch: true,
+        defaultBrowserType: 'chromium',
+      },
+    },
   ],
 })
