@@ -237,6 +237,12 @@ export default function PerformancePage() {
   useEffect(() => {
     if (!song) { setSongHtmlReady(false); return }
     if (isSongCached(song.transcription.content, transpose, true)) {
+      // Stamp lastNavTime when the new song actually finishes rendering so the
+      // cooldown guard in handleTouchEnd is measured from render completion, not
+      // from when navigate() was called. This prevents a queued touchEnd (held in
+      // the event queue while the main thread was blocked by the ChordSheetJS parse)
+      // from firing right as navPending clears and slipping through the cooldown.
+      if (navPending) lastNavTime = Date.now()
       navPending = false
       setSongHtmlReady(true)
       return
@@ -246,6 +252,7 @@ export default function PerformancePage() {
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         getCachedHtml(song.transcription.content, transpose, true)
+        if (navPending) lastNavTime = Date.now()
         navPending = false
         setSongHtmlReady(true)
       })
@@ -311,6 +318,10 @@ export default function PerformancePage() {
     if (now - lastNavTime < NAV_COOLDOWN_MS) return
 
     swipeFired = true
+    // Stamp here so the cooldown applies even if goNext/goPrev scroll rather than
+    // navigate (e.g. nextSongId not yet resolved from live query). goNext/goPrev
+    // will overwrite this with a fresh timestamp when they do navigate().
+    lastNavTime = Date.now()
 
     // Determine whether this swipe will cross a song boundary now (before goNext/
     // goPrev mutate state) so the hint can show the right song index.

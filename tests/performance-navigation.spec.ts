@@ -176,7 +176,7 @@ async function waitForApp(page: Page) {
     await page.locator('button').filter({ hasText: /^Skip$/i }).first().click()
     await page.waitForURL(/\/library/, { timeout: 8000 })
   }
-  await page.locator('aside').waitFor({ state: 'attached', timeout: 8000 })
+  await page.locator('aside').first().waitFor({ state: 'attached', timeout: 8000 })
 }
 
 /** Navigate to PerformancePage for song[pos] in the setlist and wait for render */
@@ -366,14 +366,15 @@ test.describe('Performance mode setlist navigation', () => {
     // Wait for song B to load
     await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
 
-    // Tap the X button (controls may be hidden — tap to reveal first)
-    await page.locator('.chordpro-output').tap()
-    await page.waitForTimeout(200)
+    // Reveal controls: click in the top-left corner, above the tap-zone overlay
+    // (the overlay starts at top-16 = 64px, so y=30 is safely above it)
+    await page.mouse.click(60, 30)
+    await page.waitForTimeout(300)
 
-    // The X button is a button with an SVG (X/close icon) in the controls overlay
+    // The X button is the first button in the controls overlay (top-left)
     const cancelBtn = page.locator('button').filter({ has: page.locator('svg') }).first()
     await cancelBtn.waitFor({ state: 'visible', timeout: 3000 })
-    await cancelBtn.tap()
+    await cancelBtn.click()
 
     await page.waitForTimeout(500)
 

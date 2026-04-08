@@ -47,7 +47,7 @@ async function waitForApp(page: Page) {
   }
   await expect(page).toHaveURL(/\/library/, { timeout: 5000 })
   // Aside is the sidebar — only present in AppShell (not in onboarding)
-  await page.locator('aside').waitFor({ state: 'attached', timeout: 8000 })
+  await page.locator('aside').first().waitFor({ state: 'attached', timeout: 8000 })
 }
 
 /** Open the mobile sidebar (hamburger menu) to make nav links visible */
@@ -364,7 +364,11 @@ test('DIAG-5a: touch-action CSS on nav elements', async ({ page }) => {
   }
 })
 
-test('DIAG-5b: tap-to-navigation latency', async ({ page }) => {
+test('DIAG-5b: tap-to-navigation latency', async ({ page, isMobile }) => {
+  if (!isMobile) {
+    test.skip(true, 'DIAG-5b requires touch support — run with --project=android-tablet')
+    return
+  }
   await waitForApp(page)
   // Open mobile sidebar so the nav link is in the viewport
   await openSidebar(page)

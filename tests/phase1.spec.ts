@@ -3,10 +3,23 @@ import path from 'path'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Wait for the app to load past the auth gate (local-mode guest user) */
+/** Wait for the app to load past the onboarding / auth gate */
 async function waitForApp(page: Page) {
   await page.goto('/')
-  // Local-mode auto-signs in as guest — should land on /library
+  // Fresh browser contexts show onboarding (no IDB state). Handle it if present.
+  const langBtn = page.locator('button').filter({ hasText: 'English' }).first()
+  const onboarding = await langBtn.waitFor({ state: 'visible', timeout: 5000 })
+    .then(() => true).catch(() => false)
+  if (onboarding) {
+    await langBtn.click()
+    await page.locator('button').filter({ hasText: /local mode/i }).first()
+      .waitFor({ state: 'visible', timeout: 5000 })
+    await page.locator('button').filter({ hasText: /local mode/i }).first().click()
+    await page.locator('button').filter({ hasText: /^Skip$/i }).first()
+      .waitFor({ state: 'visible', timeout: 5000 })
+    await page.locator('button').filter({ hasText: /^Skip$/i }).first().click()
+    await page.waitForURL(/\/library/, { timeout: 8000 })
+  }
   await expect(page).toHaveURL(/\/library/, { timeout: 8000 })
 }
 
