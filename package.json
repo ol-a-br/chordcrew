@@ -30,6 +30,9 @@
     "react-router-dom": "^6.22.0",
     "tailwind-merge": "^2.2.1"
   },
+  "overrides": {
+    "serialize-javascript": "^7.0.5"
+  },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@types/react": "^18.2.66",
