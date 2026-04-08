@@ -131,17 +131,17 @@ export function SongRenderer({
       return { letter, count: 1 }
     }
 
-    function makeBadgeHtml(letter: string, count: number): string {
-      return count === 1 ? letter : `${letter}${count}`
+    function createBadge(letter: string, count: number): HTMLSpanElement {
+      const badge = document.createElement('span')
+      badge.className = 'section-badge'
+      badge.textContent = count === 1 ? letter : `${letter}${count}`
+      return badge
     }
 
     function injectBadge(anchor: Element, sectionName: string): void {
       const { letter, count } = assignBadge(sectionName)
-      const badge = document.createElement('span')
-      badge.className = 'section-badge'
-      badge.innerHTML = makeBadgeHtml(letter, count)
       // Prepend inside anchor so badge + label text share the same inline baseline
-      anchor.prepend(badge)
+      anchor.prepend(createBadge(letter, count))
     }
 
     // ── Process each paragraph in document order ──────────────────────────────
@@ -196,10 +196,7 @@ export function SongRenderer({
 
       firstRow.classList.add('section-header-row')
       const { letter, count } = assignBadge(chordText)
-      const badge = document.createElement('span')
-      badge.className = 'section-badge'
-      badge.innerHTML = makeBadgeHtml(letter, count)
-      firstRow.insertBefore(badge, firstRow.firstChild)
+      firstRow.insertBefore(createBadge(letter, count), firstRow.firstChild)
 
       // If additional chord columns follow the section name, move them to a new row
       if (cols.length > 1) {
@@ -238,10 +235,22 @@ export function SongRenderer({
       // Split into root + quality modifier (slightly smaller, slightly raised)
       const { root, quality, bass } = splitChordName(text)
       if (!quality && !bass) return                     // plain root like 'A', 'G'
-      el.innerHTML =
-        `<span>${root}</span>` +
-        (quality ? `<span class="chord-quality">${quality}</span>` : '') +
-        (bass    ? `<span class="chord-bass">${bass}</span>` : '')
+      el.textContent = ''
+      const rootSpan = document.createElement('span')
+      rootSpan.textContent = root
+      el.appendChild(rootSpan)
+      if (quality) {
+        const qSpan = document.createElement('span')
+        qSpan.className = 'chord-quality'
+        qSpan.textContent = quality
+        el.appendChild(qSpan)
+      }
+      if (bass) {
+        const bSpan = document.createElement('span')
+        bSpan.className = 'chord-bass'
+        bSpan.textContent = bass
+        el.appendChild(bSpan)
+      }
     })
     // ── Mid-word column spacing fix ───────────────────────────────────────────
     // The .row flex container has column-gap:0.3em between ALL .column children.
@@ -283,11 +292,8 @@ export function SongRenderer({
       const letter = nameToLetter.get(key)!
       const count = (letterCount.get(letter) ?? 1) + 1
       letterCount.set(letter, count)
-      const badge = document.createElement('span')
-      badge.className = 'section-badge'
-      badge.innerHTML = makeBadgeHtml(letter, count)
       // Prepend inside the comment so badge + ↺ text share the same inline baseline
-      commentEl.prepend(badge)
+      commentEl.prepend(createBadge(letter, count))
     })
 
     // ── Inline chord comments (from {inline:} directive) ─────────────────────
@@ -301,11 +307,17 @@ export function SongRenderer({
       // Split on «ChordName» markers using textContent (avoids &laquo; entity issues)
       // Odd indices are chord names, even indices are plain text (|, /, spaces)
       const parts = text.split(/«([^»]*)»/)
-      commentEl.innerHTML = parts.map((part, i) =>
-        i % 2 === 1
-          ? `<span class="chord inline-chord">${part}</span>`
-          : part
-      ).join('')
+      commentEl.textContent = ''
+      parts.forEach((part, i) => {
+        if (i % 2 === 1) {
+          const span = document.createElement('span')
+          span.className = 'chord inline-chord'
+          span.textContent = part
+          commentEl.appendChild(span)
+        } else {
+          commentEl.appendChild(document.createTextNode(part))
+        }
+      })
     })
   }, [html])
 

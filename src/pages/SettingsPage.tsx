@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Github, RefreshCw, Download, CheckCircle2, Smartphone, Monitor } from 'lucide-react'
+import { GitFork, RefreshCw, Download, CheckCircle2, Smartphone, Monitor } from 'lucide-react'
 import { db, getSettings, saveSettings } from '@/db'
 import { useCaptureKey } from '@/hooks/useKeyboard'
 import { Button } from '@/components/shared/Button'
@@ -325,7 +325,7 @@ export default function SettingsPage() {
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-sm text-chord hover:underline"
             >
-              <Github size={14} />
+              <GitFork size={14} />
               ol-a-br/chordcrew
             </a>
           </Row>
