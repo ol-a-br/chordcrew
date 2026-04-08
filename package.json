@@ -21,7 +21,7 @@
     "clsx": "^2.1.0",
     "dexie": "^4.4.2",
     "dexie-react-hooks": "^1.1.7",
-    "firebase": "^10.8.0",
+    "firebase": "^12.11.0",
     "i18next": "^23.10.0",
     "lucide-react": "^1.7.0",
     "react": "^18.2.0",
