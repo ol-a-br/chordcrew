@@ -127,9 +127,13 @@
 
 /* Word group: wraps all .column elements that form one word (a chord placed
    inside a word like Kn[Dm7]ien produces two columns that must stay together).
-   inline-flex + nowrap prevents the two halves from landing on separate lines. */
+   display:flex (not inline-flex) ensures the span is unambiguously treated as
+   a block-level flex item inside the parent .row flex container. On Android
+   Chrome, inline-flex was not always fully "blockified" per spec, causing the
+   continuation column to leak to the wrong visual line after flex-wrap.
+   flex-wrap:nowrap on this container keeps both halves of the word together. */
 .chordpro-output .word-group {
-  display: inline-flex;
+  display: flex;
   flex-wrap: nowrap;
   align-items: flex-start;
 }

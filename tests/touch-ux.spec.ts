@@ -51,11 +51,29 @@ const SONG_B_CONTENT = `{title: Second Song}
 [Am]Testing done
 `
 
+/**
+ * Song C — deliberately long line that wraps at tablet width (712 px).
+ * The word "bringt" is split mid-word: "brin[F/A#]gt".
+ * The bug: on Android Chrome, display:inline-flex on the .word-group <span>
+ * was not properly blockified, so the continuation column "gt" floated back
+ * to the previous visual line. Both halves must stay on the same line.
+ *
+ * The line is long enough that flex-wrap on .row kicks in and "bringt" wraps
+ * to a second visual line — that's when the alignment check becomes meaningful.
+ */
+const SONG_C_CONTENT = `{title: Wrap Line Test}
+{artist: TUX}
+{key: F}
+
+[F]Wirf dein Vertrauen auf ihn denn er trägt dich und hält dich und lässt dich nicht los und brin[F/A#]gt dich ans Ziel
+`
+
 // ── IDB seed ──────────────────────────────────────────────────────────────────
 
 interface TestSetup {
   songAId: string
   songBId: string
+  songCId: string
   setlistId: string
 }
 
@@ -64,6 +82,7 @@ async function seedIdb(page: Page): Promise<TestSetup> {
     bookId:    randomUUID(),
     songAId:   randomUUID(),
     songBId:   randomUUID(),
+    songCId:   randomUUID(),
     setlistId: randomUUID(),
     itemAId:   randomUUID(),
     itemBId:   randomUUID(),
@@ -98,8 +117,9 @@ async function seedIdb(page: Page): Promise<TestSetup> {
           },
         })
 
-        tx.objectStore('songs').put(makeSong(d.songAId, 'Mid-Word Test', d.songAContent))
-        tx.objectStore('songs').put(makeSong(d.songBId, 'Second Song',   d.songBContent))
+        tx.objectStore('songs').put(makeSong(d.songAId, 'Mid-Word Test',   d.songAContent))
+        tx.objectStore('songs').put(makeSong(d.songBId, 'Second Song',     d.songBContent))
+        tx.objectStore('songs').put(makeSong(d.songCId, 'Wrap Line Test',  d.songCContent))
 
         tx.objectStore('setlists').put({
           id: d.setlistId, name: 'TUX Setlist',
@@ -114,9 +134,9 @@ async function seedIdb(page: Page): Promise<TestSetup> {
         tx.objectStore('setlistItems').put(makeItem(d.itemBId, d.songBId, 1))
       }
     })
-  }, { ...ids, songAContent: SONG_A_CONTENT, songBContent: SONG_B_CONTENT })
+  }, { ...ids, songAContent: SONG_A_CONTENT, songBContent: SONG_B_CONTENT, songCContent: SONG_C_CONTENT })
 
-  return { songAId: ids.songAId, songBId: ids.songBId, setlistId: ids.setlistId }
+  return { songAId: ids.songAId, songBId: ids.songBId, songCId: ids.songCId, setlistId: ids.setlistId }
 }
 
 // ── App bootstrap ─────────────────────────────────────────────────────────────
@@ -306,5 +326,48 @@ test.describe('Touch & tablet UX', () => {
 
     // Controls should be visible again
     await expect(overlay).toHaveClass(/opacity-100/, { timeout: 2000 })
+  })
+
+  // ── TUX-9: Mid-word columns stay on the same visual line after flex-wrap ──────
+  //
+  // Regression: on Android Chrome, display:inline-flex on the .word-group <span>
+  // was not fully "blockified" as a flex item, so the continuation column ("gt"
+  // in "brin[F/A#]gt") floated back to the previous visual line after wrapping.
+  // Fix: .word-group uses display:flex so it is unambiguously a block-level flex item.
+
+  test('TUX-9: mid-word continuation stays on same visual line after row wraps', async ({ page }) => {
+    await page.goto(`/view/${setup.songCId}`)
+    await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
+    await page.waitForTimeout(400)  // let useEffect post-processing finish
+
+    // Find all word-groups that rendered
+    const groupCount = await page.locator('.word-group').count()
+    if (groupCount === 0) {
+      // At this viewport width the line did not wrap — skip the visual check
+      test.skip(true, 'TUX-9: line did not wrap at this viewport — word-group not created')
+      return
+    }
+
+    // For every word-group: the .lyrics top of each column must be within 4 px.
+    // If the continuation column leaked to a different visual line its top would
+    // differ by a full line-height (~30–40 px).
+    const broken = await page.evaluate(() => {
+      const groups = Array.from(document.querySelectorAll('.word-group'))
+      let broken = 0
+      for (const g of groups) {
+        const cols = Array.from(g.querySelectorAll<HTMLElement>('.column'))
+        if (cols.length < 2) continue
+        const tops = cols.map(col => {
+          const lyr = col.querySelector<HTMLElement>('.lyrics')
+          return lyr ? Math.round(lyr.getBoundingClientRect().top) : -1
+        }).filter(t => t >= 0)
+        const minTop = Math.min(...tops)
+        const maxTop = Math.max(...tops)
+        if (maxTop - minTop > 4) broken++
+      }
+      return broken
+    })
+
+    expect(broken, 'word-group columns appeared on different visual lines').toBe(0)
   })
 })
