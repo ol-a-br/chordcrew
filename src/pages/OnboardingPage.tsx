@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Music2, Globe, LogIn, BookOpen, ListMusic, Zap, ChevronRight, Check } from 'lucide-react'
+import { Music2, Globe, LogIn, BookOpen, ListMusic, Zap, ChevronRight, Check, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/auth/AuthContext'
 import { saveSettings } from '@/db'
@@ -141,6 +141,14 @@ export default function OnboardingPage() {
             </div>
 
             <p className="text-xs text-ink-faint">{t('onboarding.privacyNote')}</p>
+
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-left space-y-1.5">
+              <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold">
+                <TriangleAlert size={13} className="shrink-0" />
+                <span>{t('onboarding.dataNoticeTitle')}</span>
+              </div>
+              <p className="text-xs text-amber-200/70 leading-relaxed">{t('onboarding.dataNotice')}</p>
+            </div>
 
             {configured ? (
               <div className="space-y-3">

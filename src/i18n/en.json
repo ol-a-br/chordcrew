@@ -94,6 +94,8 @@
     "benefit2": "Share setlists and songs with your worship team",
     "benefit3": "Your data is always backed up to the cloud",
     "privacyNote": "We only use your Google account for authentication. No data is shared with third parties.",
+    "dataNoticeTitle": "Please note before you start",
+    "dataNotice": "Do not store sensitive personal data (contact details, addresses, or any data requiring protection) in this app. ChordCrew is a volunteer project — there is no company behind it, no professional support, and no guarantee against data loss or service interruption.",
     "skipLogin": "Continue without signing in",
     "continueLocal": "Continue in local mode",
     "signInError": "Sign-in failed. Please try again.",

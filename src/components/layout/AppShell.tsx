@@ -187,7 +187,10 @@ export function AppShell() {
       {/* Main */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Mobile top bar */}
-        <header className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-surface-3 bg-surface-1">
+        <header
+          className="lg:hidden flex items-center gap-3 px-4 pb-3 border-b border-surface-3 bg-surface-1"
+          style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+        >
           <button onClick={() => setSidebarOpen(true)} className="text-ink-muted hover:text-ink">
             <Menu size={20} />
           </button>

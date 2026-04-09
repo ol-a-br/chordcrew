@@ -277,8 +277,9 @@ export function SongRenderer({
         const thisLyrics = rowCols[i].querySelector('.lyrics')?.textContent ?? ''
         const isMidWord = prevLyrics !== '' && !prevLyrics.endsWith(' ') && !thisLyrics.startsWith(' ')
         if (isMidWord) {
-          // Cancel the column-gap for mid-word continuations
-          rowCols[i].style.marginLeft = '-0.3em'
+          // No margin needed — mid-word columns are wrapped in .word-group which
+          // has no column-gap, so they already touch without any negative margin.
+          // A -0.3em margin here would cause letters to overlap.
           currentGroup.push(rowCols[i])
         } else {
           groups.push(currentGroup)
