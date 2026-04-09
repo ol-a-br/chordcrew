@@ -125,6 +125,15 @@
   max-width: 100%;
 }
 
+/* Word group: wraps all .column elements that form one word (a chord placed
+   inside a word like Kn[Dm7]ien produces two columns that must stay together).
+   inline-flex + nowrap prevents the two halves from landing on separate lines. */
+.chordpro-output .word-group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
 /* Song title — chordsheetjs outputs <h1> (no class) for {title:}.
    Also shown in the toolbar above; both are intentional. */
 .chordpro-output h1 {

@@ -33,11 +33,10 @@ export function prewarmSongCache(
 ): void {
   const key = `${transposeOffset}|${expandRepeats ? 1 : 0}|${content}`
   if (renderCache.has(key)) return
-  // Run on next idle frame so it doesn't compete with current paint
-  const schedule = typeof requestIdleCallback !== 'undefined'
-    ? (fn: () => void) => requestIdleCallback(fn, { timeout: 2000 })
-    : (fn: () => void) => setTimeout(fn, 0)
-  schedule(() => getCachedHtml(content, transposeOffset, expandRepeats))
+  // Use setTimeout(0) rather than requestIdleCallback: on Android under wake lock
+  // the browser is rarely idle, so rIC with a 2s timeout could defer the parse
+  // until right before the user swipes — defeating the warm-cache strategy.
+  setTimeout(() => getCachedHtml(content, transposeOffset, expandRepeats), 0)
 }
 import type { ChordProError } from '@/utils/chordpro'
 import { clsx } from 'clsx'
@@ -252,21 +251,49 @@ export function SongRenderer({
         el.appendChild(bSpan)
       }
     })
-    // ── Mid-word column spacing fix ───────────────────────────────────────────
-    // The .row flex container has column-gap:0.3em between ALL .column children.
-    // For chords placed inside a word (e.g. Vat[A]er), the gap inserts a visual
-    // space between "Vat" and "er". Detect these and cancel the gap with a
-    // negative margin-left. Gap is preserved when previous lyrics end in space
-    // (word boundary) or both lyric sides are empty (chord-only lines).
+    // ── Word grouping: keep mid-word chord columns with their word ────────────
+    // chordsheetjs splits a word like Kn[Dm7]ien into two .column elements:
+    //   col1 = chord Dm7 / lyrics "Kn"
+    //   col2 = no chord  / lyrics "ien"
+    // With flex-wrap:wrap on .row these two columns can end up on different lines,
+    // visually breaking the word. We wrap consecutive columns that belong to the
+    // same word into a .word-group span (display:inline-flex; flex-wrap:nowrap)
+    // so they always stay together.
+    //
+    // A column is a mid-word continuation when its lyrics do NOT start with a
+    // space AND the previous column's lyrics do NOT end with a space.
+    // The gap (column-gap:0.3em on .row) between word-parts is cancelled by a
+    // negative margin-left on the continuation column, just as before.
     container.querySelectorAll<HTMLElement>('.row').forEach(row => {
       const rowCols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
-      rowCols.forEach((col, i) => {
-        if (i === 0) return
-        const prevLyrics = rowCols[i - 1].querySelector('.lyrics')?.textContent ?? ''
-        const thisLyrics = col.querySelector('.lyrics')?.textContent ?? ''
-        if (prevLyrics && !prevLyrics.endsWith(' ') && !thisLyrics.startsWith(' ')) {
-          col.style.marginLeft = '-0.3em'
+      if (rowCols.length === 0) return
+
+      // Build groups: each entry is an array of .column elements belonging to one word.
+      const groups: HTMLElement[][] = []
+      let currentGroup: HTMLElement[] = [rowCols[0]]
+
+      for (let i = 1; i < rowCols.length; i++) {
+        const prevLyrics = currentGroup[currentGroup.length - 1].querySelector('.lyrics')?.textContent ?? ''
+        const thisLyrics = rowCols[i].querySelector('.lyrics')?.textContent ?? ''
+        const isMidWord = prevLyrics !== '' && !prevLyrics.endsWith(' ') && !thisLyrics.startsWith(' ')
+        if (isMidWord) {
+          // Cancel the column-gap for mid-word continuations
+          rowCols[i].style.marginLeft = '-0.3em'
+          currentGroup.push(rowCols[i])
+        } else {
+          groups.push(currentGroup)
+          currentGroup = [rowCols[i]]
         }
+      }
+      groups.push(currentGroup)
+
+      // Replace multi-column groups with .word-group wrappers
+      groups.forEach(group => {
+        if (group.length < 2) return
+        const wrapper = document.createElement('span')
+        wrapper.className = 'word-group'
+        group[0].before(wrapper)
+        group.forEach(col => wrapper.appendChild(col))
       })
     })
 

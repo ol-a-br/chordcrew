@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useFontScale } from '@/hooks/useFontScale'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlignLeft, ZoomIn, ZoomOut, List } from 'lucide-react'
+import { X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlignLeft, ZoomIn, ZoomOut, List, Pencil } from 'lucide-react'
 import { db } from '@/db'
 import { SongRenderer, prewarmSongCache, isSongCached, getCachedHtml } from '@/components/viewer/SongRenderer'
 import { useKeyboardNav } from '@/hooks/useKeyboard'
@@ -271,13 +271,16 @@ export default function PerformancePage() {
       { entry: songItems[currentPos + 1] },
     ].filter(({ entry }) => entry?.songId) as { entry: SetlistItem }[]
     if (candidates.length === 0) return
-    // Delay to avoid competing with the current song's own DOM processing
+    // Short delay to let the current song finish painting before the prewarm
+    // parse blocks the main thread. 100ms is enough for the double-rAF render
+    // path to complete; 300ms was unnecessarily long and left narrow windows
+    // where a fast backward swipe would find the cache cold.
     const t = setTimeout(async () => {
       for (const { entry } of candidates) {
         const s = await db.songs.get(entry.songId!)
         if (s) prewarmSongCache(s.transcription.content, entry.transposeOffset ?? 0, true)
       }
-    }, 300)
+    }, 100)
     return () => clearTimeout(t)
   }, [song?.id, currentPos, songItems])
 
@@ -352,7 +355,8 @@ export default function PerformancePage() {
     else goPrev(true)
   }, [goNext, goPrev, resetHideTimer, currentPos, columns])
 
-  useKeyboardNav({ onNext: goNext, onPrev: goPrev, enabled: true })
+  // noHide=true: pedal/keyboard navigation should NOT reveal the controls overlay
+  useKeyboardNav({ onNext: () => goNext(true), onPrev: () => goPrev(true), enabled: true })
 
   // ── Long-press pedal: hold right = skip song, hold left = back to start ───
   useEffect(() => {
@@ -421,6 +425,10 @@ export default function PerformancePage() {
       `}>
         <button onClick={() => setlistId ? navigate(`/setlists/${setlistId}`) : navigate(-1)} className="text-ink-muted hover:text-ink p-1 shrink-0">
           <X size={20} />
+        </button>
+
+        <button onClick={() => navigate(`/editor/${id}`)} className="text-ink-muted hover:text-ink p-1 shrink-0" title="Edit song">
+          <Pencil size={16} />
         </button>
 
         <div className="flex-1 min-w-0">
