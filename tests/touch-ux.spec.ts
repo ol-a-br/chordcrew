@@ -328,46 +328,51 @@ test.describe('Touch & tablet UX', () => {
     await expect(overlay).toHaveClass(/opacity-100/, { timeout: 2000 })
   })
 
-  // ── TUX-9: Mid-word columns stay on the same visual line after flex-wrap ──────
+  // ── TUX-9: Continuation column must not appear above its word ─────────────────
   //
-  // Regression: on Android Chrome, display:inline-flex on the .word-group <span>
-  // was not fully "blockified" as a flex item, so the continuation column ("gt"
-  // in "brin[F/A#]gt") floated back to the previous visual line after wrapping.
-  // Fix: .word-group uses display:flex so it is unambiguously a block-level flex item.
+  // Bug: chordsheetjs creates one column for ALL lyrics between two chords, so
+  // "brin" lives at the END of a column whose text spans multiple visual lines.
+  // Wrapping that column + the continuation "gt" in a flex-nowrap .word-group
+  // caused "gt" to align to the TOP of the group (first visual line), not the
+  // BOTTOM (where "brin" sits). The fix: word-groups are only created when the
+  // preceding column is a short single-word fragment (no internal spaces).
+  //
+  // This test verifies that "gt" never appears ABOVE "brin" in the rendered
+  // output. Without the fix, "gt" floats to the first visual line while
+  // "brin" is on a later wrapped line.
 
-  test('TUX-9: mid-word continuation stays on same visual line after row wraps', async ({ page }) => {
+  test('TUX-9: continuation column does not appear above its word', async ({ page }) => {
     await page.goto(`/view/${setup.songCId}`)
     await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
     await page.waitForTimeout(400)  // let useEffect post-processing finish
 
-    // Find all word-groups that rendered
-    const groupCount = await page.locator('.word-group').count()
-    if (groupCount === 0) {
-      // At this viewport width the line did not wrap — skip the visual check
-      test.skip(true, 'TUX-9: line did not wrap at this viewport — word-group not created')
-      return
-    }
-
-    // For every word-group: the .lyrics top of each column must be within 4 px.
-    // If the continuation column leaked to a different visual line its top would
-    // differ by a full line-height (~30–40 px).
-    const broken = await page.evaluate(() => {
-      const groups = Array.from(document.querySelectorAll('.word-group'))
-      let broken = 0
-      for (const g of groups) {
-        const cols = Array.from(g.querySelectorAll<HTMLElement>('.column'))
-        if (cols.length < 2) continue
-        const tops = cols.map(col => {
-          const lyr = col.querySelector<HTMLElement>('.lyrics')
-          return lyr ? Math.round(lyr.getBoundingClientRect().top) : -1
-        }).filter(t => t >= 0)
-        const minTop = Math.min(...tops)
-        const maxTop = Math.max(...tops)
-        if (maxTop - minTop > 4) broken++
+    // Find the two lyrics spans: one ending with "brin", one starting with "gt"
+    // Note: chordsheetjs puts ALL text between two chords into one column, so
+    // the continuation lyrics is "gt dich ans Ziel" (not just "gt").
+    const result = await page.evaluate(() => {
+      const allLyrics = Array.from(document.querySelectorAll('.chordpro-output .lyrics'))
+      let brinBottom = -1
+      let gtTop = -1
+      for (const el of allLyrics) {
+        const text = el.textContent ?? ''
+        if (text.trimEnd().endsWith('brin')) {
+          brinBottom = Math.round(el.getBoundingClientRect().bottom)
+        }
+        if (text.startsWith('gt')) {
+          gtTop = Math.round(el.getBoundingClientRect().top)
+        }
       }
-      return broken
+      return { brinBottom, gtTop }
     })
 
-    expect(broken, 'word-group columns appeared on different visual lines').toBe(0)
+    // Both elements must be found
+    expect(result.brinBottom, '"brin" lyrics not found').toBeGreaterThan(0)
+    expect(result.gtTop, '"gt" lyrics not found').toBeGreaterThan(0)
+
+    // "gt" must not appear above "brin" — its top must be at or below "brin"'s bottom
+    // (they can be on the same visual line, or "gt" can be on a later line).
+    // A 20 px tolerance covers font baseline differences; the actual bug placed
+    // "gt" an entire line-height (~30–40 px) ABOVE "brin".
+    expect(result.gtTop, '"gt" appeared above "brin" — word-group misalignment').toBeGreaterThanOrEqual(result.brinBottom - 20)
   })
 })
