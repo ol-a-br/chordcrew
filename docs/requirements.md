@@ -101,6 +101,7 @@
 | RENDER-13 | Section badge rendered as graphical bordered box; repeated sections show superscript count (B²). | done |
 | RENDER-14 | Spaces between adjacent chords in chord-only lines preserved in rendered output. | done |
 | RENDER-15 | Non-chord text in chord position (e.g. "(To Bridge)", "(last Time)") rendered as italic, muted prose — not yellow chord style. | done |
+| RENDER-16 | Mid-word chord columns (chord placed inside a word, e.g. `Kni[Am]en`) are grouped in a `display:inline-flex; flex-wrap:nowrap` DOM wrapper so the word cannot be split across lines by the row's flex-wrap. | done |
 
 ---
 
@@ -120,6 +121,9 @@
 | PERF-10 | Quick-jump slide-out tray for non-sequential song navigation. | done |
 | PERF-11 | Pinch-to-zoom in performance mode. | planned |
 | PERF-12 | Multi-column mode: horizontal column-by-column page flip, scrollbar hidden. | done |
+| PERF-13 | Edit (pencil) button in the performance mode controls overlay — navigates to `/editor/{id}` without leaving the setlist context in history. | done |
+| PERF-14 | Keyboard / Bluetooth-pedal navigation (ArrowLeft / ArrowRight) advances columns silently — does not reveal or reset the auto-hide timer for the controls overlay. | done |
+| PERF-15 | Adjacent songs in a setlist are pre-rendered into the module-level cache within 100 ms of the current song displaying, using `setTimeout(0)` for immediate scheduling. | done |
 
 ---
 
@@ -253,4 +257,4 @@
 
 ---
 
-*Last updated: 2026-04-06*
+*Last updated: 2026-04-09*

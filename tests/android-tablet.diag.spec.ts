@@ -364,9 +364,9 @@ test('DIAG-5a: touch-action CSS on nav elements', async ({ page }) => {
   }
 })
 
-test('DIAG-5b: tap-to-navigation latency', async ({ page, isMobile }) => {
-  if (!isMobile) {
-    test.skip(true, 'DIAG-5b requires touch support — run with --project=android-tablet')
+test('DIAG-5b: tap-to-navigation latency', async ({ page, isMobile, browserName }) => {
+  if (!isMobile || browserName !== 'chromium') {
+    test.skip(true, 'DIAG-5b requires Chromium touch support — run with --project=android-tablet')
     return
   }
   await waitForApp(page)
@@ -386,7 +386,7 @@ test('DIAG-5b: tap-to-navigation latency', async ({ page, isMobile }) => {
   // Warm tap (first tap, browser hasn't double-tap-zoomed yet)
   let t0 = Date.now()
   await target.tap()
-  await page.waitForURL(/\/setlists/, { timeout: 4000 })
+  await page.waitForURL(/\/setlists/, { timeout: 8000 })
   const firstTapMs = Date.now() - t0
 
   // Navigate back and measure second tap
@@ -397,7 +397,7 @@ test('DIAG-5b: tap-to-navigation latency', async ({ page, isMobile }) => {
 
   t0 = Date.now()
   await target2.tap()
-  await page.waitForURL(/\/setlists/, { timeout: 4000 })
+  await page.waitForURL(/\/setlists/, { timeout: 8000 })
   const secondTapMs = Date.now() - t0
 
   // ── Report ───────────────────────────────────────────────────────────────

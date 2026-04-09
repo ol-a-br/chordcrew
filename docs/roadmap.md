@@ -55,12 +55,19 @@
 | **Mid-word chord spacing fix (negative margin-left)** | RENDER-14 | Cancels flex gap for intra-word chord positions |
 | **`{start_of_verse}` without label preprocessed → `{start_of_verse: Verse}`** | RENDER-09 | |
 | **Chord quality modifiers extended: sus, m11, maj11, m6, m13, 7sus4/2** | RENDER-11 | |
+| **Word-group wrapping: mid-word chord columns wrapped in `display:inline-flex` to prevent line breaks** | RENDER-16 | "Kni[Am]en" stays on one line; DOM post-processing groups word-parts |
+| **Edit button in Performance mode toolbar (pencil icon, navigates to `/editor/{id}`)** | PERF-13 | Placed between X close button and song title, same position as Viewer |
+| **Keyboard / pedal navigation does not reveal the controls overlay (`noHide=true`)** | PERF-14 | Arrow keys advance song without breaking stage flow |
+| **Adjacent-song prewarm: delay 300ms → 100ms; `setTimeout(0)` replaces `requestIdleCallback`** | PERF-15 | Warm cache before user can swipe, especially on Android under wake lock |
+| **`lastNavTime` reset at render completion (not just at navigation start)** | PERF-16 | Prevents queued touchEnd from slipping through 800ms cooldown after main-thread-blocking parse |
+| **Playwright suite expanded: iPad project (WebKit), touch-ux.spec.ts (TUX-1–8)** | — | 137 tests across chromium · android-tablet · ipad; CDP-only tests skip on WebKit |
 
 ### 🔜 Remaining Phase 1 gap
 
 | Item | Req IDs | Priority |
 |------|---------|----------|
 | Pinch-to-zoom on Viewer and Performance pages | VIEW-10, PERF-11 | medium |
+| Swipe-gesture navigation tests for iPad / WebKit (blocked: no CDP on WebKit) | — | low |
 
 ---
 
@@ -190,8 +197,10 @@ To be completed before onboarding any additional contributors. Full details and 
 | Item | Priority | Notes |
 |------|----------|-------|
 | Expand Playwright suite with import-then-search flow | medium | Needs DB isolation per test |
-| Add Playwright tests for Performance mode setlist nav | medium | Phase 2 feature |
+| ~~Add Playwright tests for Performance mode setlist nav~~ | ~~medium~~ | ✅ done — `performance-navigation.spec.ts` (PERF-1–8) + `touch-ux.spec.ts` (TUX-1–8) |
+| ~~Add iPad / WebKit project to Playwright~~ | ~~medium~~ | ✅ done — `ipad` project (WebKit, 834×1194) runs all non-CDP tests |
 | Review chordsheetjs version for paragraph separation fix | low | Named sections currently merge into one `.paragraph` |
+| Swipe-gesture tests for WebKit/iPad | low | Playwright CDP touch injection only works on Chromium; need alternative (mouse drag or webkit-specific API) |
 
 ---
 
@@ -228,5 +237,12 @@ To be completed before onboarding any additional contributors. Full details and 
 | 2026-04-06 | CSV export (no external dependency) | Browser-native Blob download; avoids adding xlsx library to bundle |
 | 2026-04-06 | `develop` branch for active work; `main` for milestone releases | Keeps CI deploy silent during solo development; easy to reverse |
 | 2026-04-06 | CI auto-deploy disabled (workflow_dispatch only) | No `FIREBASE_SERVICE_ACCOUNT` secret needed until collaborators join; deploy locally via `npm run deploy` |
+| 2026-04-08 | Word-group wrapping replaces negative-margin-only fix | Negative margin cancelled the visual gap but `flex-wrap: wrap` on `.row` could still split "Kni"/"en" onto separate lines; inline-flex wrapper with `flex-wrap: nowrap` prevents this |
+| 2026-04-08 | Edit button added to Performance mode toolbar | Musicians often correct lyrics during rehearsal; jumping to the editor from present mode avoids navigating through the library |
+| 2026-04-08 | `goNext(true)` / `goPrev(true)` for keyboard/pedal nav in Performance mode | Pedal press should advance the song silently; revealing the toolbar interrupts the band flow |
+| 2026-04-08 | `prewarmSongCache` switched from `requestIdleCallback` to `setTimeout(0)` | Under Android wake lock the browser never reaches idle state, so `requestIdleCallback` with a 2 s timeout could defer prewarming until right before the user swipes |
+| 2026-04-08 | `lastNavTime` stamped at render completion, not at `navigate()` call | ChordSheetJS parse blocks the main thread for ~800 ms; a queued touchEnd fires right as `navPending` clears, hitting the edge of NAV_COOLDOWN_MS=800; reset from render-done gives a fresh 800 ms window |
+| 2026-04-09 | iPad Pro 11 project added to Playwright (WebKit, 834×1194) | All 8 TUX tests pass on WebKit; CDP-dependent swipe tests skip gracefully; establishes baseline for Safari-specific regressions |
+| 2026-04-09 | `touch-ux.spec.ts` tests all three projects (chromium · android-tablet · ipad) | Separates standard Playwright API tests (TUX) from CDP-only swipe tests (PERF); enables WebKit coverage without breaking existing test infra |
 
-*Last updated: 2026-04-06*
+*Last updated: 2026-04-09*

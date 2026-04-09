@@ -83,7 +83,10 @@ useEffect() post-processing  (SongRenderer)
   ├─ Section detection: h3.label (directive) or .chord header (bracket notation)
   ├─ Badge injection: [A] [B] B² (named section repeat tracking)
   ├─ Chorus detection: adds .chorus-section (vertical bar)
-  └─ Chord quality split: Am7 → A + m7 (slightly raised)
+  ├─ Chord quality split: Am7 → A + m7 (slightly raised)
+  └─ Word-group pass: consecutive .column elements whose lyrics are mid-word
+     (no leading/trailing space) are wrapped in a .word-group span so that
+     flex-wrap:wrap on .row never splits a word across lines (RENDER-16)
 ```
 
 ---
@@ -135,6 +138,38 @@ The `.env.local` file is gitignored (never committed). The values are baked into
 
 ---
 
+## Render cache & prewarming
+
+`SongRenderer` maintains a **module-level `Map<string, string>`** (key = `${transposeOffset}|${expandRepeats}|${content}`) that persists across React component remounts within a session. Cache hits are synchronous and instant.
+
+`prewarmSongCache` is called from `PerformancePage` 100 ms after the current song renders. It uses `setTimeout(0)` (not `requestIdleCallback`) so prewarming is scheduled on the next event-loop tick rather than waiting for browser idle time — critical on Android under Screen Wake Lock where idle rarely occurs.
+
+When a cross-song navigation happens, `navPending = true` prevents further swipe/tap navigation. `lastNavTime` is stamped **both** at navigation start and at render completion, so the 800 ms cooldown guard starts from when the song is actually ready — not from when `navigate()` was called.
+
+---
+
+## Playwright test matrix
+
+| Project | Browser | Device | Notes |
+|---------|---------|--------|-------|
+| `chromium` | Chromium | Desktop Chrome | Full test suite |
+| `android-tablet` | Chromium | Samsung Galaxy Tab S4 (712×1138, hasTouch) | Includes CDP swipe tests (PERF-1–8) |
+| `ipad` | WebKit | iPad Pro 11 (834×1194, hasTouch) | TUX-1–8 only; CDP tests skip (WebKit has no CDP) |
+
+Test files:
+
+| File | Projects | Description |
+|------|----------|-------------|
+| `tests/phase1.spec.ts` | all | Core rendering, viewer, setlist UX |
+| `tests/performance-navigation.spec.ts` | chromium · android-tablet | Swipe-gesture setlist nav via CDP touch injection |
+| `tests/touch-ux.spec.ts` | all | Standard Playwright API: word-wrap, edit button, keyboard nav, tap zones |
+| `tests/android-tablet.diag.spec.ts` | all (some android-tablet only) | Performance diagnostics; DIAG-5b skips on non-touch |
+
+Run the full suite: `npm test`
+Run for a specific project: `npx playwright test --project=ipad`
+
+---
+
 ## Key constraints (never violate)
 
 - **Chord notation**: always Standard (A B C D E F G). No German H/B.
@@ -145,4 +180,4 @@ The `.env.local` file is gitignored (never committed). The values are baked into
 
 ---
 
-*Last updated: 2026-03-31*
+*Last updated: 2026-04-09*

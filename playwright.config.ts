@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
+  workers: 2,
   retries: 0,
   reporter: 'list',
   use: {
@@ -40,6 +41,13 @@ export default defineConfig({
         isMobile: true,
         hasTouch: true,
         defaultBrowserType: 'chromium',
+      },
+    },
+    {
+      name: 'ipad',
+      use: {
+        // iPad Pro 11" — 834×1194 pt, 2× DPR, iPadOS / Safari (WebKit)
+        ...devices['iPad Pro 11'],
       },
     },
   ],
