@@ -369,10 +369,11 @@ test.describe('Touch & tablet UX', () => {
     expect(result.brinBottom, '"brin" lyrics not found').toBeGreaterThan(0)
     expect(result.gtTop, '"gt" lyrics not found').toBeGreaterThan(0)
 
-    // "gt" must not appear above "brin" — its top must be at or below "brin"'s bottom
-    // (they can be on the same visual line, or "gt" can be on a later line).
-    // A 20 px tolerance covers font baseline differences; the actual bug placed
-    // "gt" an entire line-height (~30–40 px) ABOVE "brin".
-    expect(result.gtTop, '"gt" appeared above "brin" — word-group misalignment').toBeGreaterThanOrEqual(result.brinBottom - 20)
+    // With align-items:flex-end on the word-group, "gt" sits on the SAME visual
+    // line as "brin".  So gtTop ≈ brinBottom − one line-height (~26 px).
+    // The original bug (flex-start on a multi-line word-group) placed "gt" at
+    // the TOP of the group — 60+ px above brinBottom.
+    // Threshold: 50 px catches the bug while allowing one line-height of overlap.
+    expect(result.brinBottom - result.gtTop, '"gt" too far above "brin" — word-group misalignment').toBeLessThanOrEqual(50)
   })
 })

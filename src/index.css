@@ -131,11 +131,16 @@
    a block-level flex item inside the parent .row flex container. On Android
    Chrome, inline-flex was not always fully "blockified" per spec, causing the
    continuation column to leak to the wrong visual line after flex-wrap.
-   flex-wrap:nowrap on this container keeps both halves of the word together. */
+   flex-wrap:nowrap keeps both halves of the word together as one flex item.
+   align-items:flex-end makes the continuation column align to the BOTTOM of
+   the group. When the preceding column carries a long multi-word lyric that
+   wraps to several visual lines, the split word ("brin") sits on the LAST
+   line. flex-end puts the continuation ("gt") next to that last line instead
+   of at the top where flex-start would place it. */
 .chordpro-output .word-group {
   display: flex;
   flex-wrap: nowrap;
-  align-items: flex-start;
+  align-items: flex-end;
 }
 
 /* Song title — chordsheetjs outputs <h1> (no class) for {title:}.

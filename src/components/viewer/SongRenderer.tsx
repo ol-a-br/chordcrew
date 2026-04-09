@@ -275,20 +275,14 @@ export function SongRenderer({
       for (let i = 1; i < rowCols.length; i++) {
         const prevLyrics = currentGroup[currentGroup.length - 1].querySelector('.lyrics')?.textContent ?? ''
         const thisLyrics = rowCols[i].querySelector('.lyrics')?.textContent ?? ''
-        // A column is a mid-word continuation when:
-        //   1. The previous column's lyrics don't end with a space
-        //   2. This column's lyrics don't start with a space
-        //   3. The previous column is a SHORT single-word fragment (no internal spaces)
-        //
-        // Condition 3 prevents grouping when the previous column carries an entire
-        // line of lyrics (e.g. "Hör diesen Klang der Wandlung brin").  Such a column
-        // wraps its text over multiple visual lines. In a flex-nowrap word-group the
-        // continuation column ("gt") aligns to the TOP of the group — next to the
-        // first visual line instead of the last where "brin" appears. Limiting
-        // word-groups to short fragments avoids this cross-line misalignment.
-        const prevTrimmed = prevLyrics.trimStart()
-        const isMidWord = prevTrimmed.length > 0
-          && !prevTrimmed.includes(' ')
+        // A column is a mid-word continuation when neither the previous
+        // column's lyrics ends with a space nor this column's lyrics starts
+        // with one.  The .word-group wrapper keeps both halves together as a
+        // single flex item so they never split across lines.  The CSS uses
+        // align-items:flex-end so the continuation aligns to the bottom of
+        // the group — next to the last visual line of a long wrapped lyric
+        // (where the split word actually sits), not the top.
+        const isMidWord = prevLyrics.length > 0
           && !prevLyrics.endsWith(' ')
           && !thisLyrics.startsWith(' ')
         if (isMidWord) {
