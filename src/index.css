@@ -128,19 +128,22 @@
 /* Word group: wraps all .column elements that form one word (a chord placed
    inside a word like Kn[Dm7]ien produces two columns that must stay together).
    display:flex (not inline-flex) ensures the span is unambiguously treated as
-   a block-level flex item inside the parent .row flex container. On Android
-   Chrome, inline-flex was not always fully "blockified" per spec, causing the
-   continuation column to leak to the wrong visual line after flex-wrap.
+   a block-level flex item inside the parent .row flex container.
    flex-wrap:nowrap keeps both halves of the word together as one flex item.
-   align-items:flex-end makes the continuation column align to the BOTTOM of
-   the group. When the preceding column carries a long multi-word lyric that
-   wraps to several visual lines, the split word ("brin") sits on the LAST
-   line. flex-end puts the continuation ("gt") next to that last line instead
-   of at the top where flex-start would place it. */
+   align-items:stretch makes all columns the same height. Continuation columns
+   use margin-top:auto on their .lyrics to push text to the bottom, aligning
+   with the last visual line of the preceding text.  Chords stay at the top
+   of each column, so all chords share the same baseline. */
 .chordpro-output .word-group {
   display: flex;
   flex-wrap: nowrap;
-  align-items: flex-end;
+  align-items: stretch;
+}
+/* Continuation columns inside a word-group push their lyrics to the bottom
+   so the text aligns with the split word on the preceding column's last line.
+   The chord stays at the top of the column (same height as other chords). */
+.chordpro-output .word-group .continuation .lyrics {
+  margin-top: auto;
 }
 
 /* Song title — chordsheetjs outputs <h1> (no class) for {title:}.

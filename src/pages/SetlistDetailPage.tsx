@@ -4,10 +4,11 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import {
   ArrowLeft, Play, Music, Pencil, Check,
   GripVertical, Trash2, Plus, Search,
-  ChevronUp, ChevronDown, Printer,
+  ChevronUp, ChevronDown, Printer, Link2,
 } from 'lucide-react'
 import { db, generateId, markPending } from '@/db'
 import { Button } from '@/components/shared/Button'
+import { encodeSetlistShare, buildShareUrl, copyShareUrl } from '@/utils/share'
 import type { SetlistItem, Song } from '@/types'
 
 export default function SetlistDetailPage() {
@@ -18,6 +19,7 @@ export default function SetlistDetailPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [shareCopied, setShareCopied] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -71,6 +73,31 @@ export default function SetlistDetailPage() {
   const handlePresent = () => {
     const first = songItems[0]
     if (first?.songId) navigate(`/perform/${first.songId}?setlistId=${id}&pos=0`)
+  }
+
+  const handleShareSetlist = async () => {
+    if (!setlist || !songs) return
+    const sharedSongs = songItems
+      .map(item => {
+        const s = songs[item.songId!]
+        if (!s) return null
+        return {
+          title: s.title,
+          artist: s.artist,
+          key: s.transcription.key,
+          content: s.transcription.content,
+          transposeOffset: item.transposeOffset ?? 0,
+        }
+      })
+      .filter(Boolean) as { title: string; artist: string; key: string; content: string; transposeOffset: number }[]
+    if (sharedSongs.length === 0) return
+    const encoded = await encodeSetlistShare({ name: setlist.name, songs: sharedSongs })
+    const url = buildShareUrl(encoded)
+    const ok = await copyShareUrl(url)
+    if (ok) {
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2000)
+    }
   }
 
   const handleSongClick = (songId: string, posInSongItems: number) => {
@@ -266,6 +293,18 @@ export default function SetlistDetailPage() {
 
         {!editMode && songItems.length > 0 && (
           <>
+            <button
+              onClick={handleShareSetlist}
+              className="p-1.5 text-ink-muted hover:text-ink rounded relative"
+              title="Copy read-only share link"
+            >
+              <Link2 size={17} />
+              {shareCopied && (
+                <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-chord whitespace-nowrap">
+                  Copied!
+                </span>
+              )}
+            </button>
             <button
               onClick={() => window.open(`/print/setlist/${id}`, '_blank')}
               className="p-1.5 text-ink-muted hover:text-ink rounded"

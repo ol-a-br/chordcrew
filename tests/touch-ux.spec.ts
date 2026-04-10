@@ -9,14 +9,18 @@
  *   tests/performance-navigation.spec.ts  (chromium / android-tablet only)
  *
  * Tests:
- *   TUX-1  Word-group DOM wrapper exists for mid-word chord columns
- *   TUX-2  Word-group columns share the same visual line (no mid-word break)
- *   TUX-3  Performance mode has an edit (pencil) button in the controls overlay
- *   TUX-4  Edit button navigates to /editor/{id}
- *   TUX-5  Performance controls auto-hide after 3 seconds of inactivity
- *   TUX-6  Arrow-key / pedal navigation does not reveal the controls overlay
- *   TUX-7  Tap the right half of the screen to advance to next setlist song
- *   TUX-8  Tapping the song content re-shows auto-hidden controls
+ *   TUX-1   Word-group DOM wrapper exists for mid-word chord columns
+ *   TUX-2   Word-group columns share the same visual line (no mid-word break)
+ *   TUX-3   Performance mode has an edit (pencil) button in the controls overlay
+ *   TUX-4   Edit button navigates to /editor/{id}
+ *   TUX-5   Performance controls auto-hide after 3 seconds of inactivity
+ *   TUX-6   Arrow-key / pedal navigation does not reveal the controls overlay
+ *   TUX-7   Tap the right half of the screen to advance to next setlist song
+ *   TUX-8   Tapping the song content re-shows auto-hidden controls
+ *   TUX-9   Mid-word split columns stay together in a word-group
+ *   TUX-10  No spurious comma from double-space in lyrics
+ *   TUX-11  Empty-chord columns are merged into predecessors
+ *   TUX-12  Trailing chord (no lyrics) is not in a word-group
  *
  * Run all:
  *   npx playwright test tests/touch-ux.spec.ts
@@ -52,20 +56,21 @@ const SONG_B_CONTENT = `{title: Second Song}
 `
 
 /**
- * Song C — deliberately long line that wraps at tablet width (712 px).
- * The word "bringt" is split mid-word: "brin[F/A#]gt".
- * The bug: on Android Chrome, display:inline-flex on the .word-group <span>
- * was not properly blockified, so the continuation column "gt" floated back
- * to the previous visual line. Both halves must stay on the same line.
- *
- * The line is long enough that flex-wrap on .row kicks in and "bringt" wraps
- * to a second visual line — that's when the alignment check becomes meaningful.
+ * Song C — exercises several rendering edge cases:
+ *   Line 1: long line with mid-word split "brin[F/A#]gt" — word parts must not
+ *           be separated visually.
+ *   Line 2: double spaces in lyrics "[F/A#],   text  b[F]et" — chordsheetjs has
+ *           a bug that converts "  " to ", ". Preprocessing normalizes spaces.
+ *   Line 3: trailing chord with no lyrics "Lob[Dm]" — the Dm chord must render
+ *           at the same height as other chords (not pushed down by a word-group).
  */
 const SONG_C_CONTENT = `{title: Wrap Line Test}
 {artist: TUX}
 {key: F}
 
 [F]Wirf dein Vertrauen auf ihn denn er trägt dich und hält dich und lässt dich nicht los und brin[F/A#]gt dich ans Ziel
+[F/A#],   Und Er hört Glauben wenn ich___  b[F]et
+Singe Ihm Sei[(Csus)]n Lob[Dm]
 `
 
 // ── IDB seed ──────────────────────────────────────────────────────────────────
@@ -328,52 +333,125 @@ test.describe('Touch & tablet UX', () => {
     await expect(overlay).toHaveClass(/opacity-100/, { timeout: 2000 })
   })
 
-  // ── TUX-9: Continuation column must not appear above its word ─────────────────
-  //
-  // Bug: chordsheetjs creates one column for ALL lyrics between two chords, so
-  // "brin" lives at the END of a column whose text spans multiple visual lines.
-  // Wrapping that column + the continuation "gt" in a flex-nowrap .word-group
-  // caused "gt" to align to the TOP of the group (first visual line), not the
-  // BOTTOM (where "brin" sits). The fix: word-groups are only created when the
-  // preceding column is a short single-word fragment (no internal spaces).
-  //
-  // This test verifies that "gt" never appears ABOVE "brin" in the rendered
-  // output. Without the fix, "gt" floats to the first visual line while
-  // "brin" is on a later wrapped line.
+  // ── TUX-9: Mid-word columns are in a word-group ────────────────────────────
+  // "brin[F/A#]gt" must produce a .word-group wrapper so both halves stay
+  // together when flex-wrap kicks in.  Both chords must be at the same height.
 
-  test('TUX-9: continuation column does not appear above its word', async ({ page }) => {
+  test('TUX-9: mid-word split columns stay together in a word-group', async ({ page }) => {
     await page.goto(`/view/${setup.songCId}`)
     await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
-    await page.waitForTimeout(400)  // let useEffect post-processing finish
+    await page.waitForTimeout(400)
 
-    // Find the two lyrics spans: one ending with "brin", one starting with "gt"
-    // Note: chordsheetjs puts ALL text between two chords into one column, so
-    // the continuation lyrics is "gt dich ans Ziel" (not just "gt").
     const result = await page.evaluate(() => {
-      const allLyrics = Array.from(document.querySelectorAll('.chordpro-output .lyrics'))
-      let brinBottom = -1
-      let gtTop = -1
-      for (const el of allLyrics) {
-        const text = el.textContent ?? ''
-        if (text.trimEnd().endsWith('brin')) {
-          brinBottom = Math.round(el.getBoundingClientRect().bottom)
-        }
-        if (text.startsWith('gt')) {
-          gtTop = Math.round(el.getBoundingClientRect().top)
+      // Find a word-group that contains both "brin" and "gt"
+      const groups = Array.from(document.querySelectorAll('.chordpro-output .word-group'))
+      for (const g of groups) {
+        const lyricsEls = Array.from(g.querySelectorAll('.lyrics'))
+        const allText = lyricsEls.map(el => el.textContent ?? '').join('|')
+        if (allText.includes('brin') && allText.includes('gt')) {
+          // Check chord heights: all chords in the group should be at the same top
+          const chords = Array.from(g.querySelectorAll('.chord'))
+          const tops = chords.map(c => Math.round(c.getBoundingClientRect().top))
+          const nonEmpty = chords.filter(c => c.textContent?.trim() !== '')
+          return {
+            found: true,
+            chordCount: nonEmpty.length,
+            chordTopsAligned: tops.length < 2 || Math.abs(tops[0] - tops[1]) < 3,
+            hasContinuationClass: g.querySelector('.continuation') !== null,
+          }
         }
       }
-      return { brinBottom, gtTop }
+      return { found: false, chordCount: 0, chordTopsAligned: false, hasContinuationClass: false }
     })
 
-    // Both elements must be found
-    expect(result.brinBottom, '"brin" lyrics not found').toBeGreaterThan(0)
-    expect(result.gtTop, '"gt" lyrics not found').toBeGreaterThan(0)
+    expect(result.found, 'word-group containing "brin" and "gt" not found').toBe(true)
+    expect(result.chordCount, 'expected 2 chords in word-group').toBe(2)
+    expect(result.chordTopsAligned, 'chord tops must be at the same height').toBe(true)
+    expect(result.hasContinuationClass, 'continuation column must have .continuation class').toBe(true)
+  })
 
-    // With align-items:flex-end on the word-group, "gt" sits on the SAME visual
-    // line as "brin".  So gtTop ≈ brinBottom − one line-height (~26 px).
-    // The original bug (flex-start on a multi-line word-group) placed "gt" at
-    // the TOP of the group — 60+ px above brinBottom.
-    // Threshold: 50 px catches the bug while allowing one line-height of overlap.
-    expect(result.brinBottom - result.gtTop, '"gt" too far above "brin" — word-group misalignment').toBeLessThanOrEqual(50)
+  // ── TUX-10: No comma artifact from double-space normalization ────────────────
+  // chordsheetjs converts "  " (double space) to ", " in lyrics text.
+  // Our preprocessor normalizes consecutive spaces to prevent this.
+
+  test('TUX-10: no spurious comma from double-space in lyrics', async ({ page }) => {
+    await page.goto(`/view/${setup.songCId}`)
+    await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
+    await page.waitForTimeout(400)
+
+    const text = await page.evaluate(() => {
+      return document.querySelector('.chordpro-output')?.textContent ?? ''
+    })
+    // The source has "ich___  b" (double space) which chordsheetjs would turn into
+    // "ich___ , b". After preprocessing, the comma must not appear.
+    expect(text).not.toContain('ich___ , b')
+    expect(text).toContain('ich___')
+  })
+
+  // ── TUX-11: Empty-chord columns are merged ─────────────────────────────────
+  // chordsheetjs splits lyrics at the first word boundary, creating extra columns
+  // with empty chords. Post-processing merges them into the predecessor.
+
+  test('TUX-11: no empty-chord columns in rendered output', async ({ page }) => {
+    await page.goto(`/view/${setup.songCId}`)
+    await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
+    await page.waitForTimeout(400)
+
+    const emptyChordCount = await page.evaluate(() => {
+      const chords = Array.from(document.querySelectorAll('.chordpro-output .row .chord'))
+      return chords.filter(c => c.textContent?.trim() === '').length
+    })
+
+    // After merging, no column should have an empty chord div
+    // (except the very first column of a row which may legitimately have no chord)
+    // We allow first-column empty chords since they can't be merged into a predecessor.
+    const firstColEmptyCount = await page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('.chordpro-output .row'))
+      let count = 0
+      for (const row of rows) {
+        const firstCol = row.querySelector(':scope > .column, :scope > .word-group .column')
+        if (firstCol) {
+          const chord = firstCol.querySelector('.chord')
+          if (chord && chord.textContent?.trim() === '') count++
+        }
+      }
+      return count
+    })
+
+    expect(emptyChordCount, 'all empty-chord columns should be merged or be first-column').toBe(firstColEmptyCount)
+  })
+
+  // ── TUX-12: Trailing chord (no lyrics) is not in a word-group ────────────
+  // "Lob[Dm]" — the Dm has no following lyrics. It must NOT be grouped into
+  // a word-group, so its chord renders at the normal chord height.
+
+  test('TUX-12: trailing chord without lyrics is not in a word-group', async ({ page }) => {
+    await page.goto(`/view/${setup.songCId}`)
+    await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
+    await page.waitForTimeout(400)
+
+    const result = await page.evaluate(() => {
+      // Find the Dm chord
+      const chords = Array.from(document.querySelectorAll('.chordpro-output .chord'))
+      const dmChord = chords.find(c => c.textContent?.trim() === 'Dm')
+      if (!dmChord) return { found: false, inWordGroup: false, chordAligned: false }
+
+      const column = dmChord.closest('.column')
+      const inWordGroup = column?.closest('.word-group') !== null
+
+      // Check: Dm chord top should match other chords in the same row
+      const row = column?.closest('.row')
+      if (!row) return { found: true, inWordGroup, chordAligned: false }
+      const rowChords = Array.from(row.querySelectorAll('.chord')).filter(c => c.textContent?.trim() !== '')
+      const tops = rowChords.map(c => Math.round(c.getBoundingClientRect().top))
+      const dmTop = Math.round(dmChord.getBoundingClientRect().top)
+      const aligned = tops.every(t => Math.abs(t - dmTop) < 5)
+
+      return { found: true, inWordGroup, chordAligned: aligned }
+    })
+
+    expect(result.found, 'Dm chord not found').toBe(true)
+    expect(result.inWordGroup, 'Dm column should NOT be in a word-group').toBe(false)
+    expect(result.chordAligned, 'Dm chord should be at same height as other chords').toBe(true)
   })
 })

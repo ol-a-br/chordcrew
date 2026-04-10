@@ -251,40 +251,54 @@ export function SongRenderer({
         el.appendChild(bSpan)
       }
     })
+    // ── Merge empty-chord columns into their predecessor ────────────────────
+    // chordsheetjs splits long lyrics text at the first word boundary, creating
+    // extra columns with empty chords.  E.g. [F]hello world → col(F,"hello ")
+    // + col("","world").  This creates tiny columns that wrap awkwardly on
+    // narrow screens.  Merge the empty-chord column's lyrics back into the
+    // predecessor so the text stays in a single column.
+    container.querySelectorAll<HTMLElement>('.row').forEach(row => {
+      const cols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
+      for (let i = cols.length - 1; i >= 1; i--) {
+        const chordEl = cols[i].querySelector('.chord')
+        if (chordEl && chordEl.textContent?.trim() === '') {
+          const prevLyricsEl = cols[i - 1].querySelector('.lyrics')
+          const thisLyricsEl = cols[i].querySelector('.lyrics')
+          if (prevLyricsEl && thisLyricsEl) {
+            prevLyricsEl.textContent = (prevLyricsEl.textContent ?? '') + (thisLyricsEl.textContent ?? '')
+          }
+          cols[i].remove()
+        }
+      }
+    })
+
     // ── Word grouping: keep mid-word chord columns with their word ────────────
-    // chordsheetjs splits a word like Kn[Dm7]ien into two .column elements:
+    // After merging, a word like Kn[Dm7]ien still produces two columns:
     //   col1 = chord Dm7 / lyrics "Kn"
     //   col2 = no chord  / lyrics "ien"
-    // With flex-wrap:wrap on .row these two columns can end up on different lines,
-    // visually breaking the word. We wrap consecutive columns that belong to the
-    // same word into a .word-group span (display:inline-flex; flex-wrap:nowrap)
-    // so they always stay together.
-    //
-    // A column is a mid-word continuation when its lyrics do NOT start with a
-    // space AND the previous column's lyrics do NOT end with a space.
-    // The gap (column-gap:0.3em on .row) between word-parts is cancelled by a
-    // negative margin-left on the continuation column, just as before.
+    // (only if col2 originally HAD a chord — empty-chord cols were just merged).
+    // With flex-wrap:wrap on .row these columns can end up on different lines.
+    // Wrap consecutive mid-word columns into a .word-group span so they stay
+    // together.  CSS uses align-items:stretch + margin-top:auto on continuation
+    // lyrics: chords stay at the top while lyrics align to the bottom — matching
+    // the last visual line of long wrapped text.
     container.querySelectorAll<HTMLElement>('.row').forEach(row => {
       const rowCols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
       if (rowCols.length === 0) return
 
-      // Build groups: each entry is an array of .column elements belonging to one word.
       const groups: HTMLElement[][] = []
       let currentGroup: HTMLElement[] = [rowCols[0]]
 
       for (let i = 1; i < rowCols.length; i++) {
         const prevLyrics = currentGroup[currentGroup.length - 1].querySelector('.lyrics')?.textContent ?? ''
         const thisLyrics = rowCols[i].querySelector('.lyrics')?.textContent ?? ''
-        // A column is a mid-word continuation when neither the previous
-        // column's lyrics ends with a space nor this column's lyrics starts
-        // with one.  The .word-group wrapper keeps both halves together as a
-        // single flex item so they never split across lines.  The CSS uses
-        // align-items:flex-end so the continuation aligns to the bottom of
-        // the group — next to the last visual line of a long wrapped lyric
-        // (where the split word actually sits), not the top.
+        // Mid-word: previous lyrics doesn't end with space, this lyrics doesn't
+        // start with space, AND this column has actual lyrics text (not just a
+        // trailing chord like [Dm] at the end of "Lob[Dm]").
         const isMidWord = prevLyrics.length > 0
           && !prevLyrics.endsWith(' ')
           && !thisLyrics.startsWith(' ')
+          && thisLyrics.length > 0
         if (isMidWord) {
           currentGroup.push(rowCols[i])
         } else {
@@ -294,13 +308,18 @@ export function SongRenderer({
       }
       groups.push(currentGroup)
 
-      // Replace multi-column groups with .word-group wrappers
+      // Replace multi-column groups with .word-group wrappers.
+      // Non-first columns get the .continuation class so CSS can push their
+      // lyrics to the bottom of the group (margin-top: auto).
       groups.forEach(group => {
         if (group.length < 2) return
         const wrapper = document.createElement('span')
         wrapper.className = 'word-group'
         group[0].before(wrapper)
-        group.forEach(col => wrapper.appendChild(col))
+        group.forEach((col, idx) => {
+          if (idx > 0) col.classList.add('continuation')
+          wrapper.appendChild(col)
+        })
       })
     })
 

@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash } from 'lucide-react'
+import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash, Link2 } from 'lucide-react'
+import { encodeSongShare, buildShareUrl, copyShareUrl } from '@/utils/share'
 import { db, generateId, markPending, getTeamRole } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
@@ -78,6 +79,19 @@ export default function ViewerPage() {
     if (toastTimer.current) clearTimeout(toastTimer.current)
     setToast(msg)
     toastTimer.current = setTimeout(() => setToast(null), 2000)
+  }
+
+  const handleShareReadOnly = async () => {
+    if (!song) return
+    const encoded = await encodeSongShare({
+      title: song.title,
+      artist: song.artist,
+      key: song.transcription.key,
+      content: song.transcription.content,
+    })
+    const url = buildShareUrl(encoded)
+    const ok = await copyShareUrl(url)
+    showToast(ok ? 'Read-only link copied!' : 'Could not copy link')
   }
 
   // Setlist navigation helpers (used by buttons AND keyboard)
@@ -257,6 +271,11 @@ export default function ViewerPage() {
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
 
+        {/* Edit — leftmost for consistency with performance mode */}
+        <Button variant="ghost" size="sm" onClick={() => navigate(`/editor/${song.id}`)}>
+          <Pencil size={14} />
+        </Button>
+
         {/* Setlist prev nav */}
         {setlistId && (
           <button
@@ -429,6 +448,15 @@ export default function ViewerPage() {
           </a>
         )}
 
+        {/* Share read-only link */}
+        <button
+          onClick={handleShareReadOnly}
+          className="p-1.5 text-ink-muted hover:text-ink rounded"
+          title="Copy read-only share link"
+        >
+          <Link2 size={16} />
+        </button>
+
         {/* Print / PDF */}
         <button
           onClick={() => window.open(`/print/song/${song.id}?transpose=${transpose}&columns=${columns}`, '_blank')}
@@ -479,11 +507,6 @@ export default function ViewerPage() {
         <Button variant="primary" size="sm" onClick={() => navigate(`/perform/${song.id}${setlistId ? `?setlistId=${setlistId}&pos=${currentPos}` : ''}`)}>
           <Maximize2 size={14} />
           Present
-        </Button>
-
-        {/* Edit */}
-        <Button variant="ghost" size="sm" onClick={() => navigate(`/editor/${song.id}`)}>
-          <Pencil size={14} />
         </Button>
       </div>
 

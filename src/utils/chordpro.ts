@@ -8,6 +8,23 @@ const { ChordProParser, HtmlDivFormatter, TextFormatter } = ChordSheetJS
 // These are chords.wiki-specific and not supported by chordsheetjs natively.
 
 export function preprocessChordPro(content: string): string {
+  // ── Normalize consecutive spaces in lyrics lines ──────────────────────────
+  // chordsheetjs splits text at the first word boundary after a chord, creating
+  // extra columns with empty chords.  Worse, it converts runs of 2+ spaces into
+  // ", " (comma + space) — a parser bug.  Normalizing 2+ spaces to a single
+  // space avoids both issues.  Skip directive lines ({…}) and tab/grid blocks
+  // where spacing is meaningful for alignment.
+  const lines = content.split('\n')
+  let inLiteral = false
+  const normalizedLines = lines.map(line => {
+    if (/\{(?:start_of_tab|sot|start_of_grid|sog)\b/i.test(line)) { inLiteral = true; return line }
+    if (/\{(?:end_of_tab|eot|end_of_grid|eog)\b/i.test(line)) { inLiteral = false; return line }
+    if (inLiteral) return line
+    if (line.trimStart().startsWith('{')) return line
+    return line.replace(/  +/g, ' ')
+  })
+  content = normalizedLines.join('\n')
+
   return content
     // chords.wiki start_of_part / sop → standard labeled section
     .replace(/\{sop\s*:\s*([^}]+)\}/gi, '{start_of_verse: $1}')
