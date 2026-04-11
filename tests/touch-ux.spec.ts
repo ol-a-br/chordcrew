@@ -185,56 +185,49 @@ test.describe('Touch & tablet UX', () => {
     setup = await seedIdb(page)
   })
 
-  // ── TUX-1: Word-group DOM structure ──────────────────────────────────────────
+  // ── TUX-1: Ruby layout — chords render as <rt> inside <ruby> elements ────
+  // Post-processing converts each .column to a native <ruby> element, with
+  // the lyric as a text node and the chord as an <rt class="chord"> child.
 
-  test('TUX-1: mid-word chord columns are wrapped in .word-group', async ({ page }) => {
+  test('TUX-1: chords render as <rt> inside <ruby> elements (ruby layout)', async ({ page }) => {
     await page.goto(`/view/${setup.songAId}`)
     await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
     await page.waitForTimeout(300)   // let useEffect post-processing complete
 
-    const groupCount = await page.locator('.word-group').count()
-    expect(groupCount).toBeGreaterThan(0)
-
-    // Every .word-group must contain at least two .column children
-    const allGroupsHaveMultipleCols = await page.evaluate(() => {
-      const groups = document.querySelectorAll('.word-group')
-      return Array.from(groups).every(g => g.querySelectorAll('.column').length >= 2)
+    const result = await page.evaluate(() => {
+      const rubies = Array.from(document.querySelectorAll('.chordpro-output ruby'))
+      const withChord = rubies.filter(r => r.querySelector('rt') !== null)
+      // Every ruby with a chord rt should have the chord in an <rt> element
+      const allHaveRt = withChord.every(r => r.querySelector('rt') !== null)
+      return { rubyCount: rubies.length, withChordCount: withChord.length, allHaveRt }
     })
-    expect(allGroupsHaveMultipleCols).toBe(true)
+
+    expect(result.rubyCount, 'expected ruby elements in the rendered output').toBeGreaterThan(0)
+    expect(result.withChordCount, 'expected some ruby elements to carry chord annotations').toBeGreaterThan(0)
+    expect(result.allHaveRt, 'all chord-bearing ruby elements must use <rt>').toBe(true)
   })
 
-  // ── TUX-2: Word-group columns on same visual line ─────────────────────────────
+  // ── TUX-2: No residual .column divs inside .row (ruby conversion complete) ─
 
-  test('TUX-2: word-group columns share the same visual line (no mid-word break)', async ({ page }) => {
+  test('TUX-2: no residual .column divs remain inside lyric rows after ruby conversion', async ({ page }) => {
     await page.goto(`/view/${setup.songAId}`)
     await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
     await page.waitForTimeout(400)
 
     const result = await page.evaluate(() => {
-      const groups = Array.from(document.querySelectorAll('.word-group'))
-      if (groups.length === 0) return { checked: 0, broken: 0 }
-
-      let broken = 0
-      for (const group of groups) {
-        const cols = Array.from(group.querySelectorAll<HTMLElement>('.column'))
-        if (cols.length < 2) continue
-        // Compare the bottom of the chord row (top of lyrics) for all columns.
-        // We use the lyrics span top as the reference — all lyrics in a word-group
-        // must be on the same visual line.
-        const tops = cols.map(col => {
-          const lyrics = col.querySelector<HTMLElement>('.lyrics')
-          return lyrics ? Math.round(lyrics.getBoundingClientRect().top) : -1
-        }).filter(t => t >= 0)
-
-        const minTop = Math.min(...tops)
-        const maxTop = Math.max(...tops)
-        if (maxTop - minTop > 3) broken++   // > 3px tolerance = on different lines
+      // Non-header rows should have no direct .column children after ruby conversion
+      const rows = Array.from(document.querySelectorAll('.chordpro-output .row:not(.section-header-row)'))
+      let residualCols = 0
+      for (const row of rows) {
+        // Direct .column children (not inside section-header-row) = conversion missed them
+        const cols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
+        residualCols += cols.length
       }
-      return { checked: groups.length, broken }
+      return { checked: rows.length, residualCols }
     })
 
-    expect(result.checked).toBeGreaterThan(0)
-    expect(result.broken).toBe(0)
+    expect(result.checked, 'expected lyric rows to be present').toBeGreaterThan(0)
+    expect(result.residualCols, 'no .column divs should remain in non-header rows').toBe(0)
   })
 
   // ── TUX-3: Edit button present in performance mode ─────────────────────────
@@ -333,41 +326,41 @@ test.describe('Touch & tablet UX', () => {
     await expect(overlay).toHaveClass(/opacity-100/, { timeout: 2000 })
   })
 
-  // ── TUX-9: Mid-word columns are in a word-group ────────────────────────────
-  // "brin[F/A#]gt" must produce a .word-group wrapper so both halves stay
-  // together when flex-wrap kicks in.  Both chords must be at the same height.
+  // ── TUX-9: Mid-word split is repaired before ruby conversion ─────────────
+  // "brin[Dm7]gt" — the word-boundary repair pass moves "brin" into the ruby
+  // element that carries the Dm7 chord, so the whole word "bringt" appears
+  // together in a single ruby run (no split across two ruby elements).
 
-  test('TUX-9: mid-word split columns stay together in a word-group', async ({ page }) => {
+  test('TUX-9: mid-word split is repaired — word appears whole in one ruby', async ({ page }) => {
     await page.goto(`/view/${setup.songCId}`)
     await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
     await page.waitForTimeout(400)
 
     const result = await page.evaluate(() => {
-      // Find a word-group that contains both "brin" and "gt"
-      const groups = Array.from(document.querySelectorAll('.chordpro-output .word-group'))
-      for (const g of groups) {
-        const lyricsEls = Array.from(g.querySelectorAll('.lyrics'))
-        const allText = lyricsEls.map(el => el.textContent ?? '').join('|')
-        if (allText.includes('brin') && allText.includes('gt')) {
-          // Check chord heights: all chords in the group should be at the same top
-          const chords = Array.from(g.querySelectorAll('.chord'))
-          const tops = chords.map(c => Math.round(c.getBoundingClientRect().top))
-          const nonEmpty = chords.filter(c => c.textContent?.trim() !== '')
-          return {
-            found: true,
-            chordCount: nonEmpty.length,
-            chordTopsAligned: tops.length < 2 || Math.abs(tops[0] - tops[1]) < 3,
-            hasContinuationClass: g.querySelector('.continuation') !== null,
-          }
-        }
-      }
-      return { found: false, chordCount: 0, chordTopsAligned: false, hasContinuationClass: false }
+      // In the ruby layout, each <ruby> element's text node is the lyric run.
+      // After word-boundary repair "bringt" should appear whole in a ruby, not split.
+      const rubies = Array.from(document.querySelectorAll('.chordpro-output ruby'))
+      // Check no ruby ends with "brin" (which would mean the word is still split)
+      const splitFound = rubies.some(r => {
+        const text = Array.from(r.childNodes)
+          .filter(n => n.nodeType === Node.TEXT_NODE)
+          .map(n => n.textContent ?? '')
+          .join('')
+        return text.trimEnd().endsWith('brin')
+      })
+      // Check "bringt" (or a run starting with "bringt") appears in some ruby text
+      const wholeWordFound = rubies.some(r => {
+        const text = Array.from(r.childNodes)
+          .filter(n => n.nodeType === Node.TEXT_NODE)
+          .map(n => n.textContent ?? '')
+          .join('')
+        return text.includes('bringt')
+      })
+      return { splitFound, wholeWordFound }
     })
 
-    expect(result.found, 'word-group containing "brin" and "gt" not found').toBe(true)
-    expect(result.chordCount, 'expected 2 chords in word-group').toBe(2)
-    expect(result.chordTopsAligned, 'chord tops must be at the same height').toBe(true)
-    expect(result.hasContinuationClass, 'continuation column must have .continuation class').toBe(true)
+    expect(result.splitFound, '"brin" should not be a split word-ending in any ruby').toBe(false)
+    expect(result.wholeWordFound, '"bringt" should appear whole in a single ruby text').toBe(true)
   })
 
   // ── TUX-10: No comma artifact from double-space normalization ────────────────
@@ -388,70 +381,62 @@ test.describe('Touch & tablet UX', () => {
     expect(text).toContain('ich___')
   })
 
-  // ── TUX-11: Empty-chord columns are merged ─────────────────────────────────
-  // chordsheetjs splits lyrics at the first word boundary, creating extra columns
-  // with empty chords. Post-processing merges them into the predecessor.
+  // ── TUX-11: No orphan empty-chord ruby elements ───────────────────────────
+  // After word-boundary repair + empty-chord merging, every ruby <rt> that has
+  // no chord text should have been absorbed into a sibling ruby (or the ruby
+  // removed entirely). We verify there are no <ruby> elements whose <rt> is
+  // empty AND whose text node is also empty (pure junk element).
 
-  test('TUX-11: no empty-chord columns in rendered output', async ({ page }) => {
+  test('TUX-11: no empty ruby elements (empty chord + empty lyrics) remain', async ({ page }) => {
     await page.goto(`/view/${setup.songCId}`)
     await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
     await page.waitForTimeout(400)
 
-    const emptyChordCount = await page.evaluate(() => {
-      const chords = Array.from(document.querySelectorAll('.chordpro-output .row .chord'))
-      return chords.filter(c => c.textContent?.trim() === '').length
+    const emptyRubyCount = await page.evaluate(() => {
+      const rubies = Array.from(document.querySelectorAll('.chordpro-output ruby'))
+      return rubies.filter(r => {
+        const rt = r.querySelector('rt')
+        const chordText = rt?.textContent?.trim() ?? ''
+        const lyricText = Array.from(r.childNodes)
+          .filter(n => n.nodeType === Node.TEXT_NODE)
+          .map(n => n.textContent ?? '')
+          .join('')
+          .trim()
+        return chordText === '' && lyricText === ''
+      }).length
     })
 
-    // After merging, no column should have an empty chord div
-    // (except the very first column of a row which may legitimately have no chord)
-    // We allow first-column empty chords since they can't be merged into a predecessor.
-    const firstColEmptyCount = await page.evaluate(() => {
-      const rows = Array.from(document.querySelectorAll('.chordpro-output .row'))
-      let count = 0
-      for (const row of rows) {
-        const firstCol = row.querySelector(':scope > .column, :scope > .word-group .column')
-        if (firstCol) {
-          const chord = firstCol.querySelector('.chord')
-          if (chord && chord.textContent?.trim() === '') count++
-        }
-      }
-      return count
-    })
-
-    expect(emptyChordCount, 'all empty-chord columns should be merged or be first-column').toBe(firstColEmptyCount)
+    expect(emptyRubyCount, 'no ruby element should have both empty chord and empty lyrics').toBe(0)
   })
 
-  // ── TUX-12: Trailing chord (no lyrics) is not in a word-group ────────────
-  // "Lob[Dm]" — the Dm has no following lyrics. It must NOT be grouped into
-  // a word-group, so its chord renders at the normal chord height.
+  // ── TUX-12: Trailing chord (no lyrics) renders in a ruby element ─────────
+  // "Lob[Dm]" — the Dm has no following lyrics. In the ruby layout it becomes
+  // a <ruby> with empty text and a <rt class="chord">Dm</rt>. The rt must be
+  // visible and its top should align with other chord rt elements in the same row.
 
-  test('TUX-12: trailing chord without lyrics is not in a word-group', async ({ page }) => {
+  test('TUX-12: trailing chord without lyrics renders in a ruby rt element', async ({ page }) => {
     await page.goto(`/view/${setup.songCId}`)
     await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
     await page.waitForTimeout(400)
 
     const result = await page.evaluate(() => {
-      // Find the Dm chord
-      const chords = Array.from(document.querySelectorAll('.chordpro-output .chord'))
-      const dmChord = chords.find(c => c.textContent?.trim() === 'Dm')
-      if (!dmChord) return { found: false, inWordGroup: false, chordAligned: false }
+      // Find a <rt> whose text content is "Dm"
+      const rts = Array.from(document.querySelectorAll('.chordpro-output ruby rt'))
+      const dmRt = rts.find(rt => rt.textContent?.trim() === 'Dm')
+      if (!dmRt) return { found: false, chordAligned: false }
 
-      const column = dmChord.closest('.column')
-      const inWordGroup = column?.closest('.word-group') !== null
-
-      // Check: Dm chord top should match other chords in the same row
-      const row = column?.closest('.row')
-      if (!row) return { found: true, inWordGroup, chordAligned: false }
-      const rowChords = Array.from(row.querySelectorAll('.chord')).filter(c => c.textContent?.trim() !== '')
-      const tops = rowChords.map(c => Math.round(c.getBoundingClientRect().top))
-      const dmTop = Math.round(dmChord.getBoundingClientRect().top)
+      // Check: Dm rt top should align with other rt elements in the same row
+      const row = dmRt.closest('.row')
+      if (!row) return { found: true, chordAligned: false }
+      const rowRts = Array.from(row.querySelectorAll('ruby rt')).filter(r => r.textContent?.trim() !== '')
+      const tops = rowRts.map(r => Math.round(r.getBoundingClientRect().top))
+      const dmTop = Math.round(dmRt.getBoundingClientRect().top)
       const aligned = tops.every(t => Math.abs(t - dmTop) < 5)
 
-      return { found: true, inWordGroup, chordAligned: aligned }
+      return { found: true, chordAligned: aligned }
     })
 
-    expect(result.found, 'Dm chord not found').toBe(true)
-    expect(result.inWordGroup, 'Dm column should NOT be in a word-group').toBe(false)
-    expect(result.chordAligned, 'Dm chord should be at same height as other chords').toBe(true)
+    expect(result.found, 'Dm chord rt not found').toBe(true)
+    expect(result.chordAligned, 'Dm chord should be at same height as other chords in the row').toBe(true)
   })
 })

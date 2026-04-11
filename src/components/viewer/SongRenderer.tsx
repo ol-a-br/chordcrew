@@ -272,54 +272,67 @@ export function SongRenderer({
       }
     })
 
-    // ── Word grouping: keep mid-word chord columns with their word ────────────
-    // After merging, a word like Kn[Dm7]ien still produces two columns:
-    //   col1 = chord Dm7 / lyrics "Kn"
-    //   col2 = no chord  / lyrics "ien"
-    // (only if col2 originally HAD a chord — empty-chord cols were just merged).
-    // With flex-wrap:wrap on .row these columns can end up on different lines.
-    // Wrap consecutive mid-word columns into a .word-group span so they stay
-    // together.  CSS uses align-items:stretch + margin-top:auto on continuation
-    // lyrics: chords stay at the top while lyrics align to the bottom — matching
-    // the last visual line of long wrapped text.
+    // ── Word-boundary repair: move word-prefix into the chord column ─────────
+    // After empty-chord merging, a mid-word chord like Me[F]nschen still leaves:
+    //   col_i   = (chord="" | lyrics="Wo die Me")
+    //   col_i+1 = (chord=F  | lyrics="nschen zu Ihm flehn...")
+    // Moving "Me" into col_i+1 gives col_i "Wo die " (ends with space, wraps
+    // freely) and col_i+1 the full word "Menschen…".  This prevents the
+    // two-sub-column layout that halved the usable width.
     container.querySelectorAll<HTMLElement>('.row').forEach(row => {
-      const rowCols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
-      if (rowCols.length === 0) return
-
-      const groups: HTMLElement[][] = []
-      let currentGroup: HTMLElement[] = [rowCols[0]]
-
-      for (let i = 1; i < rowCols.length; i++) {
-        const prevLyrics = currentGroup[currentGroup.length - 1].querySelector('.lyrics')?.textContent ?? ''
-        const thisLyrics = rowCols[i].querySelector('.lyrics')?.textContent ?? ''
-        // Mid-word: previous lyrics doesn't end with space, this lyrics doesn't
-        // start with space, AND this column has actual lyrics text (not just a
-        // trailing chord like [Dm] at the end of "Lob[Dm]").
+      if (row.classList.contains('section-header-row')) return
+      let i = 0
+      while (true) {
+        const cols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
+        if (i >= cols.length - 1) break
+        const prevLyricsEl = cols[i].querySelector('.lyrics')
+        const nextLyricsEl = cols[i + 1].querySelector('.lyrics')
+        if (!prevLyricsEl || !nextLyricsEl) { i++; continue }
+        const prevLyrics = prevLyricsEl.textContent ?? ''
+        const nextLyrics = nextLyricsEl.textContent ?? ''
         const isMidWord = prevLyrics.length > 0
           && !prevLyrics.endsWith(' ')
-          && !thisLyrics.startsWith(' ')
-          && thisLyrics.length > 0
+          && !nextLyrics.startsWith(' ')
+          && nextLyrics.length > 0
         if (isMidWord) {
-          currentGroup.push(rowCols[i])
+          const lastSpace = prevLyrics.lastIndexOf(' ')
+          const wordStart = lastSpace === -1 ? prevLyrics : prevLyrics.slice(lastSpace + 1)
+          const prefix    = lastSpace === -1 ? ''         : prevLyrics.slice(0, lastSpace + 1)
+          nextLyricsEl.textContent = wordStart + nextLyrics
+          prevLyricsEl.textContent = prefix
+          const prevChordEl = cols[i].querySelector('.chord')
+          if (!prefix && (!prevChordEl || prevChordEl.textContent?.trim() === '')) {
+            cols[i].remove()
+          } else {
+            i++
+          }
         } else {
-          groups.push(currentGroup)
-          currentGroup = [rowCols[i]]
+          i++
         }
       }
-      groups.push(currentGroup)
+    })
 
-      // Replace multi-column groups with .word-group wrappers.
-      // Non-first columns get the .continuation class so CSS can push their
-      // lyrics to the bottom of the group (margin-top: auto).
-      groups.forEach(group => {
-        if (group.length < 2) return
-        const wrapper = document.createElement('span')
-        wrapper.className = 'word-group'
-        group[0].before(wrapper)
-        group.forEach((col, idx) => {
-          if (idx > 0) col.classList.add('continuation')
-          wrapper.appendChild(col)
-        })
+    // ── Convert columns to native <ruby> elements for inline text flow ────────
+    // CSS flex columns force sub-column splitting on narrow screens.  Native
+    // <ruby> elements flow inline in the block row so lyrics from different
+    // chord positions share one text flow and wrap together at real word
+    // boundaries.  ruby-align:start (set in CSS) anchors each chord to the
+    // left edge of its base text, matching chord-sheet notation conventions.
+    container.querySelectorAll<HTMLElement>('.row').forEach(row => {
+      if (row.classList.contains('section-header-row')) return
+      Array.from(row.querySelectorAll<HTMLElement>(':scope > .column')).forEach(col => {
+        const chordEl  = col.querySelector('.chord')
+        const lyricsEl = col.querySelector('.lyrics')
+        const ruby = document.createElement('ruby')
+        ruby.appendChild(document.createTextNode(lyricsEl?.textContent ?? ''))
+        const rt = document.createElement('rt')
+        rt.className = 'chord'
+        if (chordEl) {
+          chordEl.classList.forEach(cls => { if (cls !== 'chord') rt.classList.add(cls) })
+          rt.innerHTML = chordEl.innerHTML   // preserves quality/bass child spans
+        }
+        ruby.appendChild(rt)
+        col.replaceWith(ruby)
       })
     })
 

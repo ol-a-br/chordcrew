@@ -429,10 +429,23 @@ test('chord text color is light yellow (not amber)', async ({ page }) => {
   const songId = await createSong(page)
   await setSongContent(page, songId, '{title:Color Test}\n[Am]Hello\n')
   await page.goto(`/view/${songId}`)
+  await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
 
-  const chordColor = await page.locator('.chordpro-output .chord').first().evaluate(
-    el => getComputedStyle(el).color
-  )
+  // In the ruby layout, chords are in <rt class="chord"> elements.
+  // WebKit does not return computed styles for <rt> elements via getComputedStyle,
+  // so we probe the CSS rule by measuring a temporary div with class "chord".
+  const chordColor = await page.evaluate(() => {
+    const output = document.querySelector('.chordpro-output')
+    if (!output) return ''
+    const probe = document.createElement('div')
+    probe.className = 'chord'
+    probe.style.position = 'absolute'
+    probe.style.visibility = 'hidden'
+    output.appendChild(probe)
+    const color = getComputedStyle(probe).color
+    probe.remove()
+    return color
+  })
   // #fde68a = rgb(253, 230, 138) — light yellow
   expect(chordColor).toBe('rgb(253, 230, 138)')
 })
