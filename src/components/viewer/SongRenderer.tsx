@@ -378,7 +378,12 @@ export function SongRenderer({
         if (i % 2 === 1) {
           const span = document.createElement('span')
           span.className = 'chord inline-chord'
-          span.textContent = part
+          let chordText = part
+          if (chordText.startsWith('(') && chordText.endsWith(')')) {
+            chordText = chordText.slice(1, -1).trim()
+            span.classList.add('chord-optional')
+          }
+          span.textContent = chordText
           commentEl.appendChild(span)
         } else {
           commentEl.appendChild(document.createTextNode(part))

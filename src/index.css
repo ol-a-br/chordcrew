@@ -117,6 +117,7 @@
   ruby-align: start;
   line-height: 1.6;
   white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 /* Section-header rows still use flex so badge + label sit side-by-side */
