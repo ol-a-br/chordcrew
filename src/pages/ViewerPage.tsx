@@ -32,6 +32,7 @@ export default function ViewerPage() {
   const [lyricsOnly, setLyricsOnly] = useState(false)
   const [fontScale, setFontScale] = useFontScale()
   const [showShareMenu, setShowShareMenu] = useState(false)
+  const [showKeyDropdown, setShowKeyDropdown] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -168,6 +169,17 @@ export default function ViewerPage() {
     () => transpose !== 0 ? getFirstChords(song?.transcription.content ?? '', transpose) : [],
     [song?.transcription.content, transpose]
   )
+  const keyDropdownEntries = useMemo(() => {
+    if (!song?.transcription.key) return []
+    const originalKey = song.transcription.key
+    const content = song.transcription.content
+    return Array.from({ length: 12 }, (_, i) => {
+      const delta = i - 5
+      const key   = transposeKey(originalKey, delta)
+      const chords = getFirstChords(content, delta, 4)
+      return { delta, key, chords }
+    })
+  }, [song?.transcription.key, song?.transcription.content])
   // Capo helper: sounding key = written key transposed up by capo value
   const capo = song?.transcription.capo ?? 0
   const soundingKey = useMemo(
@@ -297,6 +309,49 @@ export default function ViewerPage() {
               <ChevronRight size={16} />
             </button>
           </>
+        )}
+
+        {/* Key badge — click to open 12-key transpose picker */}
+        {song.transcription.key && (
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setShowKeyDropdown(v => !v)}
+              className="text-xs font-mono text-chord bg-chord/10 hover:bg-chord/20 px-2 py-1 rounded transition-colors"
+              title="Click to change key"
+            >
+              𝄞 {transpose !== 0 ? `${song.transcription.key} → ${transposedKey}` : song.transcription.key}
+            </button>
+            {showKeyDropdown && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowKeyDropdown(false)} />
+                <div className="absolute left-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl overflow-hidden w-72">
+                  {keyDropdownEntries.map(({ delta, key, chords }) => (
+                    <button
+                      key={delta}
+                      onClick={() => { setTranspose(delta); setShowKeyDropdown(false) }}
+                      className={`flex items-center gap-3 w-full text-left px-3 py-2 text-xs transition-colors
+                        ${delta === transpose
+                          ? 'bg-chord/15 text-chord'
+                          : 'text-ink hover:bg-surface-3'
+                        }`}
+                    >
+                      <span className="font-mono w-5 text-right text-ink-faint shrink-0">
+                        {delta === 0 ? '0' : delta > 0 ? `+${delta}` : delta}
+                      </span>
+                      <span className={`font-mono font-bold w-8 shrink-0 ${delta === 0 ? 'text-chord' : ''}`}>
+                        {key}
+                      </span>
+                      <span className="flex gap-1 flex-wrap">
+                        {chords.map(c => (
+                          <span key={c} className="font-mono text-chord/80 bg-surface-0 px-1 rounded text-[11px]">{c}</span>
+                        ))}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {capo > 0 && (
