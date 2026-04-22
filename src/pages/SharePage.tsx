@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Music2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
-import { decodeSongShare, decodeSetlistShare, type SharedSong, type SharedSetlist } from '@/utils/share'
+import { decodeSongShare, decodeSetlistShare, fetchSetlistShare, type SharedSong, type SharedSetlist } from '@/utils/share'
 import { Button } from '@/components/shared/Button'
 
 export default function SharePage() {
@@ -14,15 +14,32 @@ export default function SharePage() {
   const [setlistPos, setSetlistPos] = useState(0)
 
   useEffect(() => {
-    const hash = window.location.hash.slice(1)
-    if (!hash) {
-      setError('No share data in URL.')
-      setLoading(false)
-      return
-    }
-
     async function decode() {
-      // Try song first, then setlist
+      // Check for Firestore-backed short URL: /share/{setlistId}
+      const pathParts = window.location.pathname.split('/')
+      const shareId = pathParts.length >= 3 ? pathParts[2] : ''
+
+      if (shareId) {
+        const encoded = await fetchSetlistShare(shareId)
+        if (!encoded) {
+          setError('Share link not found or expired.')
+          setLoading(false)
+          return
+        }
+        const l = await decodeSetlistShare(encoded)
+        if (l) { setSetlist(l); setLoading(false); return }
+        setError('Could not decode share data.')
+        setLoading(false)
+        return
+      }
+
+      // Fall back to hash-based sharing (single songs + old setlist links)
+      const hash = window.location.hash.slice(1)
+      if (!hash) {
+        setError('No share data in URL.')
+        setLoading(false)
+        return
+      }
       const s = await decodeSongShare(hash)
       if (s) { setSong(s); setLoading(false); return }
       const l = await decodeSetlistShare(hash)

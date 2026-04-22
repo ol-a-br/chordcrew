@@ -7,14 +7,16 @@ import {
   ChevronUp, ChevronDown, Printer, Link2, AlertTriangle, FileDown,
 } from 'lucide-react'
 import { db, generateId, markPending } from '@/db'
+import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/shared/Button'
-import { encodeSetlistShare, buildShareUrl, copyShareUrl } from '@/utils/share'
+import { encodeSetlistShare, buildShareUrl, buildSetlistShareUrl, copyShareUrl, publishSetlistShare } from '@/utils/share'
 import { transposeKey, extractMeta, isValidKey } from '@/utils/chordpro'
 import type { SetlistItem, Song } from '@/types'
 
 export default function SetlistDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const [editMode, setEditMode] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -127,7 +129,7 @@ export default function SetlistDetailPage() {
   }
 
   const handleShareSetlist = async () => {
-    if (!setlist || !songs) return
+    if (!setlist || !songs || !id) return
     const sharedSongs = songItems
       .map(item => {
         const s = songs[item.songId!]
@@ -143,7 +145,9 @@ export default function SetlistDetailPage() {
       .filter(Boolean) as { title: string; artist: string; key: string; content: string; transposeOffset: number }[]
     if (sharedSongs.length === 0) return
     const encoded = await encodeSetlistShare({ name: setlist.name, songs: sharedSongs })
-    const url = buildShareUrl(encoded)
+    // Prefer Firestore-backed short URL; fall back to hash URL if Firebase unavailable
+    const published = user ? await publishSetlistShare(id, setlist.name, encoded, user.id) : false
+    const url = published ? buildSetlistShareUrl(id) : buildShareUrl(encoded)
     const ok = await copyShareUrl(url)
     if (ok) {
       setShareCopied(true)

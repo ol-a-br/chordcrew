@@ -105,7 +105,7 @@ function AppRouter() {
   const location = useLocation()
 
   // Public share route — no auth required so anonymous recipients can view
-  if (location.pathname === '/share') {
+  if (location.pathname.startsWith('/share')) {
     return (
       <Suspense fallback={<PageLoader />}>
         <SharePage />

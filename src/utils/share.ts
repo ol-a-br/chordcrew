@@ -103,11 +103,61 @@ export function buildShareUrl(encoded: string): string {
   return `${base}/share#${encoded}`
 }
 
+export function buildSetlistShareUrl(setlistId: string): string {
+  return `${window.location.origin}/share/${setlistId}`
+}
+
 export async function copyShareUrl(url: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(url)
     return true
   } catch {
     return false
+  }
+}
+
+// ── Firestore-backed setlist share (short URL) ────────────────────────────────
+// Writes to /shares/{setlistId} — one document per setlist, overwrites on refresh.
+// TTL: 30 days from creation.
+
+const SHARE_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
+export async function publishSetlistShare(
+  setlistId: string,
+  setlistName: string,
+  encoded: string,
+  ownerId: string,
+): Promise<boolean> {
+  try {
+    const { firestore } = await import('@/firebase')
+    if (!firestore) return false
+    const { doc, setDoc, Timestamp } = await import('firebase/firestore')
+    const now = Date.now()
+    await setDoc(doc(firestore, 'shares', setlistId), {
+      encoded,
+      setlistName,
+      ownerId,
+      createdAt: Timestamp.fromMillis(now),
+      expiresAt: Timestamp.fromMillis(now + SHARE_TTL_MS),
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function fetchSetlistShare(setlistId: string): Promise<string | null> {
+  try {
+    const { firestore } = await import('@/firebase')
+    if (!firestore) return null
+    const { doc, getDoc, Timestamp } = await import('firebase/firestore')
+    const snap = await getDoc(doc(firestore, 'shares', setlistId))
+    if (!snap.exists()) return null
+    const data = snap.data()
+    const expiresAt = data.expiresAt as { toMillis(): number } | undefined
+    if (expiresAt && expiresAt.toMillis() < Timestamp.now().toMillis()) return null
+    return data.encoded as string
+  } catch {
+    return null
   }
 }
