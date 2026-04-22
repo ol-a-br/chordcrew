@@ -307,7 +307,7 @@ export default function EditorPage() {
         {([
           { label: 'Title',  directive: 'title',  value: derivedMeta.title  ?? '', width: 'w-36', type: 'text' },
           { label: 'Artist', directive: 'artist', value: derivedMeta.artist ?? '', width: 'w-28', type: 'text' },
-          { label: 'Key',    directive: 'key',    value: derivedMeta.key    ?? '', width: 'w-12', type: 'text' },
+          { label: 'Key',    directive: 'key',    value: derivedMeta.key    ?? song?.transcription.key ?? '', width: 'w-12', type: 'text' },
           { label: 'Tempo',  directive: 'tempo',  value: derivedMeta.tempo  ? String(derivedMeta.tempo) : '', width: 'w-14', type: 'number' },
           { label: 'Capo',   directive: 'capo',   value: derivedMeta.capo   ? String(derivedMeta.capo)  : '', width: 'w-12', type: 'number' },
           { label: 'Time',   directive: 'time',   value: derivedMeta.time   ?? '', width: 'w-14', type: 'text' },

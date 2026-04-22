@@ -1,4 +1,4 @@
-import ChordSheetJS from 'chordsheetjs'
+import ChordSheetJS, { Chord } from 'chordsheetjs'
 
 const { ChordProParser, HtmlDivFormatter, TextFormatter } = ChordSheetJS
 
@@ -80,7 +80,19 @@ export function renderToHtml(content: string, transposeOffset = 0): string {
   let song = parseChordPro(content)
 
   if (transposeOffset !== 0) {
+    const originalKey = content.match(/\{key\s*:\s*([^}]+)\}/i)?.[1]?.trim() ?? ''
     song = song.transpose(transposeOffset)
+    if (originalKey) {
+      const modifier = targetAccidental(originalKey, transposeOffset)
+      song = song.mapItems((item) => {
+        const pair = item as { chords?: string; set?: (o: Record<string, unknown>) => unknown }
+        if (pair.chords && pair.set) {
+          const chord = Chord.parse(pair.chords)
+          if (chord) return pair.set({ chords: chord.useModifier(modifier).toString() }) as typeof item
+        }
+        return item
+      })
+    }
   }
 
   const formatter = new HtmlDivFormatter()
@@ -313,13 +325,43 @@ export function isKnownChord(chord: string): boolean {
   return false
 }
 
+// ─── Key validation ───────────────────────────────────────────────────────────
+
+const VALID_KEY_RE = /^[A-G][b#]?m?(aj)?$/
+
+export function isValidKey(key: string): boolean {
+  return VALID_KEY_RE.test(key.trim())
+}
+
+// ─── Enharmonic preference by target key ─────────────────────────────────────
+// Determines whether the target key uses sharps or flats, so transposed chords
+// are spelled correctly (e.g. C#m in D, not Dbm).
+
+const NOTE_SEMITONE: Record<string, number> = {
+  C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3,
+  E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8,
+  Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11,
+}
+// Tonic semitones that prefer flats, by major/minor key
+const FLAT_MAJOR = new Set([5, 10, 3, 8, 1, 6, 11])  // F Bb Eb Ab Db Gb Cb
+const FLAT_MINOR = new Set([2, 7, 0, 5, 10, 3, 8])    // Dm Gm Cm Fm Bbm Ebm Abm
+
+function targetAccidental(originalKey: string, delta: number): '#' | 'b' {
+  const rootMatch = originalKey.match(/^([A-G][b#]?)/)
+  if (!rootMatch) return '#'
+  const semitone = NOTE_SEMITONE[rootMatch[1]]
+  if (semitone === undefined) return '#'
+  const target = ((semitone + delta) % 12 + 12) % 12
+  const isMinor = /^[A-G][b#]?m(?!aj)/.test(originalKey)
+  return (isMinor ? FLAT_MINOR : FLAT_MAJOR).has(target) ? 'b' : '#'
+}
+
 // ─── Transpose a key name by N semitones ──────────────────────────────────────
-// Delegates to chordsheetjs so enharmonic spelling is consistent with chord transposition.
 
 export function transposeKey(key: string, semitones: number): string {
   if (!key || semitones === 0) return key
   try {
-    const html = renderToHtml(`[${key}]\n`, semitones)
+    const html = renderToHtml(`{key: ${key}}\n[${key}]\n`, semitones)
     const match = html.match(/<div class="chord">([^<]+)<\/div>/)
     return match?.[1]?.trim() ?? key
   } catch {

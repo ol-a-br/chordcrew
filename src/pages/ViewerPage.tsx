@@ -6,7 +6,7 @@ import { encodeSongShare, buildShareUrl, copyShareUrl } from '@/utils/share'
 import { db, generateId, markPending, getTeamRole } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
-import { transposeKey, getFirstChords, buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
+import { transposeKey, getFirstChords, buildSearchText, extractMeta, lintChordPro, isValidKey } from '@/utils/chordpro'
 import { useFontScale } from '@/hooks/useFontScale'
 import { useAuth } from '@/auth/AuthContext'
 import { NotesPanel } from '@/components/shared/NotesPanel'
@@ -160,18 +160,26 @@ export default function ViewerPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columns, setlistId, prevSongId, nextSongId, currentPos])
 
+  // Effective key: content directive takes priority over stored field; validate both
+  const effectiveKey = useMemo(() => {
+    if (!song) return ''
+    const fromContent = extractMeta(song.transcription.content).key ?? ''
+    const candidate = fromContent || song.transcription.key || ''
+    return isValidKey(candidate) ? candidate : ''
+  }, [song])
+
   // Transposed key and first-3-chords for musician preview
   const transposedKey = useMemo(
-    () => transposeKey(song?.transcription.key ?? '', transpose),
-    [song?.transcription.key, transpose]
+    () => transposeKey(effectiveKey, transpose),
+    [effectiveKey, transpose]
   )
   const firstChords = useMemo(
     () => transpose !== 0 ? getFirstChords(song?.transcription.content ?? '', transpose) : [],
     [song?.transcription.content, transpose]
   )
   const keyDropdownEntries = useMemo(() => {
-    if (!song?.transcription.key) return []
-    const originalKey = song.transcription.key
+    if (!effectiveKey || !song) return []
+    const originalKey = effectiveKey
     const content = song.transcription.content
     return Array.from({ length: 12 }, (_, i) => {
       const delta = i - 5
@@ -179,12 +187,12 @@ export default function ViewerPage() {
       const chords = getFirstChords(content, delta, 4)
       return { delta, key, chords }
     })
-  }, [song?.transcription.key, song?.transcription.content])
+  }, [effectiveKey, song?.transcription.content])
   // Capo helper: sounding key = written key transposed up by capo value
   const capo = song?.transcription.capo ?? 0
   const soundingKey = useMemo(
-    () => (capo > 0 && song?.transcription.key) ? transposeKey(song.transcription.key, capo) : '',
-    [capo, song?.transcription.key]
+    () => (capo > 0 && effectiveKey) ? transposeKey(effectiveKey, capo) : '',
+    [capo, effectiveKey]
   )
 
   const applyTranspose = (next: number) => {
@@ -321,14 +329,14 @@ export default function ViewerPage() {
         )}
 
         {/* Key badge — click to open 12-key transpose picker */}
-        {song.transcription.key && (
+        {effectiveKey && (
           <div className="relative shrink-0">
             <button
               onClick={() => setShowKeyDropdown(v => !v)}
               className="text-xs font-mono text-chord bg-chord/10 hover:bg-chord/20 px-2 py-1 rounded transition-colors"
               title="Click to change key"
             >
-              𝄞 {transpose !== 0 ? `${song.transcription.key} → ${transposedKey}` : song.transcription.key}
+              𝄞 {transpose !== 0 ? `${effectiveKey} → ${transposedKey}` : effectiveKey}
             </button>
             {showKeyDropdown && (
               <>
