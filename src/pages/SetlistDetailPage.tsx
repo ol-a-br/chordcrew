@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import {
   ArrowLeft, Play, Music, Pencil, Check,
   GripVertical, Trash2, Plus, Search, Copy,
-  ChevronUp, ChevronDown, Printer, Link2, AlertTriangle,
+  ChevronUp, ChevronDown, Printer, Link2, AlertTriangle, FileDown,
 } from 'lucide-react'
 import { db, generateId, markPending } from '@/db'
 import { Button } from '@/components/shared/Button'
@@ -149,6 +149,46 @@ export default function SetlistDetailPage() {
       setShareCopied(true)
       setTimeout(() => setShareCopied(false), 2000)
     }
+  }
+
+  const handleExportCsv = () => {
+    if (!setlist || !items) return
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
+    const headers = ['#', 'Type', 'Title', 'Artist', 'Key', 'Tempo', 'Time', 'Capo', 'Tags', 'Notes']
+    const rows: string[][] = [headers]
+    let pos = 0
+    for (const item of items) {
+      if (item.type === 'divider') {
+        rows.push([
+          String(++pos), 'divider',
+          item.dividerName ?? '', '', '', '', '', '', '', item.notes ?? '',
+        ])
+      } else {
+        const song = songs?.[item.songId!]
+        const raw = song ? (extractMeta(song.transcription.content).key || song.transcription.key || '') : ''
+        const baseKey = isValidKey(raw) ? raw : ''
+        const key = baseKey && item.transposeOffset ? transposeKey(baseKey, item.transposeOffset) : baseKey
+        rows.push([
+          String(++pos), 'song',
+          song?.title ?? '',
+          song?.artist ?? '',
+          key,
+          song?.transcription.tempo ? String(song.transcription.tempo) : '',
+          song?.transcription.timeSignature ?? '',
+          song?.transcription.capo ? String(song.transcription.capo) : '',
+          (song?.tags ?? []).join('; '),
+          item.notes ?? '',
+        ])
+      }
+    }
+    const csv = rows.map(r => r.map(escape).join(',')).join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${setlist.name.replace(/[^a-z0-9]/gi, '_')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleSongClick = (songId: string, posInSongItems: number) => {
@@ -377,6 +417,13 @@ export default function SetlistDetailPage() {
                   Copied!
                 </span>
               )}
+            </button>
+            <button
+              onClick={handleExportCsv}
+              className="p-1.5 text-ink-muted hover:text-ink rounded"
+              title="Export setlist as CSV"
+            >
+              <FileDown size={17} />
             </button>
             <button
               onClick={() => window.open(`/print/setlist/${id}`, '_blank')}
