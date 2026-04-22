@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash, Link2, StickyNote } from 'lucide-react'
+import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash, Link2, StickyNote, X } from 'lucide-react'
 import { encodeSongShare, buildShareUrl, copyShareUrl } from '@/utils/share'
 import { db, generateId, markPending, getTeamRole } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
@@ -297,7 +297,7 @@ export default function ViewerPage() {
             className="p-1.5 rounded text-ink-muted hover:text-ink"
             title="Back to setlist"
           >
-            <ChevronLeft size={16} />
+            <X size={16} />
           </button>
         )}
 
