@@ -98,9 +98,19 @@ async function uploadPending(userId: string): Promise<void> {
             await db.setlists.put(stripUndefined({ ...remote, accessedAt: entity.accessedAt ?? remote.accessedAt }))
           } else {
             await setDoc(remoteRef, stripUndefined(entity))
-            const items = await db.setlistItems.where('setlistId').equals(entityId).toArray()
+            const localItems = await db.setlistItems.where('setlistId').equals(entityId).toArray()
+            const localItemIds = new Set(localItems.map(i => i.id))
             const itemsBase = isTeam ? `teams/${entity.sharedTeamId}` : `users/${userId}`
-            await Promise.all(items.map(item =>
+            // Delete remote items that no longer exist locally (captures user deletions)
+            const remoteItemsSnap = await getDocs(
+              query(collection(firestore!, itemsBase, 'setlistItems'), where('setlistId', '==', entityId))
+            )
+            await Promise.all(
+              remoteItemsSnap.docs
+                .filter(d => !localItemIds.has(d.id))
+                .map(d => deleteDoc(d.ref))
+            )
+            await Promise.all(localItems.map(item =>
               setDoc(doc(firestore!, itemsBase, 'setlistItems', item.id), stripUndefined(item))
             ))
           }
@@ -159,12 +169,14 @@ async function downloadPersonal(userId: string): Promise<Set<string>> {
   }
 
   // Setlists — same always-download approach as books
+  const downloadedSetlistIds = new Set<string>()
   const remoteSetlists = await getDocs(collection(firestore!, 'users', userId, 'setlists'))
   for (const snap of remoteSetlists.docs) {
     const remote = snap.data() as Setlist
     const syncState = await db.syncStates.get(`setlist:${remote.id}`)
     if (syncState?.status !== 'pending') {
       await db.setlists.put(remote)
+      downloadedSetlistIds.add(remote.id)
       await db.syncStates.put({
         id: `setlist:${remote.id}`, entityType: 'setlist', entityId: remote.id,
         localVersion: 1, syncedVersion: 1, status: 'clean', updatedAt: Date.now(),
@@ -172,10 +184,26 @@ async function downloadPersonal(userId: string): Promise<Set<string>> {
     }
   }
 
-  // SetlistItems — no conflict tracking, always upsert remote
+  // SetlistItems — reconcile per downloaded setlist so remote deletions are honoured.
+  // Pending setlists are skipped: their items are authoritative locally and will be
+  // uploaded (with deletions) in the next uploadPending pass.
   const remoteItems = await getDocs(collection(firestore!, 'users', userId, 'setlistItems'))
+  const remoteItemsBySetlist = new Map<string, SetlistItem[]>()
   for (const snap of remoteItems.docs) {
-    await db.setlistItems.put(snap.data() as SetlistItem)
+    const item = snap.data() as SetlistItem
+    const bucket = remoteItemsBySetlist.get(item.setlistId) ?? []
+    bucket.push(item)
+    remoteItemsBySetlist.set(item.setlistId, bucket)
+  }
+  for (const setlistId of downloadedSetlistIds) {
+    const remoteForSetlist = remoteItemsBySetlist.get(setlistId) ?? []
+    const remoteIds = new Set(remoteForSetlist.map(i => i.id))
+    const localItems = await db.setlistItems.where('setlistId').equals(setlistId).toArray()
+    // Remove local items that no longer exist in Firestore
+    const toDelete = localItems.filter(i => !remoteIds.has(i.id)).map(i => i.id)
+    if (toDelete.length > 0) await db.setlistItems.bulkDelete(toDelete)
+    // Upsert all remote items
+    if (remoteForSetlist.length > 0) await db.setlistItems.bulkPut(remoteForSetlist)
   }
 
   // Notes — always download; they are user-private and small
@@ -221,15 +249,32 @@ async function downloadTeams(userId: string, userEmail: string, discoveredTeamId
     }
 
     // Team setlists + items
+    const downloadedTeamSetlistIds = new Set<string>()
     const teamSetlists = await getDocs(collection(firestore!, 'teams', teamId, 'setlists'))
     for (const snap of teamSetlists.docs) {
       const remote = snap.data() as Setlist
       const local = await db.setlists.get(remote.id)
-      if (!local || remote.updatedAt > local.updatedAt) await db.setlists.put(remote)
+      const syncState = await db.syncStates.get(`setlist:${remote.id}`)
+      if (syncState?.status !== 'pending' && (!local || remote.updatedAt > local.updatedAt)) {
+        await db.setlists.put(remote)
+        downloadedTeamSetlistIds.add(remote.id)
+      }
     }
     const teamItems = await getDocs(collection(firestore!, 'teams', teamId, 'setlistItems'))
+    const teamItemsBySetlist = new Map<string, SetlistItem[]>()
     for (const snap of teamItems.docs) {
-      await db.setlistItems.put(snap.data() as SetlistItem)
+      const item = snap.data() as SetlistItem
+      const bucket = teamItemsBySetlist.get(item.setlistId) ?? []
+      bucket.push(item)
+      teamItemsBySetlist.set(item.setlistId, bucket)
+    }
+    for (const sid of downloadedTeamSetlistIds) {
+      const remoteForSetlist = teamItemsBySetlist.get(sid) ?? []
+      const remoteIds = new Set(remoteForSetlist.map(i => i.id))
+      const localItems = await db.setlistItems.where('setlistId').equals(sid).toArray()
+      const toDelete = localItems.filter(i => !remoteIds.has(i.id)).map(i => i.id)
+      if (toDelete.length > 0) await db.setlistItems.bulkDelete(toDelete)
+      if (remoteForSetlist.length > 0) await db.setlistItems.bulkPut(remoteForSetlist)
     }
   }
 }
