@@ -187,6 +187,15 @@ export default function ViewerPage() {
     [capo, song?.transcription.key]
   )
 
+  const applyTranspose = (next: number) => {
+    setTranspose(next)
+    if (currentSetlistItem && setlistId) {
+      db.setlistItems.update(currentSetlistItem.id, { transposeOffset: next })
+      db.setlists.update(setlistId, { updatedAt: Date.now() })
+      markPending('setlist', setlistId)
+    }
+  }
+
   // Extra metadata (CCLI, copyright, URL) extracted from ChordPro content
   const derivedMeta = useMemo(
     () => extractMeta(song?.transcription.content ?? ''),
@@ -328,7 +337,7 @@ export default function ViewerPage() {
                   {keyDropdownEntries.map(({ delta, key, chords }) => (
                     <button
                       key={delta}
-                      onClick={() => { setTranspose(delta); setShowKeyDropdown(false) }}
+                      onClick={() => { applyTranspose(delta); setShowKeyDropdown(false) }}
                       className={`flex items-center gap-3 w-full text-left px-3 py-2 text-xs transition-colors
                         ${delta === transpose
                           ? 'bg-chord/15 text-chord'
@@ -363,29 +372,13 @@ export default function ViewerPage() {
         {/* Transpose */}
         <div className="flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1">
-            <button onClick={() => {
-              const next = transpose - 1
-              setTranspose(next)
-              if (currentSetlistItem && setlistId) {
-                db.setlistItems.update(currentSetlistItem.id, { transposeOffset: next })
-                db.setlists.update(setlistId, { updatedAt: Date.now() })
-                markPending('setlist', setlistId)
-              }
-            }} aria-label="Transpose down" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
+            <button onClick={() => applyTranspose(transpose - 1)} aria-label="Transpose down" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
               <ChevronDown size={16} />
             </button>
             <span className="text-xs font-mono w-8 text-center">
               {transpose > 0 ? `+${transpose}` : transpose === 0 ? '0' : transpose}
             </span>
-            <button onClick={() => {
-              const next = transpose + 1
-              setTranspose(next)
-              if (currentSetlistItem && setlistId) {
-                db.setlistItems.update(currentSetlistItem.id, { transposeOffset: next })
-                db.setlists.update(setlistId, { updatedAt: Date.now() })
-                markPending('setlist', setlistId)
-              }
-            }} aria-label="Transpose up" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
+            <button onClick={() => applyTranspose(transpose + 1)} aria-label="Transpose up" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
               <ChevronUp size={16} />
             </button>
           </div>
