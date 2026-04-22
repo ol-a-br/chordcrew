@@ -9,6 +9,7 @@ import {
 import { db, generateId, markPending } from '@/db'
 import { Button } from '@/components/shared/Button'
 import { encodeSetlistShare, buildShareUrl, copyShareUrl } from '@/utils/share'
+import { transposeKey, extractMeta, isValidKey } from '@/utils/chordpro'
 import type { SetlistItem, Song } from '@/types'
 
 export default function SetlistDetailPage() {
@@ -538,21 +539,22 @@ export default function SetlistDetailPage() {
                   </span>
                 )}
 
-                {song?.transcription.key && (
-                  <span className="text-xs font-mono text-chord bg-chord/10 px-2 py-0.5 rounded shrink-0">
-                    {song.transcription.key}
-                  </span>
-                )}
+                {song && (() => {
+                  const raw = extractMeta(song.transcription.content).key || song.transcription.key || ''
+                  const baseKey = isValidKey(raw) ? raw : ''
+                  const displayKey = baseKey && item.transposeOffset
+                    ? transposeKey(baseKey, item.transposeOffset)
+                    : baseKey
+                  return displayKey ? (
+                    <span className="text-xs font-mono text-chord bg-chord/10 px-2 py-0.5 rounded shrink-0">
+                      {displayKey}
+                    </span>
+                  ) : null
+                })()}
 
                 {song && song.transcription.tempo > 0 && (
                   <span className="text-xs font-mono text-ink-muted shrink-0" title="Tempo">
                     ♩ {song.transcription.tempo}
-                  </span>
-                )}
-
-                {!editMode && item.transposeOffset !== 0 && (
-                  <span className="text-xs font-mono text-ink-muted shrink-0">
-                    {item.transposeOffset > 0 ? `+${item.transposeOffset}` : item.transposeOffset}
                   </span>
                 )}
 
