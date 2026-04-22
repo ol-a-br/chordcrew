@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2 } from 'lucide-react'
 import { db, upsertSongVersions, markPending } from '@/db'
@@ -28,6 +28,9 @@ function updateDirective(content: string, directive: string, value: string): str
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const setlistId = searchParams.get('setlistId')
+  const setlistPos = searchParams.get('pos')
   const { user } = useAuth()
   const song = useLiveQuery(() => id ? db.songs.get(id) : undefined, [id])
 
@@ -239,7 +242,11 @@ export default function EditorPage() {
     <div className="flex flex-col h-full">
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-surface-3 bg-surface-1 shrink-0">
-        <button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink">
+        <button
+          onClick={() => setlistId ? navigate(`/setlists/${setlistId}`) : navigate(-1)}
+          className="text-ink-muted hover:text-ink"
+          title={setlistId ? 'Back to setlist' : 'Close'}
+        >
           <X size={18} />
         </button>
         <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -294,7 +301,7 @@ export default function EditorPage() {
             >
               <Trash2 size={15} />
             </button>
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/view/${song.id}`)}>
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/view/${song.id}${setlistId ? `?setlistId=${setlistId}&pos=${setlistPos ?? 0}` : ''}`)}>
               <RotateCcw size={14} />
               View
             </Button>

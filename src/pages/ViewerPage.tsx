@@ -290,8 +290,19 @@ export default function ViewerPage() {
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
 
+        {/* Back to setlist */}
+        {setlistId && (
+          <button
+            onClick={() => navigate(`/setlists/${setlistId}`)}
+            className="p-1.5 rounded text-ink-muted hover:text-ink"
+            title="Back to setlist"
+          >
+            <ChevronLeft size={16} />
+          </button>
+        )}
+
         {/* Edit — leftmost for consistency with performance mode */}
-        <Button variant="ghost" size="sm" onClick={() => navigate(`/editor/${song.id}`)}>
+        <Button variant="ghost" size="sm" onClick={() => navigate(`/editor/${song.id}${setlistId ? `?setlistId=${setlistId}&pos=${currentPos}` : ''}`)}>
           <Pencil size={14} />
         </Button>
 
