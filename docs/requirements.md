@@ -257,4 +257,21 @@
 
 ---
 
-*Last updated: 2026-04-09*
+## REQ-NOTES — Personal Song Notes
+
+Team members can take private notes on any song. Notes are visible only to the author, synced to the cloud, and displayed automatically during setlist performance so the member can recall context as each song begins.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| NOTES-01 | Personal notes stored per user (userId + songId); other users cannot read them. | done |
+| NOTES-02 | Notes panel can be shown/hidden in Viewer and Performance mode via a toggle button. | done |
+| NOTES-03 | In Performance mode (setlist), notes auto-display on song transition for a configurable duration (default 2 s), positioned on the right so the left part of the song remains visible. | done |
+| NOTES-04 | Navigating to next/previous song (pedal, tap, or arrow key) hides notes immediately. | done |
+| NOTES-05 | Notes synced to personal Firestore path `/users/{uid}/notes/{id}` and included in manual sync. | done |
+| NOTES-06 | In the Editor, a subtle indicator badge shows when any team member has notes for the song (without revealing content) — helps worship leaders avoid accidental data loss. | done |
+| NOTES-07 | Note indicator stored at `/teams/{teamId}/noteIndicators/{songId}` in Firestore; updated on save/delete. | done |
+| NOTES-08 | Note duration configurable in Settings (Performance section) — slider 1–10 s, default 2 s. | done |
+
+---
+
+*Last updated: 2026-04-14*

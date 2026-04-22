@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect } from 'react'
-import { renderToHtml, isKnownChord, expandRepeatSections } from '@/utils/chordpro'
+import { renderToHtml, isKnownChord, expandRepeatSections, transposeKey } from '@/utils/chordpro'
 
 // ─── Module-level render cache ────────────────────────────────────────────────
 // Persists across component remounts for the session lifetime.
@@ -53,6 +53,8 @@ interface SongRendererProps {
   className?: string
   errors?: ChordProError[]
   onJumpToLine?: (line: number) => void
+  songKey?: string           // transposed key — injected as meta line below title/subtitle
+  tempo?: number             // BPM — injected alongside songKey
 }
 
 /** Terms (lowercase) that identify a chorus section by label text */
@@ -91,6 +93,8 @@ export function SongRenderer({
   className,
   errors,
   onJumpToLine,
+  songKey,
+  tempo,
 }: SongRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -105,7 +109,7 @@ export function SongRenderer({
     if (!container) return
 
     // ── Clear previous injections ─────────────────────────────────────────────
-    container.querySelectorAll('.section-badge').forEach(el => el.remove())
+    container.querySelectorAll('.section-badge, .song-meta-line').forEach(el => el.remove())
     container.querySelectorAll('.chorus-section, .section-header-row').forEach(el => {
       el.classList.remove('chorus-section', 'section-header-row')
     })
@@ -383,14 +387,30 @@ export function SongRenderer({
             chordText = chordText.slice(1, -1).trim()
             span.classList.add('chord-optional')
           }
-          span.textContent = chordText
+          // Transpose inline chords using the same offset as the rendered song
+          span.textContent = transposeOffset !== 0 ? transposeKey(chordText, transposeOffset) : chordText
           commentEl.appendChild(span)
         } else {
           commentEl.appendChild(document.createTextNode(part))
         }
       })
     })
-  }, [html])
+    // ── Song meta (key + tempo) below title/subtitle ──────────────────────────
+    if (songKey || (tempo ?? 0) > 0) {
+      const meta = document.createElement('div')
+      meta.className = 'song-meta-line'
+      const parts: string[] = []
+      if (songKey) parts.push(songKey)
+      if (tempo && tempo > 0) parts.push(`♩\u202f${tempo}`)
+      meta.textContent = parts.join(' · ')
+      const anchor = container.querySelector<HTMLElement>('h2') ?? container.querySelector<HTMLElement>('h1')
+      if (anchor) {
+        anchor.after(meta)
+      } else {
+        container.insertBefore(meta, container.firstChild)
+      }
+    }
+  }, [html, songKey, tempo, transposeOffset])
 
   return (
     <>

@@ -8,6 +8,50 @@ import { lintChordPro } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
 import type { Song, Book } from '@/types'
 
+// ─── Diff helpers ─────────────────────────────────────────────────────────────
+
+interface DiffField { label: string; value: string }
+
+function songFieldValue(song: Song, label: string, bookMap: Map<string, string>): string {
+  switch (label) {
+    case 'Title':   return song.title
+    case 'Artist':  return song.artist ?? '—'
+    case 'Key':     return song.transcription.key ?? '—'
+    case 'Tempo':   return song.transcription.tempo ? `${song.transcription.tempo} BPM` : '—'
+    case 'Book':    return bookMap.get(song.bookId) ?? '—'
+    case 'Tags':    return (song.tags ?? []).join(', ') || '—'
+    case 'Updated': return new Date(song.updatedAt).toISOString().slice(0, 10)
+    default:        return ''
+  }
+}
+
+const DIFF_FIELD_ORDER = ['Title', 'Artist', 'Key', 'Tempo', 'Book', 'Tags', 'Updated']
+
+function getDiffFields(song: Song, other: Song, bookMap: Map<string, string>): DiffField[] {
+  const result: DiffField[] = []
+  for (const label of DIFF_FIELD_ORDER) {
+    if (songFieldValue(song, label, bookMap) !== songFieldValue(other, label, bookMap)) {
+      result.push({ label, value: songFieldValue(song, label, bookMap) })
+      if (result.length === 2) break
+    }
+  }
+  return result
+}
+
+function contentLines(content: string): string[] {
+  return content
+    .split('\n')
+    .map(line => line.replace(/\[[^\]]*\]/g, '').trim())
+    .filter(line => line && !line.startsWith('{'))
+}
+
+function getContentDiffLines(song: Song, other: Song): string[] {
+  const otherSet = new Set(contentLines(other.transcription.content))
+  return contentLines(song.transcription.content)
+    .filter(line => !otherSet.has(line))
+    .slice(0, 2)
+}
+
 // ─── Jaccard word similarity ──────────────────────────────────────────────────
 
 function normalizeTitle(title: string): string {
@@ -147,6 +191,35 @@ export default function CurationPage() {
       .filter(Boolean) as DuplicateGroup[]
   }, [duplicateGroups, sameBookOnly])
 
+  // ── Exact same-book duplicates (for bulk removal) ─────────────────────────
+  const exactSameBookGroups = useMemo(() => {
+    if (!songs) return []
+    const map = new Map<string, Song[]>()
+    for (const s of songs) {
+      const key = `${s.bookId}|${normalizeTitle(s.title)}`
+      const arr = map.get(key) ?? []
+      arr.push(s)
+      map.set(key, arr)
+    }
+    return [...map.values()].filter(arr => arr.length > 1)
+  }, [songs])
+
+  const removeExactDuplicates = async () => {
+    const toDelete = exactSameBookGroups.reduce((sum, g) => sum + g.length - 1, 0)
+    if (!confirm(`Delete ${toDelete} exact duplicate${toDelete === 1 ? '' : 's'}? The newest version in each book will be kept.`)) return
+    for (const group of exactSameBookGroups) {
+      const sorted = [...group].sort((a, b) => b.updatedAt - a.updatedAt)
+      for (const song of sorted.slice(1)) {
+        await db.songs.delete(song.id)
+        await db.syncStates.delete(`song:${song.id}`)
+        if (user) {
+          const book = books?.find(b => b.id === song.bookId)
+          deleteSongFromCloud(song.id, user.id, book?.sharedTeamId)
+        }
+      }
+    }
+  }
+
   // ── Delete song ───────────────────────────────────────────────────────────
   const deleteSong = async (song: Song) => {
     if (!confirm(`Delete "${song.title}"? This cannot be undone.`)) return
@@ -212,17 +285,29 @@ export default function CurationPage() {
       {/* Duplicates tab */}
       {tab === 'duplicates' && (
         <div className="space-y-3">
-          {/* Filter toggle */}
+          {/* Filter toggle + bulk remove */}
           {duplicateGroups.length > 0 && (
-            <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={sameBookOnly}
-                onChange={e => setSameBookOnly(e.target.checked)}
-                className="accent-amber-400 rounded"
-              />
-              Show only duplicates within the same book
-            </label>
+            <div className="flex items-center justify-between gap-4">
+              <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={sameBookOnly}
+                  onChange={e => setSameBookOnly(e.target.checked)}
+                  className="accent-amber-400 rounded"
+                />
+                Show only duplicates within the same book
+              </label>
+              {exactSameBookGroups.length > 0 && (
+                <button
+                  onClick={removeExactDuplicates}
+                  className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors shrink-0"
+                  title="Keep the newest copy in each book, delete the rest"
+                >
+                  <Trash2 size={12} />
+                  Remove {exactSameBookGroups.reduce((s, g) => s + g.length - 1, 0)} exact same-book duplicate{exactSameBookGroups.reduce((s, g) => s + g.length - 1, 0) === 1 ? '' : 's'}
+                </button>
+              )}
+            </div>
           )}
 
           {visibleDuplicateGroups.length === 0 ? (
@@ -232,43 +317,66 @@ export default function CurationPage() {
                 : 'No duplicates within the same book.'}
             </div>
           ) : (
-            visibleDuplicateGroups.map((group, i) => (
-              <div key={i} className="bg-surface-1 border border-surface-3 rounded-xl overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-2 bg-surface-2 border-b border-surface-3">
-                  <Copy size={13} className="text-amber-400" />
-                  <span className="text-xs text-amber-400 font-medium">
-                    {group.songs.every(s => s.title.toLowerCase().trim() === group.songs[0].title.toLowerCase().trim())
-                      ? 'Exact duplicate'
-                      : `Similar titles (${Math.round(group.similarity * 100)}% match)`}
-                  </span>
+            visibleDuplicateGroups.map((group, i) => {
+              const isExact = group.songs.every(s => s.title.toLowerCase().trim() === group.songs[0].title.toLowerCase().trim())
+              return (
+                <div key={i} className="bg-surface-1 border border-surface-3 rounded-xl overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-surface-2 border-b border-surface-3">
+                    <Copy size={13} className="text-amber-400" />
+                    <span className="text-xs text-amber-400 font-medium">
+                      {isExact ? 'Exact duplicate' : `Similar titles (${Math.round(group.similarity * 100)}% match)`}
+                    </span>
+                  </div>
+                  <ul className="divide-y divide-surface-3">
+                    {group.songs.map((song, idx) => {
+                      const neighbor = group.songs[idx + 1] ?? group.songs[idx - 1]
+                      const metaDiffs = isExact ? [] : getDiffFields(song, neighbor, bookMap)
+                      const contentDiffs = isExact ? [] : getContentDiffLines(song, neighbor)
+                      return (
+                        <li key={song.id} className="flex items-start gap-3 px-4 py-2.5">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">{song.title}</div>
+                            <div className="text-xs text-ink-muted truncate">
+                              {[song.artist, bookMap.get(song.bookId)].filter(Boolean).join(' · ')}
+                            </div>
+                            {metaDiffs.length > 0 && (
+                              <div className="flex gap-3 mt-0.5">
+                                {metaDiffs.map(({ label, value }) => (
+                                  <span key={label} className="text-xs">
+                                    <span className="text-ink-faint">{label}: </span>
+                                    <span className="text-amber-400/80">{value}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {contentDiffs.length > 0 && (
+                              <div className="mt-1 space-y-0.5">
+                                {contentDiffs.map((line, li) => (
+                                  <div key={li} className="text-xs font-mono text-ink-faint/80 truncate">+ {line}</div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => navigate(`/editor/${song.id}`)}
+                            className="text-xs text-chord hover:text-chord/80 shrink-0 mt-0.5"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteSong(song)}
+                            className="text-ink-faint hover:text-red-400 transition-colors shrink-0 mt-0.5"
+                            title="Delete song"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
                 </div>
-                <ul className="divide-y divide-surface-3">
-                  {group.songs.map(song => (
-                    <li key={song.id} className="flex items-center gap-3 px-4 py-2.5">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{song.title}</div>
-                        <div className="text-xs text-ink-muted truncate">
-                          {[song.artist, bookMap.get(song.bookId)].filter(Boolean).join(' · ')}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => navigate(`/editor/${song.id}`)}
-                        className="text-xs text-chord hover:text-chord/80 shrink-0"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteSong(song)}
-                        className="text-ink-faint hover:text-red-400 transition-colors shrink-0"
-                        title="Delete song"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       )}

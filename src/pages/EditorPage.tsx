@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2 } from 'lucide-react'
 import { db, upsertSongVersions, markPending } from '@/db'
-import { deleteSongFromCloud } from '@/sync/firestoreSync'
+import { deleteSongFromCloud, fetchTeamNoteIndicator } from '@/sync/firestoreSync'
 import { buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
 import { ChordProEditor } from '@/components/editor/ChordProEditor'
 import type { ChordProEditorHandle } from '@/components/editor/ChordProEditor'
@@ -37,6 +37,7 @@ export default function EditorPage() {
   const [showHistory, setShowHistory] = useState(false)
   const [showExtraMeta, setShowExtraMeta] = useState(false)
   const [deletePhase, setDeletePhase] = useState<'idle' | 'confirm' | 'deleted'>('idle')
+  const [teamHasNotes, setTeamHasNotes] = useState(false)
   const deletedSongRef = useRef<typeof song | null>(null)
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
@@ -55,6 +56,15 @@ export default function EditorPage() {
       : [],
     [id]
   )
+
+  // ── Team note indicator ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!song) return
+    db.books.get(song.bookId).then(book => {
+      if (!book?.sharedTeamId) return
+      fetchTeamNoteIndicator(book.sharedTeamId, song.id).then(setTeamHasNotes)
+    })
+  }, [song?.id, song?.bookId])
 
   // ── Tap-tempo ─────────────────────────────────────────────────────────────
   const tapTimesRef = useRef<number[]>([])
@@ -232,8 +242,16 @@ export default function EditorPage() {
         <button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink">
           <X size={18} />
         </button>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex items-center gap-2">
           <span className="font-medium text-sm truncate">{song.title}</span>
+          {teamHasNotes && (
+            <span
+              className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-chord/10 text-chord border border-chord/20"
+              title="Team members have notes on this song"
+            >
+              notes
+            </span>
+          )}
         </div>
         <button
           onClick={() => setShowPreview(p => !p)}

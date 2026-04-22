@@ -4,13 +4,13 @@ import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Plus, ListMusic, Play, Calendar, Copy, Users, Lock,
-  CheckSquare, Square, Trash2, FolderInput,
+  CheckSquare, Square, Trash2, FolderInput, AlertTriangle,
 } from 'lucide-react'
 import { db, generateId, markPending, getTeamRole } from '@/db'
 import { deleteSetlistFromCloud } from '@/sync/firestoreSync'
 import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
-import type { Setlist } from '@/types'
+import type { Setlist, Song } from '@/types'
 
 type SetlistSort = 'name' | 'updatedAt' | 'createdAt' | 'accessedAt'
 
@@ -30,8 +30,18 @@ export default function SetlistsPage() {
   const [bulkToast, setBulkToast] = useState<string | null>(null)
   const bulkToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  type OrganizeDialog = {
+    action: 'copy' | 'move'
+    targetTeamId: string
+    targetLabel: string
+    targetBook: { id: string; title: string } | null
+    affectedSongs: Song[]
+  }
+  const [organizeDialog, setOrganizeDialog] = useState<OrganizeDialog | null>(null)
+
   const setlistsRaw = useLiveQuery(() => db.setlists.toArray(), [])
   const teams        = useLiveQuery(() => db.teams.toArray(), [])
+  const books        = useLiveQuery(() => db.books.toArray(), [])
 
   const myTeams = useMemo(() => {
     if (!teams || !user) return []
@@ -158,9 +168,8 @@ export default function SetlistsPage() {
     showBulkToast(`Deleted ${count} setlist${count !== 1 ? 's' : ''}`)
   }
 
-  const bulkCopyTo = async (targetTeamId: string | null, targetLabel: string) => {
+  const bulkCopyTo = async (targetTeamId: string | null, targetLabel: string, songIdMap = new Map<string, string>()) => {
     const toCopy = setlists.filter(s => selectedIds.has(s.id))
-    setShowOrganizeMenu(false)
     const now = Date.now()
     for (const setlist of toCopy) {
       const newId = generateId()
@@ -176,7 +185,12 @@ export default function SetlistsPage() {
       const items = await db.setlistItems.where('setlistId').equals(setlist.id).toArray()
       if (items.length > 0) {
         await db.setlistItems.bulkAdd(
-          items.map(item => ({ ...item, id: generateId(), setlistId: newId }))
+          items.map(item => ({
+            ...item,
+            id: generateId(),
+            setlistId: newId,
+            songId: item.songId ? (songIdMap.get(item.songId) ?? item.songId) : item.songId,
+          }))
         )
       }
       await markPending('setlist', newId)
@@ -186,17 +200,70 @@ export default function SetlistsPage() {
     showBulkToast(`Copied ${toCopy.length} setlist${toCopy.length !== 1 ? 's' : ''} to ${targetLabel}`)
   }
 
-  const bulkMoveTo = async (targetTeamId: string | null, targetLabel: string) => {
+  const bulkMoveTo = async (targetTeamId: string | null, targetLabel: string, songIdMap = new Map<string, string>()) => {
     const ids = [...selectedIds]
-    setShowOrganizeMenu(false)
     const now = Date.now()
     for (const id of ids) {
       await db.setlists.update(id, { sharedTeamId: targetTeamId ?? undefined, updatedAt: now })
       await markPending('setlist', id)
+      if (songIdMap.size > 0) {
+        const items = await db.setlistItems.where('setlistId').equals(id).toArray()
+        for (const item of items) {
+          if (item.songId && songIdMap.has(item.songId)) {
+            await db.setlistItems.update(item.id, { songId: songIdMap.get(item.songId) })
+          }
+        }
+      }
     }
     setActiveTeamId(targetTeamId)
     exitSelectMode()
     showBulkToast(`Moved ${ids.length} setlist${ids.length !== 1 ? 's' : ''} to ${targetLabel}`)
+  }
+
+  const prepareOrganize = async (action: 'copy' | 'move', targetTeamId: string | null, targetLabel: string) => {
+    setShowOrganizeMenu(false)
+    if (!targetTeamId) {
+      action === 'copy' ? await bulkCopyTo(null, targetLabel) : await bulkMoveTo(null, targetLabel)
+      return
+    }
+    // Collect unique song IDs across selected setlists
+    const allSongIds = new Set<string>()
+    for (const id of selectedIds) {
+      const items = await db.setlistItems.where('setlistId').equals(id).toArray()
+      items.forEach(i => { if (i.songId) allSongIds.add(i.songId) })
+    }
+    // Find songs not in any team book for this target
+    const teamBookIds = new Set((books ?? []).filter(b => b.sharedTeamId === targetTeamId).map(b => b.id))
+    const affected: Song[] = []
+    for (const songId of allSongIds) {
+      const song = await db.songs.get(songId)
+      if (song && !teamBookIds.has(song.bookId)) affected.push(song)
+    }
+    if (affected.length === 0) {
+      action === 'copy' ? await bulkCopyTo(targetTeamId, targetLabel) : await bulkMoveTo(targetTeamId, targetLabel)
+      return
+    }
+    const teamBooks = (books ?? []).filter(b => b.sharedTeamId === targetTeamId)
+    setOrganizeDialog({ action, targetTeamId, targetLabel, targetBook: teamBooks[0] ?? null, affectedSongs: affected })
+  }
+
+  const executeOrganize = async (copySongs: boolean) => {
+    if (!organizeDialog) return
+    const { action, targetTeamId, targetLabel, targetBook, affectedSongs } = organizeDialog
+    setOrganizeDialog(null)
+    const songIdMap = new Map<string, string>()
+    if (copySongs && targetBook) {
+      const now = Date.now()
+      for (const song of affectedSongs) {
+        const newId = generateId()
+        await db.songs.add({ ...song, id: newId, bookId: targetBook.id, updatedAt: now, accessedAt: undefined })
+        await markPending('song', newId)
+        songIdMap.set(song.id, newId)
+      }
+    }
+    action === 'copy'
+      ? await bulkCopyTo(targetTeamId, targetLabel, songIdMap)
+      : await bulkMoveTo(targetTeamId, targetLabel, songIdMap)
   }
 
   return (
@@ -288,7 +355,7 @@ export default function SetlistsPage() {
                             {organizeTargets.map(target => (
                               <button
                                 key={`copy-${target.id}`}
-                                onClick={() => bulkCopyTo(target.id, target.label)}
+                                onClick={() => prepareOrganize('copy', target.id, target.label)}
                                 className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
                               >
                                 {target.id ? <Users size={11} className="text-ink-faint" /> : <ListMusic size={11} className="text-ink-faint" />}
@@ -300,7 +367,7 @@ export default function SetlistsPage() {
                             {organizeTargets.map(target => (
                               <button
                                 key={`move-${target.id}`}
-                                onClick={() => bulkMoveTo(target.id, target.label)}
+                                onClick={() => prepareOrganize('move', target.id, target.label)}
                                 className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
                               >
                                 {target.id ? <Users size={11} className="text-ink-faint" /> : <ListMusic size={11} className="text-ink-faint" />}
@@ -413,6 +480,64 @@ export default function SetlistsPage() {
           )}
         </div>
       </div>
+
+      {/* Copy-songs-to-team dialog */}
+      {organizeDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className="bg-surface-1 border border-surface-3 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={20} className="text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <h2 className="font-semibold text-sm">Songs from personal books</h2>
+                <p className="text-xs text-ink-muted mt-1">
+                  {organizeDialog.affectedSongs.length} song{organizeDialog.affectedSongs.length !== 1 ? 's' : ''} in {organizeDialog.action === 'copy' ? 'the copied' : 'these'} setlist{selectedIds.size !== 1 ? 's' : ''} are stored in your personal library and won't be visible to team members.
+                </p>
+                {organizeDialog.targetBook ? (
+                  <p className="text-xs text-ink-muted mt-2">
+                    Copy them to <span className="text-ink font-medium">"{organizeDialog.targetBook.title}"</span> to make them available to the team.
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-400/80 mt-2">
+                    No team book found for {organizeDialog.targetLabel}. Create a team book in the Library first to copy songs across.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-surface-2 rounded-lg px-3 py-2 max-h-32 overflow-y-auto">
+              {organizeDialog.affectedSongs.slice(0, 6).map(s => (
+                <div key={s.id} className="text-xs text-ink-muted py-0.5 truncate">{s.title}</div>
+              ))}
+              {organizeDialog.affectedSongs.length > 6 && (
+                <div className="text-xs text-ink-faint py-0.5">…and {organizeDialog.affectedSongs.length - 6} more</div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {organizeDialog.targetBook && (
+                <button
+                  onClick={() => executeOrganize(true)}
+                  className="w-full px-4 py-2 bg-chord/20 text-chord rounded-lg text-sm font-medium hover:bg-chord/30 transition-colors"
+                >
+                  Copy songs to "{organizeDialog.targetBook.title}"
+                </button>
+              )}
+              <button
+                onClick={() => executeOrganize(false)}
+                className="w-full px-4 py-2 bg-surface-2 text-ink-muted rounded-lg text-sm hover:bg-surface-3 transition-colors"
+              >
+                {organizeDialog.targetBook ? 'Skip — keep songs in personal book' : `${organizeDialog.action === 'copy' ? 'Copy' : 'Move'} setlist anyway`}
+              </button>
+              <button
+                onClick={() => setOrganizeDialog(null)}
+                className="w-full px-4 py-2 text-ink-faint text-sm hover:text-ink transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -73,7 +73,7 @@ export function AppShell() {
   const [showFeedback, setShowFeedback] = useState(false)
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface-0 text-ink font-ui">
+    <div className="flex h-dvh overflow-hidden bg-surface-0 text-ink font-ui">
 
       {/* Mobile overlay */}
       {sidebarOpen && (

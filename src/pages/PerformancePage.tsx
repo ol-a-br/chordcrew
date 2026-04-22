@@ -2,11 +2,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useFontScale } from '@/hooks/useFontScale'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlignLeft, ZoomIn, ZoomOut, List, Pencil } from 'lucide-react'
-import { db } from '@/db'
+import { X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlignLeft, ZoomIn, ZoomOut, List, Pencil, StickyNote } from 'lucide-react'
+import { db, getSettings, getSongNote, markPending } from '@/db'
 import { SongRenderer, prewarmSongCache, isSongCached, getCachedHtml } from '@/components/viewer/SongRenderer'
 import { useKeyboardNav } from '@/hooks/useKeyboard'
-import { transposeKey, getFirstChords } from '@/utils/chordpro'
+import { transposeKey } from '@/utils/chordpro'
+import { NotesPanel } from '@/components/shared/NotesPanel'
+import { useAuth } from '@/auth/AuthContext'
 import type { SetlistItem } from '@/types'
 
 function getDefaultColumns(): number {
@@ -49,11 +51,15 @@ export default function PerformancePage() {
   const [fontScale, setFontScale]     = useFontScale()
   const [showControls, setShowControls] = useState(true)
   const [showTray, setShowTray]       = useState(false)
-  const [showKeyDropdown, setShowKeyDropdown] = useState(false)
   const [metronome, setMetronome]     = useState(false)
   const [beat, setBeat]               = useState(false)
+  const [metronomeMode, setMetronomeMode] = useState<'light' | 'sound' | 'both'>('light')
+  const [showNotes, setShowNotes]     = useState(false)
+  const [noteAutoShowMs, setNoteAutoShowMs] = useState(2000)
   const [songHtmlReady, setSongHtmlReady] = useState(false)
   const [swipeHint, setSwipeHint] = useState<{ dir: 'prev' | 'next'; targetPos: number } | null>(null)
+
+  const { user } = useAuth()
 
   const contentRef = useRef<HTMLDivElement>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
@@ -62,23 +68,15 @@ export default function PerformancePage() {
   const beatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const swipeHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const notesHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const noteAutoShowMsRef = useRef(2000)
+  noteAutoShowMsRef.current = noteAutoShowMs  // always current — avoids stale closure in async callbacks
 
   const transposedKey = useMemo(
     () => transposeKey(song?.transcription.key ?? '', transpose),
     [song?.transcription.key, transpose]
   )
-
-  const keyDropdownEntries = useMemo(() => {
-    if (!song?.transcription.key) return []
-    const originalKey = song.transcription.key
-    const content = song.transcription.content
-    return Array.from({ length: 12 }, (_, i) => {
-      const delta = i - 5
-      const key   = transposeKey(originalKey, delta)
-      const chords = getFirstChords(content, delta, 4)
-      return { delta, key, chords }
-    })
-  }, [song?.transcription.key, song?.transcription.content])
 
   const setlistItems = useLiveQuery(
     async (): Promise<SetlistItem[]> => setlistId ? db.setlistItems.where('setlistId').equals(setlistId).sortBy('order') : [],
@@ -116,20 +114,67 @@ export default function PerformancePage() {
     if (currentSetlistItem.columnCount) setColumns(currentSetlistItem.columnCount)
   }, [currentSetlistItem])
 
-  // ── Visual metronome ──────────────────────────────────────────────────────
+  // ── Book lookup for team ID (notes indicator) ────────────────────────────
+  const book = useLiveQuery(() => song?.bookId ? db.books.get(song.bookId) : undefined, [song?.bookId])
+  const teamId = book?.sharedTeamId
+
+  // ── Load settings ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    getSettings().then(s => {
+      setMetronomeMode(s.metronomeMode)
+      setNoteAutoShowMs(s.noteAutoShowMs ?? 2000)
+    })
+  }, [])
+
+  // ── Auto-show notes on song transition ───────────────────────────────────
+  useEffect(() => {
+    if (!user || !id || noteAutoShowMs <= 0) return
+    // Only auto-show if the user has a note for this song
+    getSongNote(id, user.id).then(note => {
+      if (!note?.content?.trim()) return
+      setShowNotes(true)
+      if (notesHideTimer.current) clearTimeout(notesHideTimer.current)
+      notesHideTimer.current = setTimeout(() => setShowNotes(false), noteAutoShowMsRef.current)
+    })
+    return () => { if (notesHideTimer.current) clearTimeout(notesHideTimer.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, user?.id])
+
+  // ── Metronome: visual flash + optional audio click ────────────────────────
   useEffect(() => {
     if (beatTimerRef.current) clearInterval(beatTimerRef.current)
     if (metronome && song && song.transcription.tempo > 0) {
       const intervalMs = 60000 / song.transcription.tempo
       beatTimerRef.current = setInterval(() => {
         setBeat(true)
+        // Audio click — only when mode includes sound and AudioContext is ready
+        if (metronomeMode !== 'light' && audioCtxRef.current) {
+          const ctx = audioCtxRef.current
+          try {
+            if (ctx.state === 'suspended') ctx.resume()
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.frequency.value = 1000   // 1 kHz tick
+            gain.gain.setValueAtTime(0.35, ctx.currentTime)
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05)
+            osc.start(ctx.currentTime)
+            osc.stop(ctx.currentTime + 0.05)
+          } catch { /* audio not available on this device/context */ }
+        }
         setTimeout(() => setBeat(false), Math.min(80, intervalMs * 0.15))
       }, intervalMs)
     } else {
       setBeat(false)
     }
     return () => { if (beatTimerRef.current) clearInterval(beatTimerRef.current) }
-  }, [metronome, song?.transcription.tempo])
+  }, [metronome, song?.transcription.tempo, metronomeMode])
+
+  // ── Release AudioContext on unmount ───────────────────────────────────────
+  useEffect(() => {
+    return () => { audioCtxRef.current?.close().catch(() => {}) }
+  }, [])
 
   // ── Wake Lock ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -142,6 +187,17 @@ export default function PerformancePage() {
     }
     acquire()
     return () => { wakeLockRef.current?.release() }
+  }, [])
+
+  // ── Metronome toggle — creates AudioContext on first activation ──────────
+  const toggleMetronome = useCallback(() => {
+    setMetronome(m => {
+      const next = !m
+      if (next && !audioCtxRef.current) {
+        try { audioCtxRef.current = new AudioContext() } catch { /* ignore */ }
+      }
+      return next
+    })
   }, [])
 
   // ── Auto-hide controls ────────────────────────────────────────────────────
@@ -182,6 +238,8 @@ export default function PerformancePage() {
       if (atEnd && nextSongId && setlistId) {
         navPending = true
         lastNavTime = Date.now()
+        setShowNotes(false)
+        if (notesHideTimer.current) clearTimeout(notesHideTimer.current)
         navigate(`/perform/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`)
         return
       }
@@ -193,6 +251,8 @@ export default function PerformancePage() {
       if (atBottom && nextSongId && setlistId) {
         navPending = true
         lastNavTime = Date.now()
+        setShowNotes(false)
+        if (notesHideTimer.current) clearTimeout(notesHideTimer.current)
         navigate(`/perform/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`)
       } else {
         container.scrollBy({ top: container.clientHeight, behavior: 'auto' })
@@ -208,6 +268,8 @@ export default function PerformancePage() {
       if (container.scrollLeft < 10 && prevSongId && setlistId) {
         navPending = true
         lastNavTime = Date.now()
+        setShowNotes(false)
+        if (notesHideTimer.current) clearTimeout(notesHideTimer.current)
         navigate(`/perform/${prevSongId}?setlistId=${setlistId}&pos=${currentPos - 1}`)
         return
       }
@@ -217,6 +279,8 @@ export default function PerformancePage() {
       if (container.scrollTop < 4 && prevSongId && setlistId) {
         navPending = true
         lastNavTime = Date.now()
+        setShowNotes(false)
+        if (notesHideTimer.current) clearTimeout(notesHideTimer.current)
         navigate(`/perform/${prevSongId}?setlistId=${setlistId}&pos=${currentPos - 1}`)
         return
       }
@@ -260,8 +324,11 @@ export default function PerformancePage() {
     return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2) }
   }, [song?.id, song?.transcription.content, transpose])
 
-  // ── Clean up swipe hint timer on unmount ─────────────────────────────────────
-  useEffect(() => () => { if (swipeHintTimer.current) clearTimeout(swipeHintTimer.current) }, [])
+  // ── Clean up swipe hint + notes timers on unmount ────────────────────────────
+  useEffect(() => () => {
+    if (swipeHintTimer.current) clearTimeout(swipeHintTimer.current)
+    if (notesHideTimer.current) clearTimeout(notesHideTimer.current)
+  }, [])
 
   // ── Prefetch adjacent songs to warm the render cache ─────────────────────────
   useEffect(() => {
@@ -283,14 +350,6 @@ export default function PerformancePage() {
     }, 100)
     return () => clearTimeout(t)
   }, [song?.id, currentPos, songItems])
-
-  // Keep controls visible while key dropdown is open
-  useEffect(() => {
-    if (showKeyDropdown) {
-      setShowControls(true)
-      if (hideTimer.current) clearTimeout(hideTimer.current)
-    }
-  }, [showKeyDropdown])
 
   // ── Swipe gesture (horizontal) ────────────────────────────────────────────
   // handleTouchStart does NOT call resetHideTimer: we don't want the toolbar
@@ -413,6 +472,7 @@ export default function PerformancePage() {
   return (
     <div
       className="fixed inset-0 bg-surface-0 flex flex-col z-50"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       onPointerMove={(e) => { if (e.pointerType === 'mouse') resetHideTimer() }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -460,57 +520,16 @@ export default function PerformancePage() {
           </div>
         )}
 
-        {song.transcription.key && (
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setShowKeyDropdown(v => !v)}
-              className="text-xs font-mono text-chord bg-chord/10 hover:bg-chord/20 px-2 py-1 rounded transition-colors"
-              title="Click to change key"
-            >
-              𝄞 {transpose !== 0 ? `${song.transcription.key} → ${transposedKey}` : song.transcription.key}
-            </button>
-            {showKeyDropdown && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowKeyDropdown(false)} />
-                <div className="absolute left-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl overflow-hidden w-72">
-                  {keyDropdownEntries.map(({ delta, key, chords }) => (
-                    <button
-                      key={delta}
-                      onClick={() => { setTranspose(delta); setShowKeyDropdown(false) }}
-                      className={`flex items-center gap-3 w-full text-left px-3 py-2 text-xs transition-colors
-                        ${delta === transpose
-                          ? 'bg-chord/15 text-chord'
-                          : 'text-ink hover:bg-surface-3'
-                        }`}
-                    >
-                      <span className="font-mono w-5 text-right text-ink-faint shrink-0">
-                        {delta === 0 ? '0' : delta > 0 ? `+${delta}` : delta}
-                      </span>
-                      <span className={`font-mono font-bold w-8 shrink-0 ${delta === 0 ? 'text-chord' : ''}`}>
-                        {key}
-                      </span>
-                      <span className="flex gap-1 flex-wrap">
-                        {chords.map(c => (
-                          <span key={c} className="font-mono text-chord/80 bg-surface-0 px-1 rounded text-[11px]">{c}</span>
-                        ))}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
         {song.transcription.tempo > 0 && (
           <button
-            onClick={() => setMetronome(m => !m)}
-            className={`relative text-xs font-mono shrink-0 px-1.5 py-0.5 rounded transition-colors ${
-              metronome ? 'text-chord bg-chord/10' : 'text-ink-muted hover:text-ink'
+            onClick={toggleMetronome}
+            className={`relative p-1.5 rounded shrink-0 transition-colors ${
+              metronome ? 'text-chord' : 'text-ink-muted hover:text-ink'
             }`}
             title={`Metronome — ${song.transcription.tempo} BPM`}
           >
-            ♩ {song.transcription.tempo}
-            {metronome && (
+            ♩
+            {metronome && metronomeMode !== 'sound' && (
               <span
                 className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full transition-colors duration-75 ${
                   beat ? 'bg-chord' : 'bg-chord/25'
@@ -522,11 +541,27 @@ export default function PerformancePage() {
 
         {/* Transpose */}
         <div className="flex items-center gap-0.5 bg-surface-2/80 rounded-lg px-1">
-          <button onClick={() => setTranspose(t => t - 1)} className="p-1 text-ink-muted hover:text-ink"><ChevronDown size={15} /></button>
+          <button onClick={() => {
+            const next = transpose - 1
+            setTranspose(next)
+            if (currentSetlistItem && setlistId) {
+              db.setlistItems.update(currentSetlistItem.id, { transposeOffset: next })
+              db.setlists.update(setlistId, { updatedAt: Date.now() })
+              markPending('setlist', setlistId)
+            }
+          }} className="p-1 text-ink-muted hover:text-ink"><ChevronDown size={15} /></button>
           <span className="text-xs font-mono w-6 text-center">
             {transpose > 0 ? `+${transpose}` : transpose}
           </span>
-          <button onClick={() => setTranspose(t => t + 1)} className="p-1 text-ink-muted hover:text-ink"><ChevronUp size={15} /></button>
+          <button onClick={() => {
+            const next = transpose + 1
+            setTranspose(next)
+            if (currentSetlistItem && setlistId) {
+              db.setlistItems.update(currentSetlistItem.id, { transposeOffset: next })
+              db.setlists.update(setlistId, { updatedAt: Date.now() })
+              markPending('setlist', setlistId)
+            }
+          }} className="p-1 text-ink-muted hover:text-ink"><ChevronUp size={15} /></button>
         </div>
 
         {/* Column count 1–5 */}
@@ -566,6 +601,21 @@ export default function PerformancePage() {
             <List size={15} />
           </button>
         )}
+
+        {/* Notes toggle */}
+        {user && (
+          <button
+            onClick={() => {
+              setShowNotes(v => !v)
+              if (notesHideTimer.current) clearTimeout(notesHideTimer.current)
+              resetHideTimer()
+            }}
+            className={`p-1.5 rounded shrink-0 ${showNotes ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
+            title="My notes"
+          >
+            <StickyNote size={15} />
+          </button>
+        )}
       </div>
 
       {/* Song content */}
@@ -592,6 +642,8 @@ export default function PerformancePage() {
               fontScale={fontScale}
               expandRepeats
               pageFlip
+              songKey={transposedKey}
+              tempo={song.transcription.tempo}
             />
           </div>
         </div>
@@ -613,7 +665,34 @@ export default function PerformancePage() {
             lyricsOnly={lyricsOnly}
             fontScale={fontScale}
             expandRepeats
+            songKey={transposedKey}
+            tempo={song.transcription.tempo}
           />
+        </div>
+      )}
+
+      {/* Persistent metronome — always visible above tap zones, toolbar-independent */}
+      {song.transcription.tempo > 0 && (
+        <div className="absolute bottom-6 right-3 z-40 flex flex-col items-center gap-1.5 pointer-events-none">
+          {/* Beat indicator dot — shown for light/both modes */}
+          {metronomeMode !== 'sound' && (
+            <span className={`w-2.5 h-2.5 rounded-full transition-colors duration-75 ${
+              metronome && beat ? 'bg-chord' : metronome ? 'bg-chord/30' : 'bg-ink-faint/20'
+            }`} />
+          )}
+          {/* Toggle button — always visible; active = chord colour, inactive = muted */}
+          <button
+            className={`pointer-events-auto p-2 rounded-full text-lg leading-none select-none transition-colors ${
+              metronome
+                ? 'text-chord bg-chord/10'
+                : 'text-ink-muted bg-surface-2/60'
+            }`}
+            onClick={(e) => { e.stopPropagation(); toggleMetronome() }}
+            title={`Toggle metronome — ${song.transcription.tempo} BPM`}
+            aria-label={`Toggle metronome — ${song.transcription.tempo} BPM`}
+          >
+            ♩
+          </button>
         </div>
       )}
 
@@ -647,6 +726,24 @@ export default function PerformancePage() {
               </span>
             )}
             {swipeHint.dir === 'next' && <ChevronRight size={18} />}
+          </div>
+        </div>
+      )}
+
+      {/* Notes panel — right-side overlay in performance mode */}
+      {showNotes && user && (
+        <div
+          className="absolute inset-0 z-40 pointer-events-none"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="pointer-events-auto">
+            <NotesPanel
+              songId={song.id}
+              userId={user.id}
+              teamId={teamId}
+              onClose={() => setShowNotes(false)}
+              performanceMode
+            />
           </div>
         </div>
       )}

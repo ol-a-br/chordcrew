@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   ArrowLeft, Play, Music, Pencil, Check,
-  GripVertical, Trash2, Plus, Search,
-  ChevronUp, ChevronDown, Printer, Link2,
+  GripVertical, Trash2, Plus, Search, Copy,
+  ChevronUp, ChevronDown, Printer, Link2, AlertTriangle,
 } from 'lucide-react'
 import { db, generateId, markPending } from '@/db'
 import { Button } from '@/components/shared/Button'
@@ -19,7 +19,13 @@ export default function SetlistDetailPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [filterBookId, setFilterBookId] = useState('')
+  const [filterTags, setFilterTags] = useState<string[]>([])
+  const [showPersonalSongs, setShowPersonalSongs] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
+
+  type AddSongDialog = { song: Song; targetBook: { id: string; title: string } | null }
+  const [addSongDialog, setAddSongDialog] = useState<AddSongDialog | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -46,19 +52,63 @@ export default function SetlistDetailPage() {
     [songIds.join(',')]
   )
 
+  const books = useLiveQuery(async () => {
+    if (!editMode && !setlist?.sharedTeamId) return []
+    const all = await db.books.toArray()
+    return all.sort((a, b) => a.title.localeCompare(b.title))
+  }, [editMode, setlist?.sharedTeamId])
+
+  const isTeamSetlist = !!setlist?.sharedTeamId
+
+  // Set of book IDs that belong to this setlist's team — null when not a team setlist
+  const teamBookIds = useMemo(() => {
+    if (!setlist?.sharedTeamId || !books) return null
+    return new Set(books.filter(b => b.sharedTeamId === setlist.sharedTeamId).map(b => b.id))
+  }, [books, setlist?.sharedTeamId])
+
+  // Books available in the "Add Song" filter — personal books hidden for team setlists
+  const availableBooksForFilter = useMemo(() => {
+    if (!books) return []
+    if (!setlist?.sharedTeamId) return books
+    return books.filter(b => b.sharedTeamId === setlist.sharedTeamId)
+  }, [books, setlist?.sharedTeamId])
+
+  // Reset book filter if it points to a personal book while editing a team setlist
+  useEffect(() => {
+    if (isTeamSetlist && filterBookId && teamBookIds && !teamBookIds.has(filterBookId)) {
+      setFilterBookId('')
+    }
+  }, [isTeamSetlist, teamBookIds, filterBookId])
+
+  const allTagsForFilter = useLiveQuery(async () => {
+    if (!editMode) return []
+    const all = await db.songs.toArray()
+    const set = new Set<string>()
+    for (const s of all) for (const t of s.tags ?? []) set.add(t.toLowerCase().trim())
+    return [...set].sort()
+  }, [editMode])
+
   // Songs for the add-song panel
   const addPanelSongs = useLiveQuery(async (): Promise<Song[]> => {
     if (!editMode) return []
-    if (searchQuery.trim() === '') {
-      const all = await db.songs.toArray()
-      return all.sort((a, b) => (b.accessedAt ?? 0) - (a.accessedAt ?? 0)).slice(0, 12)
+    let all = await db.songs.toArray()
+
+    // In a team setlist, hide personal songs by default
+    if (setlist?.sharedTeamId && !showPersonalSongs) {
+      const bks = await db.books.toArray()
+      const tIds = new Set(bks.filter(b => b.sharedTeamId === setlist.sharedTeamId).map(b => b.id))
+      all = all.filter(s => tIds.has(s.bookId))
     }
-    const q = searchQuery.toLowerCase()
-    const all = await db.songs.toArray()
-    return all.filter(s =>
-      s.title.toLowerCase().includes(q) || (s.artist ?? '').toLowerCase().includes(q)
-    )
-  }, [editMode, searchQuery])
+
+    if (filterBookId) all = all.filter(s => s.bookId === filterBookId)
+    if (filterTags.length > 0) all = all.filter(s => filterTags.every(t => (s.tags ?? []).some(st => st.toLowerCase().trim() === t)))
+
+    const q = searchQuery.trim().toLowerCase()
+    if (q) all = all.filter(s => s.title.toLowerCase().includes(q) || (s.artist ?? '').toLowerCase().includes(q))
+
+    const hasFilter = q || filterBookId || filterTags.length > 0 || showPersonalSongs
+    return hasFilter ? all : all.sort((a, b) => (b.accessedAt ?? 0) - (a.accessedAt ?? 0)).slice(0, 12)
+  }, [editMode, searchQuery, filterBookId, filterTags.join(','), setlist?.sharedTeamId, showPersonalSongs])
 
   if (setlist === undefined) return <div className="p-8 text-ink-muted">Loading…</div>
   if (!setlist) return <div className="p-8 text-ink-muted">Setlist not found.</div>
@@ -244,12 +294,34 @@ export default function SetlistDetailPage() {
 
   // ── Toggle edit mode ──────────────────────────────────────────────────────────
 
+  const handleAddPersonalSong = (song: Song) => {
+    const teamBooks = (books ?? []).filter(b => b.sharedTeamId === setlist?.sharedTeamId)
+    setAddSongDialog({ song, targetBook: teamBooks[0] ?? null })
+  }
+
+  const confirmAddPersonalSong = async (copyToTeam: boolean) => {
+    if (!addSongDialog) return
+    const { song, targetBook } = addSongDialog
+    setAddSongDialog(null)
+    if (copyToTeam && targetBook) {
+      const newId = generateId()
+      await db.songs.add({ ...song, id: newId, bookId: targetBook.id, updatedAt: Date.now(), accessedAt: undefined })
+      await markPending('song', newId)
+      await addSong(newId)
+    } else {
+      await addSong(song.id)
+    }
+  }
+
   const toggleEditMode = () => {
     setEditMode(prev => {
       if (!prev) setTimeout(() => searchInputRef.current?.focus(), 100)
       return !prev
     })
     setSearchQuery('')
+    setFilterBookId('')
+    setFilterTags([])
+    setShowPersonalSongs(false)
   }
 
   // Track position within song items (dividers don't count)
@@ -460,9 +532,21 @@ export default function SetlistDetailPage() {
                   )}
                 </div>
 
+                {isTeamSetlist && song && teamBookIds && !teamBookIds.has(song.bookId) && (
+                  <span title="Personal book — not visible to team members" className="shrink-0">
+                    <AlertTriangle size={14} className="text-amber-400" />
+                  </span>
+                )}
+
                 {song?.transcription.key && (
                   <span className="text-xs font-mono text-chord bg-chord/10 px-2 py-0.5 rounded shrink-0">
                     {song.transcription.key}
+                  </span>
+                )}
+
+                {song && song.transcription.tempo > 0 && (
+                  <span className="text-xs font-mono text-ink-muted shrink-0" title="Tempo">
+                    ♩ {song.transcription.tempo}
                   </span>
                 )}
 
@@ -548,9 +632,11 @@ export default function SetlistDetailPage() {
             Add Divider
           </button>
 
-          {/* Add song search */}
+          {/* Add song search + filters */}
           <div className="space-y-2">
             <p className="text-xs font-medium text-ink-muted uppercase tracking-wider">Add Song</p>
+
+            {/* Search */}
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
               <input
@@ -563,15 +649,68 @@ export default function SetlistDetailPage() {
               />
             </div>
 
+            {/* Filters row */}
+            {(availableBooksForFilter.length > 1 || (allTagsForFilter ?? []).length > 0) && (
+              <div className="space-y-2">
+                {/* Book filter */}
+                {availableBooksForFilter.length > 1 && (
+                  <select
+                    value={filterBookId}
+                    onChange={e => setFilterBookId(e.target.value)}
+                    className="w-full bg-surface-2 border border-surface-3 focus:border-chord/40 rounded-lg px-3 py-1.5 text-xs text-ink outline-none"
+                  >
+                    <option value="">{isTeamSetlist ? 'All team books' : 'All books'}</option>
+                    {availableBooksForFilter.map(b => (
+                      <option key={b.id} value={b.id}>{b.title}</option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Tag chips */}
+                {(allTagsForFilter ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {(allTagsForFilter ?? []).map(tag => {
+                      const active = filterTags.includes(tag)
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => setFilterTags(prev => active ? prev.filter(t => t !== tag) : [...prev, tag])}
+                          className={`px-2 py-0.5 rounded-full text-xs transition-colors ${
+                            active
+                              ? 'bg-chord/20 text-chord border border-chord/40'
+                              : 'bg-surface-2 text-ink-muted border border-surface-3 hover:border-chord/30 hover:text-ink'
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      )
+                    })}
+                    {filterTags.length > 0 && (
+                      <button
+                        onClick={() => setFilterTags([])}
+                        className="px-2 py-0.5 rounded-full text-xs text-ink-faint hover:text-ink border border-transparent hover:border-surface-3 transition-colors"
+                      >
+                        clear
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Song results */}
             <ul className="space-y-0.5 max-h-72 overflow-y-auto">
               {(addPanelSongs ?? []).map(song => {
                 const alreadyIn = setlistSongIdSet.has(song.id)
+                const isPersonal = teamBookIds !== null && !teamBookIds.has(song.bookId)
                 return (
                   <li
                     key={song.id}
-                    className="flex items-center gap-3 px-3 py-2 hover:bg-surface-2 rounded-lg cursor-pointer group"
-                    onClick={() => addSong(song.id)}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer group ${
+                      isPersonal ? 'opacity-50 hover:opacity-80' : 'hover:bg-surface-2'
+                    }`}
+                    onClick={() => isPersonal ? handleAddPersonalSong(song) : addSong(song.id)}
+                    title={isPersonal ? 'Personal book — click to copy to team' : undefined}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{song.title}</div>
@@ -586,7 +725,9 @@ export default function SetlistDetailPage() {
                       </span>
                     )}
 
-                    {alreadyIn ? (
+                    {isPersonal ? (
+                      <Copy size={14} className="text-ink-faint group-hover:text-amber-400 shrink-0 transition-colors" />
+                    ) : alreadyIn ? (
                       <Check size={15} className="text-chord shrink-0" />
                     ) : (
                       <Plus size={15} className="text-ink-faint group-hover:text-ink shrink-0" />
@@ -595,18 +736,72 @@ export default function SetlistDetailPage() {
                 )
               })}
 
-              {(addPanelSongs ?? []).length === 0 && searchQuery.trim() !== '' && (
+              {(addPanelSongs ?? []).length === 0 && (
                 <li className="px-3 py-4 text-sm text-ink-faint text-center">
-                  No songs found
-                </li>
-              )}
-
-              {(addPanelSongs ?? []).length === 0 && searchQuery.trim() === '' && (
-                <li className="px-3 py-4 text-sm text-ink-faint text-center">
-                  No songs in library yet
+                  {searchQuery.trim() || filterBookId || filterTags.length > 0
+                    ? 'No songs match these filters'
+                    : 'No songs in library yet'}
                 </li>
               )}
             </ul>
+
+            {isTeamSetlist && (
+              <button
+                onClick={() => setShowPersonalSongs(v => !v)}
+                className="text-xs text-ink-faint hover:text-ink transition-colors w-full text-center pt-1"
+              >
+                {showPersonalSongs ? 'Hide personal songs' : 'Show personal songs…'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Copy personal song to team dialog */}
+      {addSongDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className="bg-surface-1 border border-surface-3 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <Copy size={18} className="text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <h2 className="font-semibold text-sm">Personal song</h2>
+                <p className="text-sm text-ink-muted mt-1">
+                  <span className="text-ink font-medium">"{addSongDialog.song.title}"</span> is in your personal library and won't be visible to other team members.
+                </p>
+                {addSongDialog.targetBook && (
+                  <p className="text-xs text-ink-muted mt-2">
+                    Copy it to <span className="text-ink font-medium">"{addSongDialog.targetBook.title}"</span> to share it with the team.
+                  </p>
+                )}
+                {!addSongDialog.targetBook && (
+                  <p className="text-xs text-amber-400/80 mt-2">
+                    No team book found. Create one in the Library to share songs with the team.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              {addSongDialog.targetBook && (
+                <button
+                  onClick={() => confirmAddPersonalSong(true)}
+                  className="w-full px-4 py-2 bg-chord/20 text-chord rounded-lg text-sm font-medium hover:bg-chord/30 transition-colors"
+                >
+                  Copy to team & add to setlist
+                </button>
+              )}
+              <button
+                onClick={() => confirmAddPersonalSong(false)}
+                className="w-full px-4 py-2 bg-surface-2 text-ink-muted rounded-lg text-sm hover:bg-surface-3 transition-colors"
+              >
+                Add anyway <span className="text-ink-faint text-xs">(only you will see it)</span>
+              </button>
+              <button
+                onClick={() => setAddSongDialog(null)}
+                className="w-full px-4 py-2 text-ink-faint text-sm hover:text-ink transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

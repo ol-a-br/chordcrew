@@ -117,7 +117,6 @@
   ruby-align: start;
   line-height: 1.6;
   white-space: pre-wrap;
-  overflow-wrap: break-word;
 }
 
 /* Section-header rows still use flex so badge + label sit side-by-side */
@@ -147,7 +146,17 @@
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 0.8em;
   @apply text-ink-muted;
-  margin: 0 0 0.6rem 0;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.4;
+}
+
+/* Song meta line (key · ♩ tempo) — injected by SongRenderer after h1/h2 */
+.chordpro-output .song-meta-line {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72em;
+  @apply text-ink-faint;
+  margin: 0 0 0.75rem 0;
+  letter-spacing: 0.02em;
   line-height: 1.4;
 }
 
@@ -294,6 +303,7 @@
   .chordpro-output .comment { color: #555 !important; font-style: italic; }
   .chordpro-output h1 { color: black !important; }
   .chordpro-output h2 { color: #555 !important; }
+  .chordpro-output .song-meta-line { color: #666 !important; }
 
   /* Lyrics */
   .chordpro-output .lyrics { color: black !important; }

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash, Link2 } from 'lucide-react'
+import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash, Link2, StickyNote } from 'lucide-react'
 import { encodeSongShare, buildShareUrl, copyShareUrl } from '@/utils/share'
 import { db, generateId, markPending, getTeamRole } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
@@ -9,6 +9,7 @@ import { Button } from '@/components/shared/Button'
 import { transposeKey, getFirstChords, buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
 import { useFontScale } from '@/hooks/useFontScale'
 import { useAuth } from '@/auth/AuthContext'
+import { NotesPanel } from '@/components/shared/NotesPanel'
 import type { SetlistItem, Book } from '@/types'
 
 function getDefaultColumns(): number {
@@ -31,7 +32,7 @@ export default function ViewerPage() {
   const [lyricsOnly, setLyricsOnly] = useState(false)
   const [fontScale, setFontScale] = useFontScale()
   const [showShareMenu, setShowShareMenu] = useState(false)
-  const [showKeyDropdown, setShowKeyDropdown] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -46,6 +47,10 @@ export default function ViewerPage() {
       return role === 'owner' || role === 'contributor'
     })
   }, [teams, user])
+
+  // Book for team ID (needed by notes panel)
+  const book = useLiveQuery(() => song?.bookId ? db.books.get(song.bookId) : undefined, [song?.bookId])
+  const teamId = book?.sharedTeamId
 
   // Setlist context for prev/next navigation
   // Track last-accessed time for "recently accessed" sort in library
@@ -163,21 +168,6 @@ export default function ViewerPage() {
     () => transpose !== 0 ? getFirstChords(song?.transcription.content ?? '', transpose) : [],
     [song?.transcription.content, transpose]
   )
-  // Pre-compute all 12 key entries for the transpose dropdown.
-  // Rows: delta -5 … +6 from original key. Original (0) is in position 6 of 12.
-  // Chords are computed once when the song loads; cached by useMemo.
-  const keyDropdownEntries = useMemo(() => {
-    if (!song?.transcription.key) return []
-    const originalKey = song.transcription.key
-    const content = song.transcription.content
-    return Array.from({ length: 12 }, (_, i) => {
-      const delta = i - 5  // -5, -4, ..., 0, ..., +6
-      const key   = transposeKey(originalKey, delta)
-      const chords = getFirstChords(content, delta, 4)
-      return { delta, key, chords }
-    })
-  }, [song?.transcription.key, song?.transcription.content])
-
   // Capo helper: sounding key = written key transposed up by capo value
   const capo = song?.transcription.capo ?? 0
   const soundingKey = useMemo(
@@ -309,53 +299,6 @@ export default function ViewerPage() {
           </>
         )}
 
-        {/* Key badge — click to open 12-key transpose picker */}
-        {song.transcription.key && (
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setShowKeyDropdown(v => !v)}
-              className="text-xs font-mono text-chord bg-chord/10 hover:bg-chord/20 px-2 py-1 rounded transition-colors"
-              title="Click to change key"
-            >
-              𝄞 {transpose !== 0 ? `${song.transcription.key} → ${transposedKey}` : song.transcription.key}
-            </button>
-            {showKeyDropdown && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowKeyDropdown(false)} />
-                <div className="absolute left-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl overflow-hidden w-72">
-                  {keyDropdownEntries.map(({ delta, key, chords }) => (
-                    <button
-                      key={delta}
-                      onClick={() => { setTranspose(delta); setShowKeyDropdown(false) }}
-                      className={`flex items-center gap-3 w-full text-left px-3 py-2 text-xs transition-colors
-                        ${delta === transpose
-                          ? 'bg-chord/15 text-chord'
-                          : 'text-ink hover:bg-surface-3'
-                        }`}
-                    >
-                      <span className="font-mono w-5 text-right text-ink-faint shrink-0">
-                        {delta === 0 ? '0' : delta > 0 ? `+${delta}` : delta}
-                      </span>
-                      <span className={`font-mono font-bold w-8 shrink-0 ${delta === 0 ? 'text-chord' : ''}`}>
-                        {key}
-                      </span>
-                      <span className="flex gap-1 flex-wrap">
-                        {chords.map(c => (
-                          <span key={c} className="font-mono text-chord/80 bg-surface-0 px-1 rounded text-[11px]">{c}</span>
-                        ))}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-        {song.transcription.tempo > 0 && (
-          <span className="text-xs font-mono text-ink-muted shrink-0" title="Tempo">
-            ♩ {song.transcription.tempo}
-          </span>
-        )}
         {capo > 0 && (
           <span className="text-xs font-mono text-ink-muted shrink-0" title="Capo helper">
             Capo {capo}{soundingKey ? ` → ${soundingKey}` : ''}
@@ -365,13 +308,29 @@ export default function ViewerPage() {
         {/* Transpose */}
         <div className="flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1">
-            <button onClick={() => setTranspose(t => t - 1)} aria-label="Transpose down" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
+            <button onClick={() => {
+              const next = transpose - 1
+              setTranspose(next)
+              if (currentSetlistItem && setlistId) {
+                db.setlistItems.update(currentSetlistItem.id, { transposeOffset: next })
+                db.setlists.update(setlistId, { updatedAt: Date.now() })
+                markPending('setlist', setlistId)
+              }
+            }} aria-label="Transpose down" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
               <ChevronDown size={16} />
             </button>
             <span className="text-xs font-mono w-8 text-center">
               {transpose > 0 ? `+${transpose}` : transpose === 0 ? '0' : transpose}
             </span>
-            <button onClick={() => setTranspose(t => t + 1)} aria-label="Transpose up" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
+            <button onClick={() => {
+              const next = transpose + 1
+              setTranspose(next)
+              if (currentSetlistItem && setlistId) {
+                db.setlistItems.update(currentSetlistItem.id, { transposeOffset: next })
+                db.setlists.update(setlistId, { updatedAt: Date.now() })
+                markPending('setlist', setlistId)
+              }
+            }} aria-label="Transpose up" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
               <ChevronUp size={16} />
             </button>
           </div>
@@ -421,6 +380,17 @@ export default function ViewerPage() {
         <button onClick={toggleFavorite} className="p-1.5 hover:bg-surface-2 rounded">
           <Star size={16} className={song.isFavorite ? 'text-chord fill-chord' : 'text-ink-muted'} />
         </button>
+
+        {/* Notes toggle */}
+        {user && (
+          <button
+            onClick={() => setShowNotes(v => !v)}
+            className={`p-1.5 rounded ${showNotes ? 'text-chord bg-chord/10' : 'text-ink-muted hover:bg-surface-2 hover:text-ink'}`}
+            title="My notes"
+          >
+            <StickyNote size={16} />
+          </button>
+        )}
 
         {/* External URL link */}
         {derivedMeta.url && (
@@ -510,6 +480,18 @@ export default function ViewerPage() {
         </Button>
       </div>
 
+      {/* Notes panel */}
+      {showNotes && user && (
+        <div className="shrink-0 px-4 pt-2 pb-1">
+          <NotesPanel
+            songId={song.id}
+            userId={user.id}
+            teamId={teamId}
+            onClose={() => setShowNotes(false)}
+          />
+        </div>
+      )}
+
       {/* Song content — multi-column: wrap to columns (no vertical scroll);
           single-column: normal vertical scroll */}
       <div className="flex-1 min-h-0 relative">
@@ -524,6 +506,8 @@ export default function ViewerPage() {
                 fontScale={fontScale}
                 pageFlip
                 errors={lintErrors}
+                songKey={transposedKey}
+                tempo={song.transcription.tempo}
               />
             </div>
           </div>
@@ -537,6 +521,8 @@ export default function ViewerPage() {
               fontScale={fontScale}
               errors={lintErrors}
               onJumpToLine={() => navigate(`/editor/${id}`)}
+              songKey={transposedKey}
+              tempo={song.transcription.tempo}
             />
           </div>
         )}

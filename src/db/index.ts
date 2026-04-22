@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import type {
   Book, Song, SongVersion, Annotation,
-  Setlist, SetlistItem, Team, SyncState, AppSettings,
+  Setlist, SetlistItem, Team, SyncState, AppSettings, SongNote,
 } from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 
@@ -17,6 +17,7 @@ export class ChordCrewDB extends Dexie {
   teams!: Table<Team>
   syncStates!: Table<SyncState>
   settings!: Table<AppSettings & { id: string }>
+  songNotes!: Table<SongNote>
 
   constructor() {
     super('ChordCrewDB')
@@ -37,6 +38,11 @@ export class ChordCrewDB extends Dexie {
     this.version(2).stores({
       teams: 'id, ownerId, updatedAt',
     })
+
+    // Version 3: personal song notes (private per user)
+    this.version(3).stores({
+      songNotes: 'id, songId, userId, updatedAt',
+    })
   }
 }
 
@@ -54,7 +60,8 @@ db.on('ready', async () => {
 
 export async function getSettings(): Promise<AppSettings> {
   const row = await db.settings.get('app')
-  return row ?? DEFAULT_SETTINGS
+  // Merge with DEFAULT_SETTINGS so any field added after initial install gets its default
+  return row ? { ...DEFAULT_SETTINGS, ...row } : DEFAULT_SETTINGS
 }
 
 export async function saveSettings(patch: Partial<AppSettings>): Promise<void> {
@@ -151,6 +158,21 @@ export function getTeamRole(team: Team, userId: string, userEmail: string): Team
 
 export function generateId(): string {
   return crypto.randomUUID()
+}
+
+// ─── Song note helpers ────────────────────────────────────────────────────────
+
+export async function getSongNote(songId: string, userId: string): Promise<SongNote | undefined> {
+  return db.songNotes.get(`${userId}:${songId}`)
+}
+
+export async function saveSongNote(songId: string, userId: string, content: string): Promise<void> {
+  const id = `${userId}:${songId}`
+  await db.songNotes.put({ id, songId, userId, content, updatedAt: Date.now() })
+}
+
+export async function deleteSongNote(songId: string, userId: string): Promise<void> {
+  await db.songNotes.delete(`${userId}:${songId}`)
 }
 
 // ─── Re-export Team types used by helpers ────────────────────────────────────

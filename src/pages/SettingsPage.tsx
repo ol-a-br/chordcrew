@@ -119,6 +119,42 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* Performance */}
+      <section>
+        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Performance</h2>
+        <div className="bg-surface-1 rounded-xl px-4 divide-y divide-surface-3">
+          <Row label="Metronome">
+            <div className="flex gap-0 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
+              {(['light', 'sound', 'both'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => update({ metronomeMode: mode })}
+                  className={`px-3 py-1.5 text-sm capitalize ${settings.metronomeMode === mode ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:text-ink'}`}
+                >
+                  {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                </button>
+              ))}
+            </div>
+          </Row>
+          <Row label="Notes auto-hide">
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={1}
+                max={10}
+                step={1}
+                value={Math.round((settings.noteAutoShowMs ?? 2000) / 1000)}
+                onChange={e => update({ noteAutoShowMs: Number(e.target.value) * 1000 })}
+                className="w-24 accent-chord"
+              />
+              <span className="text-sm font-mono text-ink-muted w-8 text-right">
+                {Math.round((settings.noteAutoShowMs ?? 2000) / 1000)}s
+              </span>
+            </div>
+          </Row>
+        </div>
+      </section>
+
       {/* Pedal */}
       <section>
         <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-1">Bluetooth Pedal</h2>
@@ -161,14 +197,18 @@ export default function SettingsPage() {
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${
-                    status === 'clean'   ? 'bg-green-500' :
-                    status === 'pending' ? 'bg-amber-400' :
-                    status === 'error'   ? 'bg-red-500'   : 'bg-blue-400 animate-pulse'
+                    status === 'clean'             ? 'bg-green-500' :
+                    status === 'pending'           ? 'bg-amber-400' :
+                    status === 'updates-available' ? 'bg-amber-400' :
+                    status === 'offline'           ? 'bg-surface-3' :
+                    status === 'error'             ? 'bg-red-500'   : 'bg-blue-400 animate-pulse'
                   }`} />
                   <span className="text-sm">
-                    {status === 'syncing' ? 'Syncing…' :
-                     status === 'error'   ? 'Sync error' :
-                     status === 'pending' ? `${pendingCount} change${pendingCount !== 1 ? 's' : ''} pending` :
+                    {status === 'syncing'           ? 'Syncing…' :
+                     status === 'error'             ? 'Sync error' :
+                     status === 'pending'           ? `${pendingCount} change${pendingCount !== 1 ? 's' : ''} pending` :
+                     status === 'updates-available' ? 'Updates available — tap Sync Now' :
+                     status === 'offline'           ? 'Offline' :
                      'Up to date'}
                   </span>
                 </div>

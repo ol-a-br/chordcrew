@@ -31,6 +31,9 @@ export default {
         mono: ['JetBrains Mono', 'monospace'],
         condensed: ['Barlow Condensed', 'sans-serif'],
       },
+      // Dynamic viewport height — stays stable when Android nav bar shows/hides
+      height: { dvh: '100dvh' },
+      minHeight: { dvh: '100dvh' },
     },
   },
   plugins: [],

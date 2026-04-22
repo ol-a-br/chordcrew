@@ -132,6 +132,14 @@ export interface Team {
   updatedAt: number
 }
 
+export interface SongNote {
+  id: string          // "{userId}:{songId}"
+  songId: string
+  userId: string
+  content: string
+  updatedAt: number
+}
+
 export type SyncStatus = 'clean' | 'pending' | 'conflict'
 
 export interface SyncState {
@@ -155,6 +163,8 @@ export interface AppSettings {
   fontScale: number           // multiplier, default 1.0
   continuousScroll: boolean   // false = page-flip (default), true = continuous scroll
   onboardingDone: boolean     // true after user completes or skips onboarding
+  metronomeMode: 'light' | 'sound' | 'both'  // visual flash only, audio only, or both
+  noteAutoShowMs: number  // ms to auto-show notes on song transition in performance mode
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -166,6 +176,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontScale: 1.0,
   continuousScroll: false,
   onboardingDone: false,
+  metronomeMode: 'light',
+  noteAutoShowMs: 2000,
 }
 
 // ─── chords.wiki import types ─────────────────────────────────────────────────

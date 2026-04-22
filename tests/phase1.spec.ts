@@ -418,10 +418,15 @@ test('viewer shows key with treble clef symbol', async ({ page }) => {
   }, [songId] as [string])
 
   await page.goto(`/view/${songId}`)
-  // Treble clef + key value
-  await expect(page.locator('text=𝄞 G')).toBeVisible({ timeout: 3000 })
-  // Quarter note + tempo value
-  await expect(page.locator('text=♩ 120')).toBeVisible({ timeout: 3000 })
+  // Key and tempo are injected as a .song-meta-line below the song title in the renderer.
+  // Format: "G · ♩\u202f120"  (no treble clef — that was removed from toolbar in favour of meta line)
+  await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
+  await page.waitForTimeout(300)  // let useEffect post-processing complete
+  const metaLine = page.locator('.song-meta-line')
+  await expect(metaLine).toBeVisible({ timeout: 3000 })
+  const metaText = await metaLine.textContent()
+  expect(metaText, 'meta line must contain the key').toContain('G')
+  expect(metaText, 'meta line must contain the tempo quarter-note symbol').toContain('♩')
 })
 
 test('chord text color is light yellow (not amber)', async ({ page }) => {

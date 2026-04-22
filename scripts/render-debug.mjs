@@ -28,6 +28,9 @@ const ROOT = resolve(__dirname, '..')
 
 const inputPath  = process.argv[2] ?? resolve(ROOT, 'data/example-song.chordpro.txt')
 const outputPath = process.argv[3] ?? '/tmp/chordcrew-debug.html'
+const colCount   = parseInt(process.argv[4] ?? '4', 10)    // CSS column-count (default 4)
+const fontScale  = parseFloat(process.argv[5] ?? '1.5')    // matches app Settings font slider
+const semitones  = parseInt(process.argv[6] ?? '0', 10)    // transpose offset (default 0)
 
 // ── 1. Preprocess (mirrors src/utils/chordpro.ts preprocessChordPro) ─────────
 
@@ -68,15 +71,43 @@ function preprocessChordPro(content) {
     .replace(/\{new_song[^}]*\}/gi, '')
 }
 
-// ── 2. Parse + render via chordsheetjs ───────────────────────────────────────
+// ── 2. Transpose a single chord name (mirrors transposeKey in chordpro.ts) ───
+
+function transposeChord(chord, n) {
+  if (!chord || n === 0) return chord
+  try {
+    const mini = new ChordProParser().parse(`[${chord}]\n`)
+    const html  = new HtmlDivFormatter().format(mini.transpose(n))
+    const m = html.match(/<div class="chord">([^<]+)<\/div>/)
+    return m?.[1]?.trim() ?? chord
+  } catch { return chord }
+}
+
+// Pre-transpose «ChordName» markers in inline comments so that chordsheetjs
+// sees the already-transposed names (it does not transpose comment text).
+function transposeInlineMarkers(content, n) {
+  if (n === 0) return content
+  return content.replace(/«([^»]*)»/g, (_, chord) => {
+    let text = chord
+    let optional = false
+    if (text.startsWith('(') && text.endsWith(')')) {
+      text = text.slice(1, -1).trim()
+      optional = true
+    }
+    const transposed = transposeChord(text, n)
+    return optional ? `«(${transposed})»` : `«${transposed}»`
+  })
+}
+
+// ── 3. Parse + render via chordsheetjs ───────────────────────────────────────
 
 const rawContent = readFileSync(inputPath, 'utf8')
-const processed  = preprocessChordPro(rawContent)
+const processed  = transposeInlineMarkers(preprocessChordPro(rawContent), semitones)
 const parser     = new ChordProParser()
-const song       = parser.parse(processed)
+const song       = semitones !== 0 ? parser.parse(processed).transpose(semitones) : parser.parse(processed)
 const rawHtml    = new HtmlDivFormatter().format(song)
 
-// ── 3. Post-processing JS (runs in the browser, same logic as SongRenderer) ──
+// ── 4. Post-processing JS (runs in the browser, same logic as SongRenderer) ──
 //    Written as a plain string so it can be embedded verbatim in the <script>.
 //    Keep this in sync with src/components/viewer/SongRenderer.tsx useEffect.
 
@@ -309,32 +340,20 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ── Convert .column elements to native <ruby> for inline text flow ──────────
-  // CSS display:ruby on <div> is unreliable; native <ruby>/<rt> elements use the
-  // browser's built-in ruby layout engine.  Each column becomes:
-  //   <ruby>lyrics text<rt class="chord [...]">CHORD</rt></ruby>
-  // Multiple ruby elements flow inline in .row (display:block), so text wraps
-  // across all columns together — no forced sub-columns.
   container.querySelectorAll('.row').forEach(row => {
     if (row.classList.contains('section-header-row')) return;
-
     Array.from(row.querySelectorAll(':scope > .column')).forEach(col => {
       const chordEl  = col.querySelector('.chord');
       const lyricsEl = col.querySelector('.lyrics');
-
       const ruby = document.createElement('ruby');
-
-      // Base text: lyrics flow as inline text (ruby base)
       ruby.appendChild(document.createTextNode(lyricsEl?.textContent ?? ''));
-
-      // Annotation: chord name appears above the base text
       const rt = document.createElement('rt');
       rt.className = 'chord';
       if (chordEl) {
         chordEl.classList.forEach(cls => { if (cls !== 'chord') rt.classList.add(cls); });
-        rt.innerHTML = chordEl.innerHTML; // preserves quality/bass child spans
+        rt.innerHTML = chordEl.innerHTML;
       }
       ruby.appendChild(rt);
-
       col.replaceWith(ruby);
     });
   });
@@ -379,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 `
 
-// ── 4. Assemble standalone HTML ───────────────────────────────────────────────
+// ── 5. Assemble standalone HTML ───────────────────────────────────────────────
 
 const html = `<!DOCTYPE html>
 <html lang="de">
@@ -393,27 +412,13 @@ const html = `<!DOCTYPE html>
     /* ── Base ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { font-family: 'Outfit', sans-serif; background: #0d1117; color: #e6edf3; }
-    body { min-height: 100vh; padding: 1rem; }
+    /* Match the app's performance page padding — full width, no fixed container */
+    body { min-height: 100vh; padding: 1rem 1.5rem; }
 
-    /* ── Debug layout: narrow column + info panel ── */
-    .debug-layout {
-      display: flex;
-      gap: 2rem;
-      align-items: flex-start;
-    }
-    .debug-column {
-      /* Simulate a narrow mobile column — ~26ch wide at the default font size */
-      width: 26ch;
-      min-width: 26ch;
-      max-width: 26ch;
-      border: 1px dashed #30363d;
-      padding: 0.75rem;
-      overflow-y: auto;
-      background: #161b22;
-      border-radius: 6px;
-    }
     .debug-info {
-      flex: 1;
+      margin-top: 1.5rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #30363d;
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.75rem;
       color: #8b949e;
@@ -432,9 +437,12 @@ const html = `<!DOCTYPE html>
       font-family: 'Barlow Condensed', sans-serif;
       line-height: 1.6;
       color: #e6edf3;
-      font-size: 1.8rem;
+      font-size: ${fontScale}rem;
     }
     .chordpro-columns-1 { column-count: 1; }
+    .chordpro-columns-2 { column-count: 2; column-gap: 2.5rem; column-rule: 1px solid rgba(255,255,255,0.06); }
+    .chordpro-columns-3 { column-count: 3; column-gap: 2rem;   column-rule: 1px solid rgba(255,255,255,0.06); }
+    .chordpro-columns-4 { column-count: 4; column-gap: 1.5rem; column-rule: 1px solid rgba(255,255,255,0.06); }
 
     .chordpro-output .paragraph {
       break-inside: avoid;
@@ -489,23 +497,16 @@ const html = `<!DOCTYPE html>
       line-height: 1;
     }
 
-    /* Row: block container — <ruby> elements flow inline within it */
     .chordpro-output .row {
       display: block;
       break-inside: avoid;
       page-break-inside: avoid;
     }
 
-    /* Native <ruby> elements — JS converts each .column to:
-         <ruby>lyrics text<rt class="chord">CHORD</rt></ruby>
-       Multiple ruby elements flow inline, sharing one text flow and wrapping
-       together at real word boundaries — no forced sub-columns.
-       ruby-align:start anchors each chord to the LEFT edge of its base text
-       (default "center" would center the chord over the full lyric run,
-       placing it over the wrong syllable). */
     .chordpro-output ruby {
-      white-space: normal;
       ruby-align: start;
+      line-height: 1.6;
+      white-space: pre-wrap;
     }
 
     /* Section header rows: keep flex layout (section name in .chord, no lyrics) */
@@ -575,18 +576,10 @@ const html = `<!DOCTYPE html>
       color: #38bdf8;
     }
 
-    /* Lyrics: inline text (in ruby base); lyrics class kept for section headers */
-    .chordpro-output .lyrics {
-      line-height: 1.6;
-      white-space: pre-wrap;
-      overflow-wrap: break-word;
-    }
+    /* Lyrics: only present in section-header-rows after JS conversion */
+    .chordpro-output .lyrics { line-height: 1.6; }
     .chordpro-output .section-header-row .lyrics { display: none; }
-
-    /* The base text inside <ruby> flows with normal line-height */
-    .chordpro-output ruby {
-      line-height: 1.6;
-    }
+    .chordpro-output ruby { line-height: 1.6; }
 
     .chordpro-output .comment {
       color: #8b949e;
@@ -620,26 +613,14 @@ const html = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <div class="debug-layout">
-    <div class="debug-column">
-      <div class="chordpro-output chordpro-columns-1">
-        ${rawHtml}
-      </div>
-    </div>
-    <div class="debug-info">
-      <h2>Debug Info</h2>
-      <p>File: <span class="key">${inputPath.split('/').pop()}</span></p>
-      <p>Column width: <span class="key">26ch</span> (narrow mobile simulation)</p>
-      <p>Transpose: <span class="key">0</span></p>
-      <br>
-      <p>Post-processing steps:</p>
-      <p>1. preprocessChordPro() — space normalisation + directive transforms</p>
-      <p>2. chordsheetjs HtmlDivFormatter</p>
-      <p>3. Section badge injection</p>
-      <p>4. Chord quality split (root + quality + bass)</p>
-      <p>5. Empty-chord column merging</p>
-      <p>6. Word-boundary repair (move word-prefix into chord column)</p>
-    </div>
+  <!-- Full-width layout — resize the browser window to match the device you're debugging -->
+  <div class="chordpro-output chordpro-columns-${colCount}">
+    ${rawHtml}
+  </div>
+  <div class="debug-info">
+    <h2>ChordCrew Debug — ${inputPath.split('/').pop()}</h2>
+    <p>Columns: <span class="key">${colCount}</span> &nbsp;|&nbsp; Font: <span class="key">${fontScale}rem</span> &nbsp;|&nbsp; Transpose: <span class="key">${semitones >= 0 ? '+' : ''}${semitones}</span> &nbsp;|&nbsp; Resize window to match target device width</p>
+    <p style="margin-top:0.25rem;color:#484f58">Usage: node scripts/render-debug.mjs [file] [out.html] [cols] [fontscale] [semitones]</p>
   </div>
   <script>
     ${postProcessingJS}
