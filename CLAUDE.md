@@ -41,6 +41,17 @@ Auto-deploy is currently **disabled** (workflow_dispatch only). Deploy manually 
 
 **Teams**: Scoped via `Book.sharedTeamId`. Team songs/setlists live in the same Dexie tables as personal content; role enforcement is at the read/write layer. Firestore paths: `/users/{uid}/songs|books|setlists` (personal) and `/teams/{teamId}/songs|setlists` (shared).
 
+## Commit discipline
+
+Commit after each logical unit of work — not at the end of the session. Specifically:
+
+- **After each feature or fix** that builds cleanly (`npm run build`) and has passed any relevant tests
+- **Before starting something new** — never carry uncommitted changes across task boundaries
+- **Before context gets large** — long sessions compress context; uncommitted code in a rewrite can silently drop earlier features (see: transpose dropdown incident)
+- **One concern per commit** — do not bundle unrelated changes; a commit message should describe one thing
+
+Use targeted `Edit` calls on specific code sections rather than full-file `Write` rewrites. Full rewrites are the main way existing features get silently lost across context boundaries.
+
 ## Key constraints — never violate these
 
 - Chord notation is always **Standard** (A B C D E F G). Never rewrite enharmonics, never use German H/B notation.
