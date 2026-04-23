@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect } from 'react'
-import { renderToHtml, isKnownChord, expandRepeatSections, transposeKey } from '@/utils/chordpro'
+import { renderToHtml, isKnownChord, expandRepeatSections, transposeKey, transposeChordName, extractMeta } from '@/utils/chordpro'
 
 // ─── Module-level render cache ────────────────────────────────────────────────
 // Persists across component remounts for the session lifetime.
@@ -370,6 +370,7 @@ export function SongRenderer({
     // The preprocessor converts {inline: | [C] / / / |} to a {comment:} line
     // with chord names wrapped in «guillemet» markers. We expand those into
     // chord-styled <span>s so everything sits on the same baseline as | and /.
+    const originalKey = extractMeta(content).key || ''
     container.querySelectorAll<HTMLElement>('.comment').forEach(commentEl => {
       const text = commentEl.textContent ?? ''
       if (!text.includes('«')) return
@@ -388,7 +389,7 @@ export function SongRenderer({
             span.classList.add('chord-optional')
           }
           // Transpose inline chords using the same offset as the rendered song
-          span.textContent = transposeOffset !== 0 ? transposeKey(chordText, transposeOffset) : chordText
+          span.textContent = transposeOffset !== 0 ? transposeChordName(chordText, transposeOffset, originalKey) : chordText
           commentEl.appendChild(span)
         } else {
           commentEl.appendChild(document.createTextNode(part))
