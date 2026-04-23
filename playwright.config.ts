@@ -50,5 +50,19 @@ export default defineConfig({
         ...devices['iPad Pro 11'],
       },
     },
+    {
+      name: 'ipad-13-landscape',
+      use: {
+        // iPad Pro 12.9" / 13" landscape — 2732×2048px display at 2× → 1366×1024 CSS px
+        viewport: { width: 1366, height: 1024 },
+        deviceScaleFactor: 2,
+        isMobile: true,
+        hasTouch: true,
+        defaultBrowserType: 'chromium',
+        userAgent:
+          'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 ' +
+          '(KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+      },
+    },
   ],
 })
