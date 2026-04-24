@@ -7,14 +7,17 @@ const CT_VALID_KEYS = new Set([
   'Fm', 'G', 'G#m', 'Gb', 'Gm',
 ])
 
-function endpoint(baseUrl: string, path: string): string {
-  return `${baseUrl.replace(/\/+$/, '')}/api${path}`
+// All browser calls go through the /ct-api proxy (Firebase Function) to avoid CORS.
+// The proxy validates the target hostname ends in .church.tools and forwards the request.
+function endpoint(_baseUrl: string, path: string): string {
+  return `/ct-api${path}`
 }
 
-function headers(token: string): HeadersInit {
+function headers(baseUrl: string, token: string): HeadersInit {
   return {
     'Content-Type': 'application/json',
     'Authorization': `Login ${token}`,
+    'X-CT-Base-URL': baseUrl,
   }
 }
 
@@ -31,7 +34,7 @@ export async function ctWhoAmI(
   baseUrl: string,
   token: string,
 ): Promise<{ id: number; firstName: string; lastName: string }> {
-  const res = await fetch(endpoint(baseUrl, '/whoami'), { headers: headers(token) })
+  const res = await fetch(endpoint(baseUrl, '/whoami'), { headers: headers(baseUrl, token) })
   await checkResponse(res)
   const data = await res.json()
   return {
@@ -48,7 +51,7 @@ export async function ctGetAllSongs(baseUrl: string, token: string): Promise<CTS
   let page = 1
   for (;;) {
     const res = await fetch(endpoint(baseUrl, `/songs?limit=100&page=${page}`), {
-      headers: headers(token),
+      headers: headers(baseUrl, token),
     })
     await checkResponse(res)
     const data = await res.json()
@@ -66,7 +69,7 @@ export async function ctCreateSong(
 ): Promise<CTSong> {
   const res = await fetch(endpoint(baseUrl, '/songs'), {
     method: 'POST',
-    headers: headers(token),
+    headers: headers(baseUrl, token),
     body: JSON.stringify({
       name: song.name,
       categoryId: song.categoryId,
@@ -94,7 +97,7 @@ export async function ctCreateArrangement(
 
   const res = await fetch(endpoint(baseUrl, `/songs/${songId}/arrangements`), {
     method: 'POST',
-    headers: headers(token),
+    headers: headers(baseUrl, token),
     body: JSON.stringify(body),
   })
   await checkResponse(res)
@@ -109,7 +112,7 @@ export async function ctGetEvents(baseUrl: string, token: string, date: string):
   nextDay.setDate(nextDay.getDate() + 1)
   const to = nextDay.toISOString().slice(0, 10)
   const res = await fetch(endpoint(baseUrl, `/events?from=${date}&to=${to}&limit=50`), {
-    headers: headers(token),
+    headers: headers(baseUrl, token),
   })
   await checkResponse(res)
   const data = await res.json()
@@ -122,7 +125,7 @@ export async function ctGetEventAgendaSongs(
   eventId: number,
 ): Promise<CTSong[]> {
   const res = await fetch(endpoint(baseUrl, `/events/${eventId}/agenda/songs`), {
-    headers: headers(token),
+    headers: headers(baseUrl, token),
   })
   await checkResponse(res)
   const data = await res.json()
@@ -138,7 +141,7 @@ export async function ctAddAgendaItem(
 ): Promise<void> {
   const res = await fetch(endpoint(baseUrl, `/events/${eventId}/agenda/items`), {
     method: 'POST',
-    headers: headers(token),
+    headers: headers(baseUrl, token),
     body: JSON.stringify({
       type: 'song',
       arrangementId,
@@ -152,7 +155,7 @@ export async function ctAddAgendaItem(
 
 export async function ctGetSongCategories(baseUrl: string, token: string): Promise<CTCategory[]> {
   const res = await fetch(endpoint(baseUrl, '/event/masterdata'), {
-    headers: headers(token),
+    headers: headers(baseUrl, token),
   })
   await checkResponse(res)
   const data = await res.json()

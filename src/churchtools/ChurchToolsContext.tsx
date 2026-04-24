@@ -73,10 +73,9 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
       setCategories(cats)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Verification failed'
-      const isCors = msg.toLowerCase().includes('fetch') || msg === 'Failed to fetch'
       setVerifyError(
-        isCors
-          ? 'Network error — ChurchTools may not allow cross-origin requests from this domain. Check that CORS is enabled in your ChurchTools administration.'
+        msg === 'Failed to fetch'
+          ? 'Could not reach the proxy — make sure the app is deployed or the Functions emulator is running.'
           : msg,
       )
     } finally {
