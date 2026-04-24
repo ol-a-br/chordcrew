@@ -274,4 +274,42 @@ Team members can take private notes on any song. Notes are visible only to the a
 
 ---
 
-*Last updated: 2026-04-14*
+## REQ-CT — ChurchTools Integration
+
+ChordCrew can push songs and setlists to a ChurchTools instance. The ChurchTools URL is user-configurable. Authentication uses ChurchTools username/password to obtain a session token stored locally. All write operations require explicit user confirmation before executing.
+
+### REQ-CT-SETTINGS — Configuration
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| CT-S01 | ChurchTools base URL configurable in Settings (e.g. `https://mychurch.church.tools`). | planned |
+| CT-S02 | Connect / disconnect: user enters ChurchTools username + password; app exchanges for a session token via `POST /api/login`; token stored in settings. | planned |
+| CT-S03 | Connection status shown in Settings: connected (person name + church) / disconnected / error. | planned |
+| CT-S04 | Default song category (ChurchTools `categoryId`) selectable from a dropdown populated via `GET /api/event/masterdata`. | planned |
+
+### REQ-CT-SONGS — Song Upload
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| CT-SO01 | Single-song upload from Song Viewer toolbar: button "Upload to ChurchTools". | planned |
+| CT-SO02 | Batch upload from Library → Organize: select multiple songs and "Upload to ChurchTools". | planned |
+| CT-SO03 | Before any write, show a confirmation dialog listing songs to create vs. songs already existing in ChurchTools (matched by name, case-insensitive). | planned |
+| CT-SO04 | New songs created via `POST /api/songs` (fields: `name`, `author`, `categoryId`, `ccli`, `copyright`). | planned |
+| CT-SO05 | After song creation, a default arrangement is created via `POST /api/songs/{id}/arrangements` with `key`, `tempo`, `beat` (time signature), `duration` from the ChordCrew song metadata. | planned |
+| CT-SO06 | Songs already present in ChurchTools are skipped (not overwritten); shown as "Already exists" in the result summary. | planned |
+| CT-SO07 | Upload result summary shown after batch: N created, M skipped (already existed), K failed. | planned |
+
+### REQ-CT-EVENTS — Setlist → Event Upload
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| CT-E01 | "Upload to ChurchTools event" action on a setlist; available from `SetlistDetailPage`. | planned |
+| CT-E02 | App fetches events on the setlist's planned date (`GET /api/events?from=DATE&to=NEXT_DAY`); user picks the matching event from a list. | planned |
+| CT-E03 | Confirmation dialog shows: event name, list of songs to add (new vs already on agenda). | planned |
+| CT-E04 | For each setlist song: ensure song exists in ChurchTools (create if missing); then add to the event's agenda via `POST /api/events/{eventId}/agenda/items`. | planned |
+| CT-E05 | Songs already on the event's agenda are skipped. | planned |
+| CT-E06 | Divider items in the setlist are not uploaded (ChurchTools agenda items are song-only). | planned |
+
+---
+
+*Last updated: 2026-04-24*

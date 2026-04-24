@@ -165,6 +165,9 @@ export interface AppSettings {
   onboardingDone: boolean     // true after user completes or skips onboarding
   metronomeMode: 'light' | 'sound' | 'both'  // visual flash only, audio only, or both
   noteAutoShowMs: number  // ms to auto-show notes on song transition in performance mode
+  churchToolsUrl: string
+  churchToolsToken: string
+  churchToolsCategoryId: number  // CT song category id; 0 = first/default category
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -178,6 +181,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   onboardingDone: false,
   metronomeMode: 'light',
   noteAutoShowMs: 2000,
+  churchToolsUrl: '',
+  churchToolsToken: '',
+  churchToolsCategoryId: 0,
 }
 
 // ─── chords.wiki import types ─────────────────────────────────────────────────

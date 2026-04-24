@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GitFork, RefreshCw, Download, CheckCircle2, Smartphone, Monitor } from 'lucide-react'
+import { GitFork, RefreshCw, Download, CheckCircle2, Smartphone, Monitor, LogIn, LogOut, Church } from 'lucide-react'
 import { db, getSettings, saveSettings } from '@/db'
 import { useCaptureKey } from '@/hooks/useKeyboard'
 import { Button } from '@/components/shared/Button'
 import { useSync } from '@/sync/SyncContext'
+import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import type { AppSettings } from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 
@@ -17,8 +18,16 @@ interface BeforeInstallPromptEvent extends Event {
 export default function SettingsPage() {
   const { t, i18n } = useTranslation()
   const { status, pendingCount, lastSync, error: syncError, syncNow } = useSync()
+  const {
+    isConfigured, personName, categories,
+    verifying, verifyError,
+    baseUrl, saveTokenAndVerify, disconnect, setBaseUrl, setCategoryId, categoryId,
+  } = useChurchTools()
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [capturingKey, setCapturingKey] = useState<'next' | 'prev' | null>(null)
+  const [ctUrlInput, setCtUrlInput] = useState('')
+  const [ctTokenInput, setCtTokenInput] = useState('')
+  const [showTokenField, setShowTokenField] = useState(false)
 
   // PWA install state
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
@@ -31,7 +40,10 @@ export default function SettingsPage() {
   const isWindows = /Win/.test(navigator.userAgent)
 
   useEffect(() => {
-    getSettings().then(setSettings)
+    getSettings().then(s => {
+      setSettings(s)
+      setCtUrlInput(s.churchToolsUrl ?? '')
+    })
     // Check if already running as installed PWA
     setIsInstalled(window.matchMedia('(display-mode: standalone)').matches)
     // Listen for Chrome/Edge/Android install prompt
@@ -234,6 +246,117 @@ export default function SettingsPage() {
           </div>
         </section>
       )}
+
+      {/* ChurchTools */}
+      <section>
+        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <Church size={13} />
+          ChurchTools
+        </h2>
+        <div className="bg-surface-1 rounded-xl px-4 py-3 space-y-3">
+          {/* URL row */}
+          <div className="space-y-1.5">
+            <label className="text-xs text-ink-faint">Church URL</label>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={ctUrlInput}
+                onChange={e => setCtUrlInput(e.target.value)}
+                placeholder="https://mychurch.church.tools"
+                className="flex-1 bg-surface-2 rounded-lg px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint border border-surface-3 focus:outline-none focus:ring-1 focus:ring-chord/50"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!ctUrlInput.trim() || ctUrlInput === baseUrl}
+                onClick={() => setBaseUrl(ctUrlInput.trim())}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+
+          {/* Connection status */}
+          {baseUrl && (
+            isConfigured && personName ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                  Connected as <strong>{personName}</strong>
+                </div>
+                <Button variant="ghost" size="sm" onClick={disconnect}>
+                  <LogOut size={13} />
+                  Disconnect
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {!showTokenField ? (
+                  <Button variant="ghost" size="sm" onClick={() => setShowTokenField(true)}>
+                    <LogIn size={13} />
+                    Enter login token
+                  </Button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-ink-muted leading-relaxed">
+                      In ChurchTools: <strong className="text-ink">Your profile → Security → Login tokens</strong> → create a token and paste it here. Your password is never stored.
+                    </p>
+                    <input
+                      type="password"
+                      value={ctTokenInput}
+                      onChange={e => setCtTokenInput(e.target.value)}
+                      placeholder="Paste login token…"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && ctTokenInput.trim()) {
+                          saveTokenAndVerify(ctTokenInput)
+                          setCtTokenInput('')
+                          setShowTokenField(false)
+                        }
+                      }}
+                      className="w-full bg-surface-2 rounded-lg px-3 py-1.5 text-sm font-mono border border-surface-3 focus:outline-none focus:ring-1 focus:ring-chord/50"
+                    />
+                    {verifyError && (
+                      <p className="text-xs text-red-400 leading-relaxed">{verifyError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="primary" size="sm"
+                        onClick={() => {
+                          saveTokenAndVerify(ctTokenInput)
+                          setCtTokenInput('')
+                          setShowTokenField(false)
+                        }}
+                        disabled={verifying || !ctTokenInput.trim()}
+                      >
+                        {verifying ? 'Verifying…' : 'Save & verify'}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => { setShowTokenField(false); setCtTokenInput('') }}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          )}
+
+          {/* Category picker */}
+          {isConfigured && categories.length > 1 && (
+            <div className="flex items-center justify-between pt-1 border-t border-surface-3">
+              <span className="text-sm">Default song category</span>
+              <select
+                value={categoryId}
+                onChange={e => setCategoryId(Number(e.target.value))}
+                className="bg-surface-2 text-sm rounded-lg px-2 py-1 border border-surface-3 focus:outline-none"
+              >
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Danger zone */}
       <section>
