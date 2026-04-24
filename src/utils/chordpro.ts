@@ -357,15 +357,38 @@ function targetAccidental(originalKey: string, delta: number): '#' | 'b' {
 }
 
 // ─── Transpose a key name by N semitones ──────────────────────────────────────
+// Only for simple key names (e.g. "G", "Am", "F#"). For full chord names with
+// quality suffixes use transposeChordName instead.
 
 export function transposeKey(key: string, semitones: number): string {
   if (!key || semitones === 0) return key
   try {
-    const html = renderToHtml(`{key: ${key}}\n[${key}]\n`, semitones)
-    const match = html.match(/<div class="chord">([^<]+)<\/div>/)
-    return match?.[1]?.trim() ?? key
+    const chord = Chord.parse(key)
+    if (!chord) return key
+    const modifier = targetAccidental(key, semitones)
+    return chord.transpose(semitones).useModifier(modifier).toString()
   } catch {
     return key
+  }
+}
+
+// ─── Transpose any chord name (including quality suffixes) ───────────────────
+// Uses chordsheetjs Chord.parse — works for Am7, Gsus4, Dm9, etc.
+// originalKey is used to pick the correct enharmonic spelling.
+
+export function transposeChordName(
+  chordName: string,
+  semitones: number,
+  originalKey = '',
+): string {
+  if (!chordName || semitones === 0) return chordName
+  try {
+    const chord = Chord.parse(chordName)
+    if (!chord) return chordName
+    const modifier = originalKey ? targetAccidental(originalKey, semitones) : '#'
+    return chord.transpose(semitones).useModifier(modifier).toString()
+  } catch {
+    return chordName
   }
 }
 
