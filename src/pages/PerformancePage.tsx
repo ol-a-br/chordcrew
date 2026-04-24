@@ -477,12 +477,15 @@ export default function PerformancePage() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Controls overlay */}
-      <div className={`
-        absolute top-0 inset-x-0 z-10 flex items-center gap-2 px-4 py-3
-        bg-gradient-to-b from-surface-0/95 to-transparent
-        transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}
-      `}>
+      {/* Controls overlay — paddingTop respects the iOS/iPadOS status bar */}
+      <div
+        className={`
+          absolute top-0 inset-x-0 z-10 flex items-center gap-2 px-4 pb-3
+          bg-gradient-to-b from-surface-0/95 to-transparent
+          transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}
+        `}
+        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+      >
         <button onClick={() => setlistId ? navigate(`/setlists/${setlistId}`) : navigate(-1)} className="text-ink-muted hover:text-ink p-1 shrink-0">
           <X size={20} />
         </button>

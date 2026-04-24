@@ -89,8 +89,11 @@ export function AppShell() {
         'transition-transform duration-200',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       )}>
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 px-4 py-4 border-b border-surface-3">
+        {/* Logo — paddingTop covers the iOS/iPadOS status bar (safe area) */}
+        <div
+          className="flex items-center gap-2.5 px-4 pb-4 border-b border-surface-3"
+          style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
+        >
           <Music2 className="text-chord" size={22} />
           <span className="font-semibold text-lg tracking-tight">ChordCrew</span>
           <button
@@ -186,7 +189,7 @@ export function AppShell() {
 
       {/* Main */}
       <div className="flex flex-col flex-1 min-w-0">
-        {/* Mobile top bar */}
+        {/* Mobile top bar — handles safe-area-inset-top on small screens */}
         <header
           className="lg:hidden flex items-center gap-3 px-4 pb-3 border-b border-surface-3 bg-surface-1"
           style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
@@ -197,6 +200,10 @@ export function AppShell() {
           <Music2 className="text-chord" size={18} />
           <span className="font-semibold text-sm">ChordCrew</span>
         </header>
+
+        {/* Safe-area spacer for lg layout (sidebar visible, mobile header hidden).
+            On small screens this is hidden — the mobile header above handles it. */}
+        <div className="hidden lg:block shrink-0" style={{ height: 'env(safe-area-inset-top)' }} />
 
         {/* Team invite notifications */}
         <TeamInviteNotification />
