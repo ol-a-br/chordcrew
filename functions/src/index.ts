@@ -1,43 +1,40 @@
-import { onRequest } from 'firebase-functions/v2/https'
+import * as functions from 'firebase-functions/v1'
 
 // Only proxy requests to official ChurchTools SaaS hostnames.
-// Self-hosted CT installations end in any domain, but SaaS always uses .church.tools.
 const CT_HOSTNAME_SUFFIX = '.church.tools'
 
-export const ctProxy = onRequest(
-  {
-    cors: true,           // firebase-functions handles CORS preflight automatically
-    region: 'europe-west1',
-    timeoutSeconds: 30,
-    minInstances: 0,
-    maxInstances: 10,
-  },
-  async (req, res) => {
-    // --- Validate target -------------------------------------------------------
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-CT-Base-URL',
+}
+
+export const ctProxy = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 30 })
+  .https.onRequest(async (req, res) => {
+    // CORS preflight
+    Object.entries(CORS_HEADERS).forEach(([k, v]) => res.set(k, v))
+    if (req.method === 'OPTIONS') { res.status(204).send(''); return }
+
+    // Validate target
     const ctBaseUrl = (req.headers['x-ct-base-url'] as string | undefined)?.trim()
-    if (!ctBaseUrl) {
-      res.status(400).json({ error: 'Missing X-CT-Base-URL header' })
-      return
-    }
+    if (!ctBaseUrl) { res.status(400).json({ error: 'Missing X-CT-Base-URL header' }); return }
+
     let targetHost: string
-    try {
-      targetHost = new URL(ctBaseUrl).hostname
-    } catch {
-      res.status(400).json({ error: 'Invalid X-CT-Base-URL' })
-      return
-    }
+    try { targetHost = new URL(ctBaseUrl).hostname }
+    catch { res.status(400).json({ error: 'Invalid X-CT-Base-URL' }); return }
+
     if (!targetHost.endsWith(CT_HOSTNAME_SUFFIX)) {
-      res.status(403).json({ error: 'Target must be a *.church.tools host' })
-      return
+      res.status(403).json({ error: 'Target must be a *.church.tools host' }); return
     }
 
-    // --- Build target URL -------------------------------------------------------
-    // Firebase Hosting rewrite: /ct-api/songs → function receives path /ct-api/songs
+    // Build target URL — strip the /ct-api prefix the Hosting rewrite preserves
     const path = req.path.replace(/^\/ct-api/, '') || '/'
     const qs = req.url.includes('?') ? `?${req.url.split('?')[1]}` : ''
     const targetUrl = `${ctBaseUrl.replace(/\/+$/, '')}/api${path}${qs}`
 
-    // --- Proxy ------------------------------------------------------------------
+    // Proxy
     try {
       const ctRes = await fetch(targetUrl, {
         method: req.method,
@@ -45,12 +42,10 @@ export const ctProxy = onRequest(
           'Content-Type': 'application/json',
           'Authorization': (req.headers.authorization as string) || '',
         },
-        // Body only for mutating methods; req.body is already parsed by express
         body: ['POST', 'PUT', 'PATCH'].includes(req.method)
           ? JSON.stringify(req.body)
           : undefined,
       })
-
       const text = await ctRes.text()
       res.status(ctRes.status).set('Content-Type', 'application/json').send(text)
     } catch (err) {
