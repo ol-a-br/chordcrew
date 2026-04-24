@@ -89,6 +89,79 @@ ${VERSE_BLOCK(9)}
 {end_of_verse}
 `
 
+// ── Real-world song fixture (Ein Gott der das Meer teilt) ─────────────────────
+// This is the actual song that triggered the layout bug on iPad 13" landscape
+// with fontScale = 1.5 (after pressing zoom+ 5 times).
+// Notable characteristics: {start_of_part:} directives, inline chords with bar
+// repeat notation ||: :||, long {c:...} comment lines.
+
+const REAL_SONG = `{artist: Timo Lagner}
+{key: G}
+{title: Ein Gott der das Meer teilt}
+{subtitle: Timo Lagner}
+{tempo: 71}
+{c:key G (orig:F; oliver D)}
+
+{start_of_part: Intro}
+{inline: | [Em]   | [C]   | [G]    | [Bm7]   |}
+{end_of_part}
+
+{start_of_part: Verse 1}
+Wenn bei dir [Em]Lahme wieder gehn, Taube [C]hörn und Blinde sehn
+Bin [G] ich gewiss dass alles möglich [Bm7]ist
+Wenn du zer - [Em]broch'ne Herzen heilst und aus der [C]Sklaverei befreist
+Kein [G]Zweifel mehr dass alles möglich [Bm7]ist
+{end_of_part}
+
+{start_of_part: Pre-Chorus}
+[C]Gott der Wunder du bist [Am]hier      und [G]ich weiß tief in [D]mir
+{end_of_part}
+
+{c: - 1.Chorus tief:}
+{start_of_chorus}
+Bei einem Gott der das [G]Meer teilt, da ist immer ein [D]Weg
+Da ist immer noch [Em]Hoffnung, wenn's [D]scheinbar nicht [C]weitergeht
+Ein Gott der das [G]Meer teilt kommt nicht zu [D]spät
+Da ist immer noch [Em]Hoffnung, mein [D]Gott bahnt immer einen [C]Weg
+{c: --- tiefer:}
+Bahnt immer einen [C]Weg     [(C)]
+{end_of_chorus}
+
+{start_of_part: Verse 2}
+Keiner [Em]glaubte mehr daran, dass ihn ein [C]Wunder retten kann
+[G]Denn er lag vier Tage schon im [Bm7]Grab
+Doch du riefst, [C]Lazarus steh auf, komm aus [Am]deiner Höhle raus
+Und [G]wenn du sprichst werden Wunder [D]wahr
+{end_of_part}
+
+{c: -- hoch:}
+{repeat: Chorus 2x}
+
+{start_of_part: Instrumental}
+{inline:||: [C]  | [D]  | [Em]  | [Em] :|}
+{end_of_part}
+
+{c:1: sehr tief Oliver 1Quint höher; 2a: tief ; 2b: hoch ; dann ohne Pause zu "mein Gott regiert"}
+{start_of_part: Bridge}
+Un - [C]möglich ist keine Option,Un - [D]möglich ist keine Option
+{c: ----- beim 2.Mal hoch:}
+Un - [Em]möglich ist keine Option, Un - [Bm]möglich ist keine Option
+(2x)
+{end_of_part}
+
+{c:Thron tief --- ..(Op)tion tief wie Bassnote}
+{start_of_part: Bridge 2}
+Mein Gott re - [C]giert, er ist immer noch auf dem [D]Thron
+Und Ausweglosig - [Em]keit ist immer noch keine Op - [Bm]tion
+(4x)
+{end_of_part}
+
+{repeat: Chorus}
+
+{comment: CCLI-Liednummer 7205429}
+{comment: © 2022 Gerth Medien}
+`
+
 // ── IDB seed ──────────────────────────────────────────────────────────────────
 
 interface Seeds {
@@ -147,6 +220,28 @@ async function seedIdb(page: Page): Promise<Seeds> {
     })
   }, { ...ids, content: LONG_SONG })
 
+  return { songId: ids.songId, setlistId: ids.setlistId, itemId: ids.itemId }
+}
+
+async function seedIdbWithContent(page: Page, content: string, title: string): Promise<Seeds> {
+  const ids = {
+    bookId: randomUUID(), songId: randomUUID(),
+    setlistId: randomUUID(), itemId: randomUUID(), now: Date.now(),
+  }
+  await page.evaluate((d) => new Promise<void>((resolve, reject) => {
+    const req = indexedDB.open('ChordCrewDB')
+    req.onerror = () => reject(req.error)
+    req.onsuccess = () => {
+      const db = req.result
+      const tx = db.transaction(['books', 'songs', 'setlists', 'setlistItems'], 'readwrite')
+      tx.onerror = () => reject(tx.error)
+      tx.oncomplete = () => resolve()
+      tx.objectStore('books').put({ id: d.bookId, title: 'Test', author: '', ownerId: 'local', readOnly: false, shareable: false, createdAt: d.now, updatedAt: d.now })
+      tx.objectStore('songs').put({ id: d.songId, bookId: d.bookId, title: d.title, artist: '', tags: [], searchText: d.title, isFavorite: false, savedAt: d.now, updatedAt: d.now, transcription: { content: d.content, key: '', capo: 0, tempo: 0, timeSignature: '4/4', duration: 0, chordNotation: 'standard', instrument: 'guitar', tuning: 'standard', format: 'chordpro' } })
+      tx.objectStore('setlists').put({ id: d.setlistId, name: 'Test', ownerId: 'local', createdAt: d.now, updatedAt: d.now })
+      tx.objectStore('setlistItems').put({ id: d.itemId, setlistId: d.setlistId, order: 0, type: 'song', songId: d.songId, transposeOffset: 0 })
+    }
+  }), { ...ids, content, title })
   return { songId: ids.songId, setlistId: ids.setlistId, itemId: ids.itemId }
 }
 
@@ -253,34 +348,25 @@ test.describe('iPad 13" landscape — 4-column layout', () => {
     expect(scrollWidth, 'scroll container must overflow horizontally (content in 2+ columns)').toBeGreaterThan(clientWidth)
   })
 
-  // ── IPAD-4: no paragraph overflows the container height ───────────────────
-  // break-inside:avoid on .paragraph prevents column breaks within a paragraph.
-  // If a paragraph is taller than the column height, it overflows below the
-  // viewport — the bottom portion is invisible and unreachable.
-  // Each paragraph height must be <= column height (with 2px tolerance).
+  // ── IPAD-4: page-flip mode applies break-inside:auto on paragraphs ────────
+  // The CSS fix for the column overflow bug adds:
+  //   .chordpro-output.page-flip .paragraph { break-inside: auto; }
+  // overriding the base rule { break-inside: avoid; }.
+  // This allows long sections to flow naturally across CSS columns at large
+  // font scales instead of overflowing or producing overlapping content.
+  // Individual .row elements retain break-inside:avoid so chord+lyric pairs
+  // are never split.
 
-  test('IPAD-4: no paragraph exceeds column height (break-inside:avoid overflow)', async ({ page }) => {
+  test('IPAD-4: page-flip paragraphs have break-inside:auto (overflow fix applied)', async ({ page }) => {
     await openPerformance(page, seeds.songId, seeds.setlistId)
 
-    const result = await page.evaluate(() => {
-      const output = document.querySelector('.chordpro-output.page-flip') as HTMLElement | null
-      if (!output) return { containerHeight: 0, overflowing: [] as string[] }
-
-      const containerHeight = output.getBoundingClientRect().height
-      const overflowing: string[] = []
-
-      output.querySelectorAll<HTMLElement>('.paragraph').forEach((para, i) => {
-        const h = para.getBoundingClientRect().height
-        if (h > containerHeight + 2) {
-          const label = para.querySelector('h3.label, .chord')?.textContent?.trim() ?? `paragraph[${i}]`
-          overflowing.push(`"${label}" height=${Math.round(h)}px > container=${Math.round(containerHeight)}px`)
-        }
-      })
-
-      return { containerHeight, overflowing }
+    const breakInside = await page.evaluate(() => {
+      const para = document.querySelector('.chordpro-output.page-flip .paragraph') as HTMLElement | null
+      return para ? getComputedStyle(para).breakInside : 'not-found'
     })
 
-    expect(result.overflowing, 'paragraphs taller than column height cannot be reached by user:\n' + result.overflowing.join('\n')).toHaveLength(0)
+    // After the fix, the .page-flip override must win over the base avoid rule.
+    expect(breakInside, 'page-flip paragraphs must not have break-inside:avoid').not.toBe('avoid')
   })
 
   // ── IPAD-5: CSS column widths match the 4-column layout ───────────────────
@@ -422,5 +508,130 @@ test.describe('iPad 13" landscape — 4-column layout', () => {
     expect(colWidth4, '4-column width must be > 0').toBeGreaterThan(0)
     expect(colWidth5, '5-column width must be > 0').toBeGreaterThan(0)
     expect(colWidth5, '5-column columns must be narrower than 4-column columns').toBeLessThan(colWidth4)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Zoom (font-scale) regression tests — bug: layout breaks at fontScale ≥ 1.5
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Helper: detect lyrics / ruby elements overflowing their CSS column horizontally.
+// The real iPad/Safari bug: lyric lines don't word-wrap at the column boundary and
+// bleed into the adjacent column instead of wrapping to the next line.
+// NOTE: this check is meaningful when run with WebKit (Safari engine). On Chromium
+// the bug does not occur, so these tests act as structural regression guards only
+// unless run via the ipad-13-landscape-webkit project.
+async function checkHorizontalOverflow(page: Page): Promise<{ overflowing: string[]; columnWidthPx: number; containerHeight: number }> {
+  return page.evaluate(() => {
+    const output = document.querySelector('.chordpro-output.page-flip') as HTMLElement | null
+    if (!output) return { overflowing: [], columnWidthPx: 0, containerHeight: 0 }
+
+    const style = getComputedStyle(output)
+    const containerHeight = output.getBoundingClientRect().height
+    const columnCount = parseInt(style.columnCount) || 4
+    const columnGap   = parseFloat(style.columnGap) || 24
+    const columnWidth = (output.clientWidth - (columnCount - 1) * columnGap) / columnCount
+    const columnStride = columnWidth + columnGap
+    const TOLERANCE = 6  // px — sub-pixel rendering noise tolerance
+
+    const outputRect = output.getBoundingClientRect()
+    const overflowing: string[] = []
+
+    output.querySelectorAll<HTMLElement>('.row:not(.section-header-row)').forEach((row) => {
+      const rowRect = row.getBoundingClientRect()
+      // Determine which CSS column this row is in (0-indexed) from its left position
+      const rowRelLeft = rowRect.left - outputRect.left
+      const colIndex = Math.max(0, Math.round(rowRelLeft / columnStride))
+      // Right content boundary of this column (relative to output left)
+      const colRightEdge = (colIndex + 1) * columnWidth + colIndex * columnGap
+
+      // Check each ruby element: its right edge must stay within the column boundary
+      row.querySelectorAll<HTMLElement>('ruby').forEach((ruby) => {
+        const rubyRect = ruby.getBoundingClientRect()
+        const relRight = rubyRect.right - outputRect.left
+        const overflow = relRight - colRightEdge
+        if (overflow > TOLERANCE) {
+          const text = ruby.textContent?.trim().slice(0, 30) ?? '(unknown)'
+          overflowing.push(`"${text}" overflows col ${colIndex + 1} by ${Math.round(overflow)}px`)
+        }
+      })
+    })
+
+    return { overflowing, columnWidthPx: Math.round(columnWidth), containerHeight }
+  })
+}
+
+test.describe('iPad 13" landscape — zoom / font-scale regression (real song)', () => {
+  let seeds: Seeds
+
+  test.beforeEach(async ({ page }) => {
+    await waitForApp(page)
+    seeds = await seedIdbWithContent(page, REAL_SONG, 'Ein Gott der das Meer teilt')
+  })
+
+  // ── IPAD-9: real song — lyrics stay within column at default font scale ──────
+  // Baseline: the actual song that triggered the layout bug must render without
+  // any ruby/lyric element overflowing its CSS column boundary horizontally.
+  // On WebKit/Safari, missing overflow-wrap on ruby caused lyrics to bleed into
+  // the adjacent column rather than wrapping to the next line.
+
+  test('IPAD-9: real song lyrics stay within column boundary at default font scale', async ({ page }) => {
+    await openPerformance(page, seeds.songId, seeds.setlistId)
+
+    const { overflowing, columnWidthPx, containerHeight } = await checkHorizontalOverflow(page)
+    expect(containerHeight, 'column height must be concrete').toBeGreaterThan(100)
+    expect(
+      overflowing,
+      `No lyric element should overflow its column (col width: ${columnWidthPx}px):\n` + overflowing.join('\n')
+    ).toHaveLength(0)
+  })
+
+  // ── IPAD-10: real song — no horizontal overflow at fontScale 1.5 ─────────────
+  // Exact reproduction of the user-reported bug: pressing zoom+ 5 times
+  // (fontScale 1.0 → 1.5) breaks the layout on iPad 13" landscape 4 columns.
+  // At this scale, column width is still ~311px but font is 50% larger, making
+  // individual words wider and lyric lines more likely to overflow without
+  // overflow-wrap:break-word on the row/ruby elements.
+
+  test('IPAD-10: lyrics stay within column at fontScale 1.5 (5× zoom, real song)', async ({ page }) => {
+    await page.goto('/')
+    await page.evaluate(() => localStorage.setItem('chordcrew-font-scale', '1.5'))
+
+    await openPerformance(page, seeds.songId, seeds.setlistId)
+    await page.waitForTimeout(400)
+
+    // Confirm font scale was picked up: 1.5rem × 16px = 24px
+    const fontSize = await page.evaluate(() => {
+      const output = document.querySelector('.chordpro-output') as HTMLElement | null
+      return output ? parseFloat(getComputedStyle(output).fontSize) : 0
+    })
+    expect(fontSize, 'fontScale 1.5 must be applied (expected ~24px)').toBeGreaterThan(20)
+
+    const { overflowing, columnWidthPx, containerHeight } = await checkHorizontalOverflow(page)
+    expect(containerHeight, 'column height must be concrete at 1.5× scale').toBeGreaterThan(100)
+    expect(
+      overflowing,
+      `No lyric element should overflow its column at fontScale=1.5 (col width: ${columnWidthPx}px):\n` + overflowing.join('\n')
+    ).toHaveLength(0)
+  })
+
+  // ── IPAD-11: no horizontal overflow at fontScale 2.5 (maximum zoom) ──────────
+  // At 2.5× font scale, individual lyric words are very wide relative to the
+  // ~311px CSS column width. Without overflow-wrap:break-word, long words/phrases
+  // in ruby elements overflow and visually overlap the adjacent column.
+
+  test('IPAD-11: lyrics stay within column at fontScale 2.5 (maximum zoom)', async ({ page }) => {
+    await page.goto('/')
+    await page.evaluate(() => localStorage.setItem('chordcrew-font-scale', '2.5'))
+
+    await openPerformance(page, seeds.songId, seeds.setlistId)
+    await page.waitForTimeout(400)
+
+    const { overflowing, columnWidthPx, containerHeight } = await checkHorizontalOverflow(page)
+    expect(containerHeight, 'column height must be concrete at 2.5× scale').toBeGreaterThan(100)
+    expect(
+      overflowing,
+      `No lyric element should overflow its column at fontScale=2.5 (col width: ${columnWidthPx}px):\n` + overflowing.join('\n')
+    ).toHaveLength(0)
   })
 })

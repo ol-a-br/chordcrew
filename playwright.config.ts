@@ -64,5 +64,20 @@ export default defineConfig({
           '(KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
       },
     },
+    {
+      // WebKit build — catches Safari-specific word-wrap bugs in CSS columns.
+      // The horizontal overflow tests (IPAD-9/10/11) are most meaningful here.
+      name: 'ipad-13-landscape-webkit',
+      use: {
+        viewport: { width: 1366, height: 1024 },
+        deviceScaleFactor: 2,
+        isMobile: true,
+        hasTouch: true,
+        defaultBrowserType: 'webkit',
+        userAgent:
+          'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 ' +
+          '(KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+      },
+    },
   ],
 })
