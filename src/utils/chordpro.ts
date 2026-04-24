@@ -81,18 +81,34 @@ export function renderToHtml(content: string, transposeOffset = 0): string {
 
   if (transposeOffset !== 0) {
     const originalKey = content.match(/\{key\s*:\s*([^}]+)\}/i)?.[1]?.trim() ?? ''
+    const modifier = originalKey ? targetAccidental(originalKey, transposeOffset) : null
     song = song.transpose(transposeOffset)
-    if (originalKey) {
-      const modifier = targetAccidental(originalKey, transposeOffset)
-      song = song.mapItems((item) => {
-        const pair = item as { chords?: string; set?: (o: Record<string, unknown>) => unknown }
-        if (pair.chords && pair.set) {
-          const chord = Chord.parse(pair.chords)
-          if (chord) return pair.set({ chords: chord.useModifier(modifier).toString() }) as typeof item
+    // Always run mapItems to:
+    // (a) apply flat/sharp preference when a key is present
+    // (b) fix optional chords like (Gm) that song.transpose() skips because
+    //     Chord.parse('(Gm)') returns null — we strip/restore the parens manually
+    song = song.mapItems((item) => {
+      const pair = item as { chords?: string; set?: (o: Record<string, unknown>) => unknown }
+      if (pair.chords && pair.set) {
+        const c = pair.chords as string
+        const isOptional = c.startsWith('(') && c.endsWith(')')
+        const name = isOptional ? c.slice(1, -1) : c
+        const chord = Chord.parse(name)
+        if (!chord) return item
+        if (isOptional) {
+          // song.transpose() skipped this chord — transpose it now, with round-trip
+          const transposedStr = chord.transpose(transposeOffset).toString()
+          const reparsed = Chord.parse(transposedStr)
+          if (!reparsed) return item
+          const result = modifier ? reparsed.useModifier(modifier) : reparsed
+          return pair.set({ chords: `(${result.toString()})` }) as typeof item
         }
-        return item
-      })
-    }
+        if (modifier) {
+          return pair.set({ chords: chord.useModifier(modifier).toString() }) as typeof item
+        }
+      }
+      return item
+    })
   }
 
   const formatter = new HtmlDivFormatter()
@@ -386,7 +402,14 @@ export function transposeChordName(
     const chord = Chord.parse(chordName)
     if (!chord) return chordName
     const modifier = originalKey ? targetAccidental(originalKey, semitones) : '#'
-    return chord.transpose(semitones).useModifier(modifier).toString()
+    // Round-trip through string before useModifier — mirrors how renderToHtml works
+    // (song.transpose stores a string; mapItems re-parses it before useModifier).
+    // Chaining .transpose().useModifier() directly on the Chord object skips the
+    // normalisation step and can yield enharmonically wrong spellings (e.g. B# → C).
+    const transposedStr = chord.transpose(semitones).toString()
+    const reparsed = Chord.parse(transposedStr)
+    if (!reparsed) return transposedStr
+    return reparsed.useModifier(modifier).toString()
   } catch {
     return chordName
   }
