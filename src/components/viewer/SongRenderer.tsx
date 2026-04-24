@@ -322,9 +322,16 @@ export function SongRenderer({
     // chord positions share one text flow and wrap together at real word
     // boundaries.  ruby-align:start (set in CSS) anchors each chord to the
     // left edge of its base text, matching chord-sheet notation conventions.
+    //
+    // Safari/WebKit treats display:ruby as an atomic inline box — adjacent ruby
+    // elements have no break opportunity between them and lines overflow into
+    // the next CSS column.  We insert a <wbr> (word-break opportunity) after
+    // each ruby (except the last in the row) so the browser can wrap the line
+    // at chord-position boundaries when the column width is exceeded.
     container.querySelectorAll<HTMLElement>('.row').forEach(row => {
       if (row.classList.contains('section-header-row')) return
-      Array.from(row.querySelectorAll<HTMLElement>(':scope > .column')).forEach(col => {
+      const cols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
+      cols.forEach((col, idx) => {
         const chordEl  = col.querySelector('.chord')
         const lyricsEl = col.querySelector('.lyrics')
         const ruby = document.createElement('ruby')
@@ -337,6 +344,9 @@ export function SongRenderer({
         }
         ruby.appendChild(rt)
         col.replaceWith(ruby)
+        if (idx < cols.length - 1) {
+          ruby.insertAdjacentElement('afterend', document.createElement('wbr'))
+        }
       })
     })
 

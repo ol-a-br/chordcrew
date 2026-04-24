@@ -39,10 +39,20 @@
   column-fill: auto;
 }
 
-/* Prevent sections splitting across columns */
+/* Prevent sections splitting across columns in normal (non-page-flip) layout.
+   In page-flip mode this is intentionally overridden below: at large font scales
+   a section (verse/chorus) can be taller than a single column, so we allow
+   paragraph breaks there rather than letting the browser violate the rule and
+   produce overlapping content. The .row rule below keeps chord+lyric pairs
+   together even when a paragraph is allowed to break. */
 .chordpro-output .paragraph {
   break-inside: avoid;
   margin-bottom: 1.25rem;
+}
+/* Page-flip: allow sections to break across CSS columns so that long paragraphs
+   at high font scales don't overflow or overlap into adjacent columns. */
+.chordpro-output.page-flip .paragraph {
+  break-inside: auto;
 }
 
 /* Section headers — directive syntax: h3.label */
@@ -102,17 +112,26 @@
 }
 
 /* Each chord+lyric row — block so ruby elements wrap naturally.
-   break-inside:avoid prevents a CSS column break from splitting a row. */
+   break-inside:avoid prevents a CSS column break from splitting a row.
+   overflow-wrap:break-word covers edge cases where a single lyric word is
+   longer than the CSS column width (forces a mid-word break rather than
+   overflow). */
 .chordpro-output .row {
   display: block;
   break-inside: avoid;
   page-break-inside: avoid; /* legacy */
+  overflow-wrap: break-word;
 }
 
 /* Native ruby elements carry one lyric run with its chord annotation above.
    ruby-align:start left-aligns the chord to the start of the base text,
    matching chord sheet convention (chord marks where it first sounds).
-   white-space:pre-wrap preserves spaces but allows browser line-wrapping. */
+   white-space:pre-wrap is required for WebKit/Safari to activate proper ruby
+   annotation layout (rt positioned above base text). Removing it causes Safari
+   to stop rendering rt elements as chord annotations (they disappear).
+   Word-wrap between adjacent ruby elements at CSS column boundaries is handled
+   by <wbr> elements injected by SongRenderer after each ruby — those are
+   outside the ruby's own white-space scope so pre-wrap does not suppress them. */
 .chordpro-output ruby {
   ruby-align: start;
   line-height: 1.6;
