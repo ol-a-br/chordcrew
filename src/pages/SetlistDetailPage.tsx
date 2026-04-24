@@ -4,11 +4,13 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import {
   ArrowLeft, Play, Music, Pencil, Check,
   GripVertical, Trash2, Plus, Search, Copy,
-  ChevronUp, ChevronDown, Printer, Link2, AlertTriangle, FileDown,
+  ChevronUp, ChevronDown, Printer, Link2, AlertTriangle, FileDown, Upload,
 } from 'lucide-react'
 import { db, generateId, markPending } from '@/db'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/shared/Button'
+import { useChurchTools } from '@/churchtools/ChurchToolsContext'
+import { EventPickerDialog } from '@/components/churchtools/EventPickerDialog'
 import { encodeSetlistShare, buildShareUrl, buildSetlistShareUrl, copyShareUrl, publishSetlistShare } from '@/utils/share'
 import { transposeKey, extractMeta, isValidKey } from '@/utils/chordpro'
 import type { SetlistItem, Song } from '@/types'
@@ -18,6 +20,8 @@ export default function SetlistDetailPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
+  const { isConfigured: ctConfigured } = useChurchTools()
+  const [showCtEvent, setShowCtEvent] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -373,6 +377,7 @@ export default function SetlistDetailPage() {
   let songPos = -1
 
   return (
+    <>
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -429,6 +434,15 @@ export default function SetlistDetailPage() {
             >
               <FileDown size={17} />
             </button>
+            {ctConfigured && (
+              <button
+                onClick={() => setShowCtEvent(true)}
+                className="p-1.5 text-ink-muted hover:text-ink rounded"
+                title="Upload setlist to ChurchTools event"
+              >
+                <Upload size={17} />
+              </button>
+            )}
             <button
               onClick={() => window.open(`/print/setlist/${id}`, '_blank')}
               className="p-1.5 text-ink-muted hover:text-ink rounded"
@@ -859,5 +873,14 @@ export default function SetlistDetailPage() {
         </div>
       )}
     </div>
+
+    {showCtEvent && setlist && songs && (
+      <EventPickerDialog
+        setlist={setlist}
+        songs={songItems.map(i => songs[i.songId!]).filter(Boolean)}
+        onClose={() => setShowCtEvent(false)}
+      />
+    )}
+    </>
   )
 }

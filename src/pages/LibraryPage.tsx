@@ -4,13 +4,15 @@ import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users,
-  CheckSquare, Square, Trash2, FolderInput, Pencil, Check, X,
+  CheckSquare, Square, Trash2, FolderInput, Pencil, Check, X, Upload,
 } from 'lucide-react'
 import { db, generateId, markPending, getTeamRole } from '@/db'
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { Button } from '@/components/shared/Button'
 import { buildSearchText } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
+import { useChurchTools } from '@/churchtools/ChurchToolsContext'
+import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
 import type { Song } from '@/types'
 
 type SortKey = 'title' | 'artist' | 'updatedAt' | 'savedAt' | 'accessedAt'
@@ -60,6 +62,10 @@ export default function LibraryPage() {
   const [showTagMenu, setShowTagMenu] = useState(false)
   const [bulkTagInput, setBulkTagInput] = useState('')
   const tagMenuRef = useRef<HTMLDivElement>(null)
+
+  const { isConfigured: ctConfigured } = useChurchTools()
+  const [showCtUpload, setShowCtUpload] = useState(false)
+  const [ctUploadSongs, setCtUploadSongs] = useState<Song[]>([])
 
   // Bulk selection state
   const [selectMode, setSelectMode] = useState(false)
@@ -449,6 +455,7 @@ export default function LibraryPage() {
   }
 
   return (
+    <>
     <div className="flex h-full">
       {/* Left panel */}
       <aside className="hidden md:flex flex-col w-52 border-r border-surface-3 bg-surface-1 py-3 px-2 gap-0.5 shrink-0 overflow-y-auto">
@@ -722,6 +729,23 @@ export default function LibraryPage() {
                             ) : (
                               <p className="px-3 py-2 text-xs text-ink-faint">No other books or teams available</p>
                             )}
+                            {ctConfigured && (
+                              <>
+                                <hr className="border-surface-3 my-1" />
+                                <button
+                                  onClick={async () => {
+                                    const list = await db.songs.bulkGet([...selectedIds])
+                                    setCtUploadSongs(list.filter(Boolean) as Song[])
+                                    setShowOrganizeMenu(false)
+                                    setShowCtUpload(true)
+                                  }}
+                                  className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-chord hover:bg-surface-3"
+                                >
+                                  <Upload size={11} />
+                                  Upload to ChurchTools
+                                </button>
+                              </>
+                            )}
                           </div>
                         </>
                       )}
@@ -839,6 +863,14 @@ export default function LibraryPage() {
         </div>
       </div>
     </div>
+
+    {showCtUpload && ctUploadSongs.length > 0 && (
+      <SongUploadDialog
+        songs={ctUploadSongs}
+        onClose={() => { setShowCtUpload(false); setCtUploadSongs([]) }}
+      />
+    )}
+    </>
   )
 }
 

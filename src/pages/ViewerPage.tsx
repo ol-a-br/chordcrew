@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash, Link2, StickyNote, X } from 'lucide-react'
+import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash, Link2, StickyNote, X, Upload } from 'lucide-react'
 import { encodeSongShare, buildShareUrl, copyShareUrl } from '@/utils/share'
 import { db, generateId, markPending, getTeamRole } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
@@ -10,6 +10,8 @@ import { transposeKey, getFirstChords, buildSearchText, extractMeta, lintChordPr
 import { useFontScale } from '@/hooks/useFontScale'
 import { useAuth } from '@/auth/AuthContext'
 import { NotesPanel } from '@/components/shared/NotesPanel'
+import { useChurchTools } from '@/churchtools/ChurchToolsContext'
+import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
 import type { SetlistItem, Book } from '@/types'
 
 function getDefaultColumns(): number {
@@ -22,6 +24,8 @@ export default function ViewerPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { isConfigured: ctConfigured } = useChurchTools()
+  const [showCtUpload, setShowCtUpload] = useState(false)
   const song = useLiveQuery(() => id ? db.songs.get(id) : undefined, [id])
 
   const setlistId = searchParams.get('setlistId')
@@ -286,6 +290,7 @@ export default function ViewerPage() {
   )
 
   return (
+    <>
     <div className="flex flex-col h-full" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
@@ -494,6 +499,17 @@ export default function ViewerPage() {
           <Link2 size={16} />
         </button>
 
+        {/* ChurchTools upload */}
+        {ctConfigured && (
+          <button
+            onClick={() => setShowCtUpload(true)}
+            className="p-1.5 text-ink-muted hover:text-ink rounded"
+            title="Upload to ChurchTools"
+          >
+            <Upload size={16} />
+          </button>
+        )}
+
         {/* Print / PDF */}
         <button
           onClick={() => window.open(`/print/song/${song.id}?transpose=${transpose}&columns=${columns}`, '_blank')}
@@ -604,5 +620,10 @@ export default function ViewerPage() {
         )}
       </div>
     </div>
+
+    {showCtUpload && song && (
+      <SongUploadDialog songs={[song]} onClose={() => setShowCtUpload(false)} />
+    )}
+    </>
   )
 }

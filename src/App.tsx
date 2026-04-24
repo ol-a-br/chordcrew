@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { SyncProvider } from '@/sync/SyncContext'
+import { ChurchToolsProvider } from '@/churchtools/ChurchToolsContext'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/components/auth/LoginPage'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -58,6 +59,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 function AuthenticatedRoutes() {
   return (
     <RequireAuth>
+      <ChurchToolsProvider>
       <SyncProvider>
       <Suspense fallback={<PageLoader />}>
         <Routes>
@@ -88,6 +90,7 @@ function AuthenticatedRoutes() {
         </Routes>
       </Suspense>
       </SyncProvider>
+      </ChurchToolsProvider>
     </RequireAuth>
   )
 }
