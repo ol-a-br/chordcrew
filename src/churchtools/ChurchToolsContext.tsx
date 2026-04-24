@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { getSettings, saveSettings } from '@/db'
-import { ctLogin, ctWhoAmI, ctGetSongCategories } from './api'
+import { ctWhoAmI, ctGetSongCategories } from './api'
+import { saveToken, loadToken, clearToken } from './credentials'
 import type { CTCategory } from './types'
 
 interface ChurchToolsContextValue {
@@ -10,13 +11,12 @@ interface ChurchToolsContextValue {
   categoryId: number
   personName: string | null
   categories: CTCategory[]
-  connecting: boolean
-  connectError: string | null
-  connect: (username: string, password: string) => Promise<void>
+  verifying: boolean
+  verifyError: string | null
+  saveTokenAndVerify: (token: string) => Promise<void>
   disconnect: () => void
   setBaseUrl: (url: string) => Promise<void>
   setCategoryId: (id: number) => Promise<void>
-  refreshPerson: () => Promise<void>
 }
 
 const ChurchToolsContext = createContext<ChurchToolsContextValue | null>(null)
@@ -27,18 +27,27 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
   const [categoryId, setCategoryIdState] = useState(0)
   const [personName, setPersonName] = useState<string | null>(null)
   const [categories, setCategories] = useState<CTCategory[]>([])
-  const [connecting, setConnecting] = useState(false)
-  const [connectError, setConnectError] = useState<string | null>(null)
+  const [verifying, setVerifying] = useState(false)
+  const [verifyError, setVerifyError] = useState<string | null>(null)
 
+  // Load persisted URL + category; then load token from credential store
   useEffect(() => {
-    getSettings().then(s => {
-      setBaseUrlState(s.churchToolsUrl ?? '')
-      setTokenState(s.churchToolsToken ?? '')
-      setCategoryIdState(s.churchToolsCategoryId ?? 0)
+    let cancelled = false
+    getSettings().then(async s => {
+      if (cancelled) return
+      const url = s.churchToolsUrl ?? ''
+      const catId = s.churchToolsCategoryId ?? 0
+      setBaseUrlState(url)
+      setCategoryIdState(catId)
+      if (url) {
+        const tok = await loadToken(url)
+        if (!cancelled && tok) setTokenState(tok)
+      }
     })
+    return () => { cancelled = true }
   }, [])
 
-  // Verify stored token and load person name + categories on mount
+  // Verify token and refresh person + categories whenever baseUrl or token changes
   useEffect(() => {
     if (!baseUrl || !token) { setPersonName(null); setCategories([]); return }
     ctWhoAmI(baseUrl, token)
@@ -51,29 +60,35 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
 
   const isConfigured = !!baseUrl && !!token
 
-  const connect = async (username: string, password: string) => {
-    setConnecting(true)
-    setConnectError(null)
+  const saveTokenAndVerify = async (rawToken: string) => {
+    const tok = rawToken.trim()
+    setVerifying(true)
+    setVerifyError(null)
     try {
-      const { token: newToken } = await ctLogin(baseUrl, username, password)
-      setTokenState(newToken)
-      await saveSettings({ churchToolsToken: newToken })
-      const person = await ctWhoAmI(baseUrl, newToken)
+      const person = await ctWhoAmI(baseUrl, tok)
       setPersonName(`${person.firstName} ${person.lastName}`.trim())
-      const cats = await ctGetSongCategories(baseUrl, newToken)
+      await saveToken(baseUrl, tok)
+      setTokenState(tok)
+      const cats = await ctGetSongCategories(baseUrl, tok)
       setCategories(cats)
     } catch (e) {
-      setConnectError(e instanceof Error ? e.message : 'Connection failed')
+      const msg = e instanceof Error ? e.message : 'Verification failed'
+      const isCors = msg.toLowerCase().includes('fetch') || msg === 'Failed to fetch'
+      setVerifyError(
+        isCors
+          ? 'Network error — ChurchTools may not allow cross-origin requests from this domain. Check that CORS is enabled in your ChurchTools administration.'
+          : msg,
+      )
     } finally {
-      setConnecting(false)
+      setVerifying(false)
     }
   }
 
-  const disconnect = () => {
+  const disconnect = async () => {
     setTokenState('')
     setPersonName(null)
     setCategories([])
-    saveSettings({ churchToolsToken: '' })
+    await clearToken()
   }
 
   const setBaseUrl = async (url: string) => {
@@ -81,8 +96,9 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
     setBaseUrlState(normalised)
     setPersonName(null)
     setCategories([])
-    await saveSettings({ churchToolsUrl: normalised, churchToolsToken: '' })
     setTokenState('')
+    await saveSettings({ churchToolsUrl: normalised })
+    await clearToken()
   }
 
   const setCategoryId = async (id: number) => {
@@ -90,21 +106,11 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
     await saveSettings({ churchToolsCategoryId: id })
   }
 
-  const refreshPerson = async () => {
-    if (!baseUrl || !token) return
-    try {
-      const p = await ctWhoAmI(baseUrl, token)
-      setPersonName(`${p.firstName} ${p.lastName}`.trim())
-    } catch {
-      setPersonName(null)
-    }
-  }
-
   return (
     <ChurchToolsContext.Provider value={{
       isConfigured, baseUrl, token, categoryId, personName,
-      categories, connecting, connectError,
-      connect, disconnect, setBaseUrl, setCategoryId, refreshPerson,
+      categories, verifying, verifyError,
+      saveTokenAndVerify, disconnect, setBaseUrl, setCategoryId,
     }}>
       {children}
     </ChurchToolsContext.Provider>

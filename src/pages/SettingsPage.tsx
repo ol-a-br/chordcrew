@@ -20,15 +20,14 @@ export default function SettingsPage() {
   const { status, pendingCount, lastSync, error: syncError, syncNow } = useSync()
   const {
     isConfigured, personName, categories,
-    connecting, connectError,
-    baseUrl, connect, disconnect, setBaseUrl, setCategoryId, categoryId,
+    verifying, verifyError,
+    baseUrl, saveTokenAndVerify, disconnect, setBaseUrl, setCategoryId, categoryId,
   } = useChurchTools()
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [capturingKey, setCapturingKey] = useState<'next' | 'prev' | null>(null)
   const [ctUrlInput, setCtUrlInput] = useState('')
-  const [ctUser, setCtUser] = useState('')
-  const [ctPass, setCtPass] = useState('')
-  const [showCtLogin, setShowCtLogin] = useState(false)
+  const [ctTokenInput, setCtTokenInput] = useState('')
+  const [showTokenField, setShowTokenField] = useState(false)
 
   // PWA install state
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
@@ -277,7 +276,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Connection status / login */}
+          {/* Connection status */}
           {baseUrl && (
             isConfigured && personName ? (
               <div className="flex items-center justify-between">
@@ -292,40 +291,46 @@ export default function SettingsPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {!showCtLogin ? (
-                  <Button variant="ghost" size="sm" onClick={() => setShowCtLogin(true)}>
+                {!showTokenField ? (
+                  <Button variant="ghost" size="sm" onClick={() => setShowTokenField(true)}>
                     <LogIn size={13} />
-                    Connect with ChurchTools account
+                    Enter login token
                   </Button>
                 ) : (
                   <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={ctUser}
-                      onChange={e => setCtUser(e.target.value)}
-                      placeholder="Username or email"
-                      className="w-full bg-surface-2 rounded-lg px-3 py-1.5 text-sm border border-surface-3 focus:outline-none focus:ring-1 focus:ring-chord/50"
-                    />
+                    <p className="text-xs text-ink-muted leading-relaxed">
+                      In ChurchTools: <strong className="text-ink">Your profile → Security → Login tokens</strong> → create a token and paste it here. Your password is never stored.
+                    </p>
                     <input
                       type="password"
-                      value={ctPass}
-                      onChange={e => setCtPass(e.target.value)}
-                      placeholder="Password"
-                      onKeyDown={e => { if (e.key === 'Enter') connect(ctUser, ctPass) }}
-                      className="w-full bg-surface-2 rounded-lg px-3 py-1.5 text-sm border border-surface-3 focus:outline-none focus:ring-1 focus:ring-chord/50"
+                      value={ctTokenInput}
+                      onChange={e => setCtTokenInput(e.target.value)}
+                      placeholder="Paste login token…"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && ctTokenInput.trim()) {
+                          saveTokenAndVerify(ctTokenInput)
+                          setCtTokenInput('')
+                          setShowTokenField(false)
+                        }
+                      }}
+                      className="w-full bg-surface-2 rounded-lg px-3 py-1.5 text-sm font-mono border border-surface-3 focus:outline-none focus:ring-1 focus:ring-chord/50"
                     />
-                    {connectError && (
-                      <p className="text-xs text-red-400">{connectError}</p>
+                    {verifyError && (
+                      <p className="text-xs text-red-400 leading-relaxed">{verifyError}</p>
                     )}
                     <div className="flex gap-2">
                       <Button
                         variant="primary" size="sm"
-                        onClick={() => connect(ctUser, ctPass)}
-                        disabled={connecting || !ctUser || !ctPass}
+                        onClick={() => {
+                          saveTokenAndVerify(ctTokenInput)
+                          setCtTokenInput('')
+                          setShowTokenField(false)
+                        }}
+                        disabled={verifying || !ctTokenInput.trim()}
                       >
-                        {connecting ? 'Connecting…' : 'Connect'}
+                        {verifying ? 'Verifying…' : 'Save & verify'}
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setShowCtLogin(false)}>
+                      <Button variant="ghost" size="sm" onClick={() => { setShowTokenField(false); setCtTokenInput('') }}>
                         Cancel
                       </Button>
                     </div>

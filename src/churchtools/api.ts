@@ -27,29 +27,6 @@ async function checkResponse(res: Response): Promise<void> {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-export async function ctLogin(
-  baseUrl: string,
-  username: string,
-  password: string,
-): Promise<{ personId: number; token: string }> {
-  const loginRes = await fetch(endpoint(baseUrl, '/login'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ username, password }),
-  })
-  await checkResponse(loginRes)
-  const loginData = await loginRes.json()
-  const personId: number = loginData.data.personId
-
-  const tokenRes = await fetch(endpoint(baseUrl, `/persons/${personId}/logintoken`), {
-    credentials: 'include',
-  })
-  await checkResponse(tokenRes)
-  const tokenData = await tokenRes.json()
-  return { personId, token: tokenData.data as string }
-}
-
 export async function ctWhoAmI(
   baseUrl: string,
   token: string,
