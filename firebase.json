@@ -7,7 +7,7 @@
       "**/node_modules/**"
     ],
     "rewrites": [
-      { "source": "/ct-api/**", "function": "ctProxy" },
+      { "source": "/ct-api/**", "function": "ctProxy", "region": "europe-west1" },
       { "source": "**",         "destination": "/index.html" }
     ]
   },
