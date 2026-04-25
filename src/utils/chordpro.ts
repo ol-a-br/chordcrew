@@ -96,12 +96,9 @@ export function renderToHtml(content: string, transposeOffset = 0): string {
         const chord = Chord.parse(name)
         if (!chord) return item
         if (isOptional) {
-          // song.transpose() skipped this chord — transpose it now, with round-trip
-          const transposedStr = chord.transpose(transposeOffset).toString()
-          const reparsed = Chord.parse(transposedStr)
-          if (!reparsed) return item
-          const result = modifier ? reparsed.useModifier(modifier) : reparsed
-          return pair.set({ chords: `(${result.toString()})` }) as typeof item
+          // song.transpose() skipped this chord — transpose it now via semitone lookup
+          const transposed = transposeChordName(name, transposeOffset, originalKey)
+          return pair.set({ chords: `(${transposed})` }) as typeof item
         }
         if (modifier) {
           return pair.set({ chords: chord.useModifier(modifier).toString() }) as typeof item
@@ -354,9 +351,19 @@ export function isValidKey(key: string): boolean {
 // are spelled correctly (e.g. C#m in D, not Dbm).
 
 const NOTE_SEMITONE: Record<string, number> = {
-  C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3,
-  E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8,
-  Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11,
+  'B#': 0, C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3,
+  E: 4, 'E#': 5, Fb: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8,
+  Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11, Cb: 11,
+}
+
+const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+const FLAT_NAMES  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
+
+function transposeNoteName(note: string, semitones: number, useFlats: boolean): string {
+  const base = NOTE_SEMITONE[note]
+  if (base === undefined) return note
+  const target = ((base + semitones) % 12 + 12) % 12
+  return useFlats ? FLAT_NAMES[target] : SHARP_NAMES[target]
 }
 // Tonic semitones that prefer flats, by major/minor key
 const FLAT_MAJOR = new Set([5, 10, 3, 8, 1, 6, 11])  // F Bb Eb Ab Db Gb Cb
@@ -379,18 +386,20 @@ function targetAccidental(originalKey: string, delta: number): '#' | 'b' {
 export function transposeKey(key: string, semitones: number): string {
   if (!key || semitones === 0) return key
   try {
-    const chord = Chord.parse(key)
-    if (!chord) return key
+    const m = key.match(/^([A-G][b#]?)(m(?:aj)?)?\s*$/)
+    if (!m) return key
+    const [, root, quality = ''] = m
     const modifier = targetAccidental(key, semitones)
-    return chord.transpose(semitones).useModifier(modifier).toString()
+    return transposeNoteName(root, semitones, modifier === 'b') + quality
   } catch {
     return key
   }
 }
 
 // ─── Transpose any chord name (including quality suffixes) ───────────────────
-// Uses chordsheetjs Chord.parse — works for Am7, Gsus4, Dm9, etc.
-// originalKey is used to pick the correct enharmonic spelling.
+// Uses a semitone lookup table — bypasses chordsheetjs Chord.transpose() which
+// produces enharmonically wrong spellings for some intervals (e.g. G→-7 gives B#
+// instead of C). originalKey is used to pick the correct flat/sharp spelling.
 
 export function transposeChordName(
   chordName: string,
@@ -399,17 +408,15 @@ export function transposeChordName(
 ): string {
   if (!chordName || semitones === 0) return chordName
   try {
-    const chord = Chord.parse(chordName)
-    if (!chord) return chordName
     const modifier = originalKey ? targetAccidental(originalKey, semitones) : '#'
-    // Round-trip through string before useModifier — mirrors how renderToHtml works
-    // (song.transpose stores a string; mapItems re-parses it before useModifier).
-    // Chaining .transpose().useModifier() directly on the Chord object skips the
-    // normalisation step and can yield enharmonically wrong spellings (e.g. B# → C).
-    const transposedStr = chord.transpose(semitones).toString()
-    const reparsed = Chord.parse(transposedStr)
-    if (!reparsed) return transposedStr
-    return reparsed.useModifier(modifier).toString()
+    const useFlats = modifier === 'b'
+    // Parse: Root([A-G][b#]?) + Quality(anything) + optional /Bass([A-G][b#]?)
+    const m = chordName.match(/^([A-G][b#]?)(.*?)(?:\/([A-G][b#]?))?$/)
+    if (!m) return chordName
+    const [, root, quality, bass] = m
+    const newRoot = transposeNoteName(root, semitones, useFlats)
+    const newBass = bass ? transposeNoteName(bass, semitones, useFlats) : null
+    return newRoot + quality + (newBass ? '/' + newBass : '')
   } catch {
     return chordName
   }
