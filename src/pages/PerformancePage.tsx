@@ -3,7 +3,7 @@ import { useFontScale } from '@/hooks/useFontScale'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlignLeft, ZoomIn, ZoomOut, List, Pencil, StickyNote } from 'lucide-react'
-import { db, getSettings, getSongNote, markPending } from '@/db'
+import { db, getSettings, saveSettings, getSongNote, markPending } from '@/db'
 import { SongRenderer, prewarmSongCache, isSongCached, getCachedHtml } from '@/components/viewer/SongRenderer'
 import { useKeyboardNav } from '@/hooks/useKeyboard'
 import { transposeKey } from '@/utils/chordpro'
@@ -11,10 +11,6 @@ import { NotesPanel } from '@/components/shared/NotesPanel'
 import { useAuth } from '@/auth/AuthContext'
 import type { SetlistItem } from '@/types'
 
-function getDefaultColumns(): number {
-  if (typeof window === 'undefined') return 2
-  return window.matchMedia('(orientation: landscape)').matches ? 4 : 2
-}
 
 // Module-level: all three variables persist across React component remounts.
 //
@@ -46,7 +42,7 @@ export default function PerformancePage() {
   const currentPos = parseInt(searchParams.get('pos') ?? '0', 10)
 
   const [transpose, setTranspose]     = useState(0)
-  const [columns, setColumns]         = useState(getDefaultColumns)
+  const [columns, setColumns]         = useState(2)
   const [lyricsOnly, setLyricsOnly]   = useState(false)
   const [fontScale, setFontScale]     = useFontScale()
   const [showControls, setShowControls] = useState(true)
@@ -121,6 +117,7 @@ export default function PerformancePage() {
   // ── Load settings ─────────────────────────────────────────────────────────
   useEffect(() => {
     getSettings().then(s => {
+      setColumns(s.defaultColumnCount)
       setMetronomeMode(s.metronomeMode)
       setNoteAutoShowMs(s.noteAutoShowMs ?? 2000)
     })
@@ -572,7 +569,7 @@ export default function PerformancePage() {
           {[1, 2, 3, 4, 5].map(n => (
             <button
               key={n}
-              onClick={() => setColumns(n)}
+              onClick={() => { setColumns(n); saveSettings({ defaultColumnCount: n }) }}
               className={`px-2 py-1.5 text-xs ${columns === n ? 'bg-chord/30 text-chord' : 'text-ink-muted hover:text-ink'}`}
             >
               {n}

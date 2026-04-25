@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash, Link2, StickyNote, X, Upload } from 'lucide-react'
 import { encodeSongShare, buildShareUrl, copyShareUrl } from '@/utils/share'
-import { db, generateId, markPending, getTeamRole } from '@/db'
+import { db, generateId, markPending, getTeamRole, getSettings, saveSettings } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
 import { transposeKey, getFirstChords, buildSearchText, extractMeta, lintChordPro, isValidKey } from '@/utils/chordpro'
@@ -13,11 +13,6 @@ import { NotesPanel } from '@/components/shared/NotesPanel'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
 import type { SetlistItem, Book } from '@/types'
-
-function getDefaultColumns(): number {
-  if (typeof window === 'undefined') return 2
-  return window.matchMedia('(orientation: landscape)').matches ? 4 : 2
-}
 
 export default function ViewerPage() {
   const { id } = useParams<{ id: string }>()
@@ -32,7 +27,7 @@ export default function ViewerPage() {
   const currentPos = parseInt(searchParams.get('pos') ?? '0', 10)
 
   const [transpose, setTranspose] = useState(0)
-  const [columns, setColumns] = useState(getDefaultColumns)
+  const [columns, setColumns] = useState(2)
   const [lyricsOnly, setLyricsOnly] = useState(false)
   const [fontScale, setFontScale] = useFontScale()
   const [showShareMenu, setShowShareMenu] = useState(false)
@@ -75,7 +70,12 @@ export default function ViewerPage() {
   const nextSongId = songItems[currentPos + 1]?.songId
   const currentSetlistItem = songItems[currentPos]
 
-  // Apply per-slot overrides once when the setlist item changes
+  // Load default column count from settings on mount
+  useEffect(() => {
+    getSettings().then(s => setColumns(s.defaultColumnCount))
+  }, [])
+
+  // Apply per-slot overrides once when the setlist item changes (overrides default)
   const appliedItemRef = useRef<string | null>(null)
   useEffect(() => {
     if (!currentSetlistItem || currentSetlistItem.id === appliedItemRef.current) return
@@ -421,7 +421,7 @@ export default function ViewerPage() {
           {[1, 2, 3, 4, 5].map(n => (
             <button
               key={n}
-              onClick={() => setColumns(n)}
+              onClick={() => { setColumns(n); saveSettings({ defaultColumnCount: n }) }}
               className={`px-2 py-1.5 text-xs ${columns === n ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:bg-surface-2'}`}
             >
               {n}
