@@ -6,7 +6,7 @@ import {
   Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users,
   CheckSquare, Square, Trash2, FolderInput, Pencil, Check, X, Upload,
 } from 'lucide-react'
-import { db, generateId, markPending, getTeamRole } from '@/db'
+import { db, generateId, markPending, markDeleted, getTeamRole } from '@/db'
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { Button } from '@/components/shared/Button'
 import { buildSearchText } from '@/utils/chordpro'
@@ -268,12 +268,15 @@ export default function LibraryPage() {
     if (!confirm(`Delete ${count} song${count !== 1 ? 's' : ''}? This cannot be undone.`)) return
     const songs = sortedSongs.filter(s => selectedIds.has(s.id))
     for (const song of songs) {
-      await db.songs.delete(song.id)
-      await db.syncStates.delete(`song:${song.id}`)
       if (user) {
         const teamId = bookTeamMap[song.bookId]
+        const paths = [`users/${user.id}/songs/${song.id}`]
+        if (teamId) paths.push(`teams/${teamId}/songs/${song.id}`)
+        await markDeleted('song', song.id, paths)
+        // Best-effort immediate cloud delete; uploadPending retries if this fails
         deleteSongFromCloud(song.id, user.id, teamId).catch(() => {})
       }
+      await db.songs.delete(song.id)
     }
     exitSelectMode()
     showBulkToast(`Deleted ${count} song${count !== 1 ? 's' : ''}`)

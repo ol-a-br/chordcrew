@@ -31,7 +31,7 @@ import type { Book, Song, Setlist, SetlistItem, Team, SongNote } from '@/types'
 // ─── Upload ───────────────────────────────────────────────────────────────────
 
 async function uploadPending(userId: string): Promise<void> {
-  const pending = await db.syncStates.where('status').equals('pending').toArray()
+  const pending = await db.syncStates.where('status').anyOf('pending', 'deleted').toArray()
   if (pending.length === 0) return
 
   // Find which teams this user belongs to (for team-scoped uploads)
@@ -45,6 +45,16 @@ async function uploadPending(userId: string): Promise<void> {
   for (const state of pending) {
     const { entityType, entityId } = state
     try {
+      // Handle deletion tombstones: delete from every listed Firestore path, then
+      // remove the tombstone so the entity is fully gone from the sync system.
+      if (state.status === 'deleted') {
+        for (const path of state.deleteFromPaths ?? []) {
+          await deleteDoc(doc(firestore!, path)).catch(() => {})
+        }
+        await db.syncStates.delete(state.id)
+        continue
+      }
+
       if (entityType === 'song') {
         const entity = await db.songs.get(entityId)
         if (entity) {
@@ -151,13 +161,14 @@ async function downloadPersonal(userId: string): Promise<Set<string>> {
     if (remote.sharedTeamId) discoveredTeamIds.add(remote.sharedTeamId)
   }
 
-  // Songs — skip if still pending (uploadPending should have resolved it, but guard defensively)
+  // Songs — skip if pending (uploadPending handles it) or deleted (tombstone, don't re-add)
   const remoteSongs = await getDocs(collection(firestore!, 'users', userId, 'songs'))
   for (const snap of remoteSongs.docs) {
     const remote = snap.data() as Song
     const local = await db.songs.get(remote.id)
     const syncState = await db.syncStates.get(`song:${remote.id}`)
-    if (syncState?.status === 'pending') continue  // uploadPending already handled or will handle
+    if (syncState?.status === 'pending') continue
+    if (syncState?.status === 'deleted') continue  // locally deleted — don't re-add
     if (!local || remote.updatedAt > local.updatedAt) {
       // Preserve device-local accessedAt when pulling remote content
       await db.songs.put(stripUndefined({ ...remote, accessedAt: local?.accessedAt ?? remote.accessedAt }))
@@ -245,6 +256,8 @@ async function downloadTeams(userId: string, userEmail: string, discoveredTeamId
     for (const snap of teamSongs.docs) {
       const remote = snap.data() as Song
       const local = await db.songs.get(remote.id)
+      const syncState = await db.syncStates.get(`song:${remote.id}`)
+      if (syncState?.status === 'deleted') continue  // locally deleted — don't re-add
       if (!local || remote.updatedAt > local.updatedAt) await db.songs.put(remote)
     }
 
@@ -335,6 +348,11 @@ async function repairOrphaned(userId: string): Promise<void> {
   const allSongs = await db.songs.toArray()
   const bookTeamMap = new Map(allBooks.filter(b => b.sharedTeamId).map(b => [b.id, b.sharedTeamId!]))
   for (const song of allSongs) {
+    // Skip songs that have any syncState: they are already part of the sync system.
+    // A missing Firestore doc for a synced song means it was intentionally deleted
+    // from another device — re-uploading it would undo that deletion.
+    const existingSyncState = await db.syncStates.get(`song:${song.id}`)
+    if (existingSyncState) continue
     const snap = await getDoc(doc(firestore, 'users', userId, 'songs', song.id))
     if (snap.exists()) continue
     await setDoc(doc(firestore, 'users', userId, 'songs', song.id), stripUndefined(song))

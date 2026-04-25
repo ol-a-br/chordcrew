@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { AlertTriangle, Copy, Download, Search, Trash2 } from 'lucide-react'
-import { db } from '@/db'
+import { db, markDeleted } from '@/db'
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { lintChordPro } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
@@ -210,12 +210,15 @@ export default function CurationPage() {
     for (const group of exactSameBookGroups) {
       const sorted = [...group].sort((a, b) => b.updatedAt - a.updatedAt)
       for (const song of sorted.slice(1)) {
-        await db.songs.delete(song.id)
-        await db.syncStates.delete(`song:${song.id}`)
         if (user) {
           const book = books?.find(b => b.id === song.bookId)
-          deleteSongFromCloud(song.id, user.id, book?.sharedTeamId)
+          const teamId = book?.sharedTeamId
+          const paths = [`users/${user.id}/songs/${song.id}`]
+          if (teamId) paths.push(`teams/${teamId}/songs/${song.id}`)
+          await markDeleted('song', song.id, paths)
+          deleteSongFromCloud(song.id, user.id, teamId)
         }
+        await db.songs.delete(song.id)
       }
     }
   }
@@ -223,12 +226,15 @@ export default function CurationPage() {
   // ── Delete song ───────────────────────────────────────────────────────────
   const deleteSong = async (song: Song) => {
     if (!confirm(`Delete "${song.title}"? This cannot be undone.`)) return
-    await db.songs.delete(song.id)
-    await db.syncStates.delete(`song:${song.id}`)
     if (user) {
       const book = books?.find(b => b.id === song.bookId)
-      deleteSongFromCloud(song.id, user.id, book?.sharedTeamId)
+      const teamId = book?.sharedTeamId
+      const paths = [`users/${user.id}/songs/${song.id}`]
+      if (teamId) paths.push(`teams/${teamId}/songs/${song.id}`)
+      await markDeleted('song', song.id, paths)
+      deleteSongFromCloud(song.id, user.id, teamId)
     }
+    await db.songs.delete(song.id)
   }
 
   // ── Parse errors ──────────────────────────────────────────────────────────

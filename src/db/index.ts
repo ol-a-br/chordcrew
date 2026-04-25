@@ -127,6 +127,7 @@ export async function markPending(
 ): Promise<void> {
   const id = `${entityType}:${entityId}`
   const existing = await db.syncStates.get(id)
+  if (existing?.status === 'deleted') return  // don't resurrect a deletion tombstone
   await db.syncStates.put({
     id,
     entityType,
@@ -134,6 +135,23 @@ export async function markPending(
     localVersion: (existing?.localVersion ?? 0) + 1,
     syncedVersion: existing?.syncedVersion ?? 0,
     status: 'pending',
+    updatedAt: Date.now(),
+  })
+}
+
+export async function markDeleted(
+  entityType: SyncState['entityType'],
+  entityId: string,
+  deleteFromPaths: string[],
+): Promise<void> {
+  await db.syncStates.put({
+    id: `${entityType}:${entityId}`,
+    entityType,
+    entityId,
+    localVersion: 0,
+    syncedVersion: 0,
+    status: 'deleted',
+    deleteFromPaths,
     updatedAt: Date.now(),
   })
 }

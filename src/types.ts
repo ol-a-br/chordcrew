@@ -140,7 +140,7 @@ export interface SongNote {
   updatedAt: number
 }
 
-export type SyncStatus = 'clean' | 'pending' | 'conflict'
+export type SyncStatus = 'clean' | 'pending' | 'conflict' | 'deleted'
 
 export interface SyncState {
   id: string                // "{entityType}:{entityId}"
@@ -150,6 +150,7 @@ export interface SyncState {
   syncedVersion: number
   status: SyncStatus
   updatedAt: number
+  deleteFromPaths?: string[]  // Firestore paths to delete when status === 'deleted'
 }
 
 // ─── UI / app state types ─────────────────────────────────────────────────────
