@@ -45,11 +45,27 @@ async function uploadPending(userId: string): Promise<void> {
   for (const state of pending) {
     const { entityType, entityId } = state
     try {
-      // Handle deletion tombstones: delete from every listed Firestore path, then
-      // remove the tombstone so the entity is fully gone from the sync system.
+      // Handle deletion tombstones: delete from every listed Firestore path, write
+      // deletion records so other devices can learn about the deletion, then clean up.
       if (state.status === 'deleted') {
+        const deletedAt = Date.now()
         for (const path of state.deleteFromPaths ?? []) {
           await deleteDoc(doc(firestore!, path)).catch(() => {})
+        }
+        // Write deletion log entries so other devices remove the song on their next sync.
+        // Personal log entry (readable by all devices of this user)
+        await setDoc(
+          doc(firestore!, 'users', userId, 'deletions', entityId),
+          { entityId, entityType, deletedAt },
+        ).catch(() => {})
+        // Team log entry (readable by all team members) — extract teamId from deleteFromPaths
+        const teamPath = (state.deleteFromPaths ?? []).find(p => p.startsWith('teams/'))
+        if (teamPath) {
+          const teamId = teamPath.split('/')[1]
+          await setDoc(
+            doc(firestore!, 'teams', teamId, 'deletions', entityId),
+            { entityId, entityType, deletedAt },
+          ).catch(() => {})
         }
         await db.syncStates.delete(state.id)
         continue
@@ -142,6 +158,32 @@ async function uploadPending(userId: string): Promise<void> {
 
 // ─── Download ─────────────────────────────────────────────────────────────────
 
+const DELETION_LOG_TTL = 30 * 24 * 60 * 60 * 1000  // 30 days
+
+// Read a deletion log collection, apply removals locally, prune expired records.
+// A deletion is skipped if the local copy has a pending edit or was updated after
+// the deletion timestamp (concurrent edit on this device wins).
+async function applyDeletionLog(collectionPath: string): Promise<void> {
+  if (!firestore) return
+  const snaps = await getDocs(collection(firestore, collectionPath)).catch(() => null)
+  if (!snaps) return
+  for (const snap of snaps.docs) {
+    const { entityId, entityType, deletedAt } =
+      snap.data() as { entityId: string; entityType: string; deletedAt: number }
+    if (entityType === 'song') {
+      const syncState = await db.syncStates.get(`song:${entityId}`)
+      if (syncState?.status === 'pending') continue  // local unsaved edit wins
+      const local = await db.songs.get(entityId)
+      if (local && local.updatedAt > deletedAt) continue  // newer local version wins
+      await db.songs.delete(entityId).catch(() => {})
+      await db.syncStates.delete(`song:${entityId}`).catch(() => {})
+    }
+    if (Date.now() - deletedAt > DELETION_LOG_TTL) {
+      await deleteDoc(snap.ref).catch(() => {})
+    }
+  }
+}
+
 async function downloadPersonal(userId: string): Promise<Set<string>> {
   // Books — return discovered team IDs so downloadTeams can sync them even on
   // a fresh device where local Dexie has no teams yet.
@@ -227,6 +269,9 @@ async function downloadPersonal(userId: string): Promise<Set<string>> {
     }
   }
 
+  // Apply personal deletion log — propagate deletions made on other devices
+  await applyDeletionLog(`users/${userId}/deletions`)
+
   return discoveredTeamIds
 }
 
@@ -260,6 +305,9 @@ async function downloadTeams(userId: string, userEmail: string, discoveredTeamId
       if (syncState?.status === 'deleted') continue  // locally deleted — don't re-add
       if (!local || remote.updatedAt > local.updatedAt) await db.songs.put(remote)
     }
+
+    // Apply team deletion log — propagate song deletions to all team members
+    await applyDeletionLog(`teams/${teamId}/deletions`)
 
     // Team setlists + items
     const downloadedTeamSetlistIds = new Set<string>()
