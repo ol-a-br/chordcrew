@@ -1,4 +1,4 @@
-import type { CTSong, CTArrangement, CTEvent, CTCategory } from './types'
+import type { CTSong, CTArrangement, CTEvent, CTCategory, CTAgenda } from './types'
 
 // Keys the ChurchTools API accepts on arrangements
 const CT_VALID_KEYS = new Set([
@@ -146,6 +146,67 @@ export async function ctAddAgendaItem(
       type: 'song',
       arrangementId,
       ...(note ? { note } : {}),
+    }),
+  })
+  await checkResponse(res)
+}
+
+export async function ctGetAgenda(baseUrl: string, token: string, eventId: number): Promise<CTAgenda> {
+  const res = await fetch(endpoint(baseUrl, `/events/${eventId}/agenda`), {
+    headers: headers(baseUrl, token),
+  })
+  await checkResponse(res)
+  return (await res.json()).data as CTAgenda
+}
+
+// PUT full agenda — the only documented way to control item positions.
+// Items in newArrangementIds are inserted after the last item of the target
+// section (identified by sectionItemIndex, an index into agenda.items).
+// All existing items are preserved in order; PUT recreates them so item IDs
+// change, but serviceGroupNotes are empty for typical use.
+export async function ctPutAgendaWithSection(
+  baseUrl: string,
+  token: string,
+  eventId: number,
+  agenda: CTAgenda,
+  newArrangementIds: number[],
+  sectionItemIndex: number,  // index in agenda.items of the chosen header
+): Promise<void> {
+  const items = agenda.items
+
+  // Find the last item index that belongs to this section (before next header)
+  let insertAfterIndex = sectionItemIndex
+  for (let i = sectionItemIndex + 1; i < items.length; i++) {
+    if (items[i].type === 'header') break
+    insertAfterIndex = i
+  }
+
+  // Reconstruct PUT payload from existing items
+  type PutItem = { type: string; title?: string; note?: string; duration?: number; responsible?: string; arrangementId?: number }
+  const toPayload = (it: (typeof items)[number]): PutItem => ({
+    type: it.type,
+    ...(it.title ? { title: it.title } : {}),
+    ...(it.note ? { note: it.note } : {}),
+    ...(it.duration > 0 ? { duration: it.duration } : {}),
+    ...(it.responsible?.text ? { responsible: it.responsible.text } : {}),
+    ...(it.type === 'song' && it.song?.arrangementId ? { arrangementId: it.song.arrangementId } : {}),
+  })
+
+  const newItems: PutItem[] = newArrangementIds.map(id => ({ type: 'song', arrangementId: id }))
+
+  const putItems = [
+    ...items.slice(0, insertAfterIndex + 1).map(toPayload),
+    ...newItems,
+    ...items.slice(insertAfterIndex + 1).map(toPayload),
+  ]
+
+  const res = await fetch(endpoint(baseUrl, `/events/${eventId}/agenda`), {
+    method: 'PUT',
+    headers: headers(baseUrl, token),
+    body: JSON.stringify({
+      calendarId: agenda.calendarId,
+      eventStartPosition: agenda.eventStartPosition ?? 0,
+      items: putItems,
     }),
   })
   await checkResponse(res)

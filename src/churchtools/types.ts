@@ -35,6 +35,27 @@ export interface CTEvent {
   calendar: { title: string }
 }
 
+export interface CTAgendaItem {
+  id: number
+  type: 'header' | 'song' | 'text'
+  title: string
+  position: number
+  note: string
+  duration: number
+  isBeforeEvent: boolean
+  responsible: { text: string; persons: unknown[] }
+  song?: { songId: number; arrangementId: number; title: string }
+  serviceGroupNotes: unknown[]
+}
+
+export interface CTAgenda {
+  id: number
+  calendarId: number
+  isLocked: boolean
+  eventStartPosition: number
+  items: CTAgendaItem[]
+}
+
 // Preview item computed before any write happens
 export interface CTSongPreview {
   localTitle: string

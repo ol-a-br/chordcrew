@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Upload, X, CheckCircle2, AlertCircle, Loader2, ChevronRight } from 'lucide-react'
+import { Calendar, Upload, X, CheckCircle2, AlertCircle, Loader2, ChevronRight, Lock } from 'lucide-react'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import {
-  ctGetEvents, ctGetAllSongs, ctGetEventAgendaSongs,
-  ctCreateSong, ctCreateArrangement, ctAddAgendaItem,
+  ctGetEvents, ctGetAllSongs, ctGetAgenda,
+  ctCreateSong, ctCreateArrangement, ctAddAgendaItem, ctPutAgendaWithSection,
 } from '@/churchtools/api'
 import type { Song, Setlist } from '@/types'
-import type { CTEvent, CTSongPreview, CTSongUploadResult } from '@/churchtools/types'
+import type { CTEvent, CTSongPreview, CTSongUploadResult, CTAgenda, CTAgendaItem } from '@/churchtools/types'
 import { Button } from '@/components/shared/Button'
 
 interface Props {
@@ -23,11 +23,13 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
   const [events, setEvents] = useState<CTEvent[]>([])
   const [eventsError, setEventsError] = useState<string | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<CTEvent | null>(null)
+  const [agenda, setAgenda] = useState<CTAgenda | null>(null)
+  const [sections, setSections] = useState<CTAgendaItem[]>([])
+  const [selectedSectionIdx, setSelectedSectionIdx] = useState<number>(-1) // index into agenda.items
   const [previews, setPreviews] = useState<CTSongPreview[]>([])
   const [results, setResults] = useState<CTSongUploadResult[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  // Date to look up events: use setlist date or today
   const lookupDate = setlist.date
     ? setlist.date.slice(0, 10)
     : new Date().toISOString().slice(0, 10)
@@ -42,31 +44,36 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
     setSelectedEvent(event)
     setPhase('loading-preview')
     try {
-      const [ctSongs, agendaSongs] = await Promise.all([
+      const [ctSongs, ag] = await Promise.all([
         ctGetAllSongs(baseUrl, token),
-        ctGetEventAgendaSongs(baseUrl, token, event.id),
+        ctGetAgenda(baseUrl, token, event.id),
       ])
+
+      setAgenda(ag)
+      const agendaSongIds = new Set(
+        ag.items.filter(i => i.type === 'song').map(i => i.song?.songId).filter(Boolean)
+      )
+
       const nameMap = new Map(ctSongs.map(s => [s.name.toLowerCase(), s]))
-      const agendaIds = new Set(agendaSongs.map(s => s.id))
 
       const preview: CTSongPreview[] = songs.map(s => {
         const match = nameMap.get(s.title.toLowerCase())
-        if (match && agendaIds.has(match.id)) {
+        if (match && agendaSongIds.has(match.id)) {
           const defaultArr = match.arrangements.find(a => a.isDefault) ?? match.arrangements[0]
-          return {
-            localId: s.id, localTitle: s.title,
-            status: 'exists', ctSongId: match.id, ctArrangementId: defaultArr?.id,
-          }
+          return { localId: s.id, localTitle: s.title, status: 'exists', ctSongId: match.id, ctArrangementId: defaultArr?.id }
         }
         if (match) {
           const defaultArr = match.arrangements.find(a => a.isDefault) ?? match.arrangements[0]
-          return {
-            localId: s.id, localTitle: s.title,
-            status: 'will-create', ctSongId: match.id, ctArrangementId: defaultArr?.id,
-          }
+          return { localId: s.id, localTitle: s.title, status: 'will-create', ctSongId: match.id, ctArrangementId: defaultArr?.id }
         }
         return { localId: s.id, localTitle: s.title, status: 'will-create' }
       })
+
+      // Extract sections (header items) for the section picker
+      const headerItems = ag.items.filter(i => i.type === 'header')
+      setSections(headerItems)
+      // Default to first section
+      setSelectedSectionIdx(headerItems.length > 0 ? ag.items.indexOf(headerItems[0]) : -1)
 
       setPreviews(preview)
       setPhase('preview')
@@ -80,20 +87,20 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
   const toSkip = previews.filter(p => p.status === 'exists')
 
   const upload = async () => {
-    if (!selectedEvent) return
+    if (!selectedEvent || !agenda) return
     setPhase('uploading')
-    const results: CTSongUploadResult[] = []
+    const uploadResults: CTSongUploadResult[] = []
+    const newArrangementIds: number[] = []
 
     for (const preview of previews) {
       if (preview.status === 'exists') {
-        results.push({ localTitle: preview.localTitle, status: 'exists' })
+        uploadResults.push({ localTitle: preview.localTitle, status: 'exists' })
         continue
       }
       const song = songs.find(s => s.id === preview.localId)!
       try {
         let arrangementId = preview.ctArrangementId
         if (!arrangementId) {
-          // Song doesn't exist in CT at all — create it
           let ctSongId = preview.ctSongId
           if (!ctSongId) {
             const created = await ctCreateSong(baseUrl, token, {
@@ -113,10 +120,10 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
           })
           arrangementId = arr.id
         }
-        await ctAddAgendaItem(baseUrl, token, selectedEvent.id, arrangementId)
-        results.push({ localTitle: song.title, status: 'created' })
+        newArrangementIds.push(arrangementId)
+        uploadResults.push({ localTitle: song.title, status: 'created' })
       } catch (e) {
-        results.push({
+        uploadResults.push({
           localTitle: song.title,
           status: 'error',
           error: e instanceof Error ? e.message : 'Unknown error',
@@ -124,12 +131,30 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
       }
     }
 
-    setResults(results)
+    // Place songs in the selected section via PUT full agenda, or POST to end if no section
+    if (newArrangementIds.length > 0) {
+      try {
+        if (selectedSectionIdx >= 0) {
+          await ctPutAgendaWithSection(baseUrl, token, selectedEvent.id, agenda, newArrangementIds, selectedSectionIdx)
+        } else {
+          for (const arrId of newArrangementIds) {
+            await ctAddAgendaItem(baseUrl, token, selectedEvent.id, arrId)
+          }
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to update agenda'
+        setError(msg)
+      }
+    }
+
+    setResults(uploadResults)
     setPhase('done')
   }
 
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+  const isLocked = agenda?.isLocked ?? false
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
@@ -200,6 +225,39 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
                   {error}
                 </div>
               )}
+
+              {/* Section picker */}
+              {sections.length > 0 && !error && (
+                <div>
+                  <p className="text-xs text-ink-faint uppercase tracking-wider mb-1.5">Target section</p>
+                  {isLocked ? (
+                    <div className="flex items-center gap-2 text-amber-400 text-xs p-2 rounded-lg bg-amber-400/10 border border-amber-400/20">
+                      <Lock size={13} className="shrink-0" />
+                      The agenda is locked. Unlock it in ChurchTools to upload.
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {sections.map(sec => {
+                        const idx = agenda!.items.indexOf(sec)
+                        return (
+                          <button
+                            key={sec.id}
+                            onClick={() => setSelectedSectionIdx(idx)}
+                            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                              selectedSectionIdx === idx
+                                ? 'bg-chord/20 border-chord text-chord'
+                                : 'bg-surface-2 border-surface-3 text-ink-muted hover:border-chord/40'
+                            }`}
+                          >
+                            {sec.title}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {toAdd.length > 0 && (
                 <div>
                   <p className="text-xs text-ink-faint uppercase tracking-wider mb-2">
@@ -250,6 +308,12 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
           {/* Done */}
           {phase === 'done' && (
             <div className="space-y-1">
+              {error && (
+                <div className="flex items-start gap-2 text-red-400 text-sm mb-3">
+                  <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                  {error}
+                </div>
+              )}
               {results.map((r, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm">
                   {r.status === 'created' && <CheckCircle2 size={15} className="text-green-400 shrink-0" />}
@@ -273,7 +337,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
             <Button variant="primary" size="sm" onClick={onClose}>Close</Button>
           ) : phase === 'preview' ? (
             <>
-              <Button variant="ghost" size="sm" onClick={() => { setSelectedEvent(null); setPhase('events') }}>
+              <Button variant="ghost" size="sm" onClick={() => { setSelectedEvent(null); setAgenda(null); setSections([]); setPhase('events') }}>
                 Back
               </Button>
               <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
@@ -281,7 +345,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
                 variant="primary"
                 size="sm"
                 onClick={upload}
-                disabled={toAdd.length === 0 || !!error}
+                disabled={toAdd.length === 0 || !!error || isLocked}
               >
                 <Upload size={14} />
                 {toAdd.length > 0 ? `Add ${toAdd.length} to agenda` : 'Nothing to add'}
