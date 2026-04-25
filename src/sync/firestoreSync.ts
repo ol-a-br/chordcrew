@@ -158,7 +158,7 @@ async function uploadPending(userId: string): Promise<void> {
 
 // ─── Download ─────────────────────────────────────────────────────────────────
 
-const DELETION_LOG_TTL = 30 * 24 * 60 * 60 * 1000  // 30 days
+const DELETION_LOG_TTL = 90 * 24 * 60 * 60 * 1000  // 90 days
 
 // Read a deletion log collection, apply removals locally, prune expired records.
 // A deletion is skipped if the local copy has a pending edit or was updated after
