@@ -334,6 +334,15 @@ export function isKnownChord(chord: string): boolean {
     if (/^\d{1,2}$/.test(normalized)) return true
     // Accept compound numeric+quality modifiers (e.g. 2sus → Esus2, 9sus4, 4add9)
     if (/^\d+(sus|add|maj|min|m)\d*$/.test(normalized)) return true
+    // Accept (noX) omit modifier: C2(no3), Cadd9(no3), C(no3)
+    // Case 1: (noX) embedded after a base quality — e.g. normalized = '2(no3)'
+    const noModMatch = normalized.match(/^(.*)\(no\d+\)$/)
+    if (noModMatch) {
+      const base = noModMatch[1]
+      if (base === '' || QUALITIES.includes(base) || /^\d{1,2}$/.test(base) || /^\d+(sus|add|maj|min|m)\d*$/.test(base)) return true
+    }
+    // Case 2: (noX) was the entire quality, parens already stripped — e.g. normalized = 'no3'
+    if (/^no\d+$/.test(normalized)) return true
   }
   return false
 }
