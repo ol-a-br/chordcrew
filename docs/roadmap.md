@@ -204,6 +204,14 @@ To be completed before onboarding any additional contributors. Full details and 
 
 ---
 
+## Known Limitations
+
+| Area | Limitation | Impact | Workaround |
+|------|-----------|--------|------------|
+| ChurchTools songbook | Deleting a CT song that is currently used in a ChurchTools event agenda silently removes it from that agenda. ChurchTools does not return a conflict error; the song is just gone from the event. | Loss of agenda entry — the organiser must manually re-add the correct song. | Before deleting a CT song, check in ChurchTools which events use it (`/songs/{id}/arrangements/{arrId}` is referenced by which agendas). Consider adding a pre-delete check that queries CT event usage and warns the user if any scheduled event references the song. |
+
+---
+
 ## Decision Log
 
 | Date | Decision | Rationale |
@@ -244,5 +252,8 @@ To be completed before onboarding any additional contributors. Full details and 
 | 2026-04-08 | `lastNavTime` stamped at render completion, not at `navigate()` call | ChordSheetJS parse blocks the main thread for ~800 ms; a queued touchEnd fires right as `navPending` clears, hitting the edge of NAV_COOLDOWN_MS=800; reset from render-done gives a fresh 800 ms window |
 | 2026-04-09 | iPad Pro 11 project added to Playwright (WebKit, 834×1194) | All 8 TUX tests pass on WebKit; CDP-dependent swipe tests skip gracefully; establishes baseline for Safari-specific regressions |
 | 2026-04-09 | `touch-ux.spec.ts` tests all three projects (chromium · android-tablet · ipad) | Separates standard Playwright API tests (TUX) from CDP-only swipe tests (PERF); enables WebKit coverage without breaking existing test infra |
+| 2026-04-26 | CT songbook: metadata-only editing, no ChordPro body | ChurchTools does not store ChordPro; single source of truth is CT. Editing lyrics in CT is outside ChordCrew scope. |
+| 2026-04-26 | CT sync manual + auto on app start; no background/optimistic sync | Consistent with the global no-background-sync rule; CT songs are read-only in terms of content so freshness is low-risk. |
+| 2026-04-26 | CT song delete calls `ctDeleteSong` directly, no Firestore tombstone | CT books bypass Firestore sync entirely; each device re-syncs from CT independently. |
 
-*Last updated: 2026-04-09*
+*Last updated: 2026-04-26*
