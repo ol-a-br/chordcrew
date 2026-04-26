@@ -212,6 +212,57 @@ export async function ctPutAgendaWithSection(
   await checkResponse(res)
 }
 
+export async function ctDeleteSong(baseUrl: string, token: string, songId: number): Promise<void> {
+  const res = await fetch(endpoint(baseUrl, `/songs/${songId}`), {
+    method: 'DELETE',
+    headers: headers(baseUrl, token),
+  })
+  await checkResponse(res)
+}
+
+export async function ctUpdateSong(
+  baseUrl: string,
+  token: string,
+  songId: number,
+  patch: { name?: string; author?: string | null; ccli?: string | null; copyright?: string | null },
+): Promise<CTSong> {
+  const body: Record<string, unknown> = {}
+  if (patch.name !== undefined) body.name = patch.name
+  if ('author' in patch) body.author = patch.author ?? ''
+  if ('ccli' in patch) body.ccli = patch.ccli ?? ''
+  if ('copyright' in patch) body.copyright = patch.copyright ?? ''
+  const res = await fetch(endpoint(baseUrl, `/songs/${songId}`), {
+    method: 'PATCH',
+    headers: headers(baseUrl, token),
+    body: JSON.stringify(body),
+  })
+  await checkResponse(res)
+  const data = await res.json()
+  return data.data as CTSong
+}
+
+export async function ctUpdateArrangement(
+  baseUrl: string,
+  token: string,
+  songId: number,
+  arrangementId: number,
+  patch: { key?: string | null; tempo?: number | null; beat?: string | null; duration?: number | null },
+): Promise<CTArrangement> {
+  const body: Record<string, unknown> = {}
+  if (patch.key !== undefined) body.key = patch.key && CT_VALID_KEYS.has(patch.key) ? patch.key : null
+  if (patch.tempo !== undefined) body.tempo = patch.tempo && patch.tempo > 0 ? patch.tempo : null
+  if (patch.beat !== undefined) body.beat = patch.beat ?? null
+  if (patch.duration !== undefined) body.duration = patch.duration && patch.duration > 0 ? patch.duration : null
+  const res = await fetch(endpoint(baseUrl, `/songs/${songId}/arrangements/${arrangementId}`), {
+    method: 'PATCH',
+    headers: headers(baseUrl, token),
+    body: JSON.stringify(body),
+  })
+  await checkResponse(res)
+  const data = await res.json()
+  return data.data as CTArrangement
+}
+
 // ── Masterdata ────────────────────────────────────────────────────────────────
 
 export async function ctGetSongCategories(baseUrl: string, token: string): Promise<CTCategory[]> {

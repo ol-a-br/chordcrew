@@ -1,7 +1,9 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { getSettings, saveSettings } from '@/db'
 import { ctWhoAmI, ctGetSongCategories } from './api'
 import { saveToken, loadToken, clearToken } from './credentials'
+import { syncCtSongs, type CtSyncResult } from './ctBookSync'
+import { useAuth } from '@/auth/AuthContext'
 import type { CTCategory } from './types'
 
 interface ChurchToolsContextValue {
@@ -13,15 +15,21 @@ interface ChurchToolsContextValue {
   categories: CTCategory[]
   verifying: boolean
   verifyError: string | null
+  ctSyncing: boolean
+  ctLastSync: number | null
+  ctSyncResult: CtSyncResult | null
+  ctSyncError: string | null
   saveTokenAndVerify: (token: string) => Promise<void>
   disconnect: () => void
   setBaseUrl: (url: string) => Promise<void>
   setCategoryId: (id: number) => Promise<void>
+  syncCtBook: () => Promise<void>
 }
 
 const ChurchToolsContext = createContext<ChurchToolsContextValue | null>(null)
 
 export function ChurchToolsProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
   const [baseUrl, setBaseUrlState] = useState('')
   const [token, setTokenState] = useState('')
   const [categoryId, setCategoryIdState] = useState(0)
@@ -29,6 +37,11 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<CTCategory[]>([])
   const [verifying, setVerifying] = useState(false)
   const [verifyError, setVerifyError] = useState<string | null>(null)
+  const [ctSyncing, setCtSyncing] = useState(false)
+  const [ctLastSync, setCtLastSync] = useState<number | null>(null)
+  const [ctSyncResult, setCtSyncResult] = useState<CtSyncResult | null>(null)
+  const [ctSyncError, setCtSyncError] = useState<string | null>(null)
+  const [readyToSync, setReadyToSync] = useState(false)
 
   // Load persisted URL + category; then load token from credential store
   useEffect(() => {
@@ -41,7 +54,10 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
       setCategoryIdState(catId)
       if (url) {
         const tok = await loadToken(url)
-        if (!cancelled && tok) setTokenState(tok)
+        if (!cancelled && tok) {
+          setTokenState(tok)
+          setReadyToSync(true)
+        }
       }
     })
     return () => { cancelled = true }
@@ -60,6 +76,29 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
 
   const isConfigured = !!baseUrl && !!token
 
+  const syncCtBook = useCallback(async () => {
+    if (!baseUrl || !token || !user) return
+    setCtSyncing(true)
+    setCtSyncError(null)
+    try {
+      const result = await syncCtSongs(user.id, user.displayName, baseUrl, token, categoryId)
+      setCtSyncResult(result)
+      setCtLastSync(Date.now())
+    } catch (e) {
+      setCtSyncError(e instanceof Error ? e.message : 'Sync failed')
+    } finally {
+      setCtSyncing(false)
+    }
+  }, [baseUrl, token, categoryId, user])
+
+  // Auto-sync on app start when credentials are already loaded
+  useEffect(() => {
+    if (readyToSync && baseUrl && token && user) {
+      syncCtBook()
+      setReadyToSync(false)
+    }
+  }, [readyToSync, baseUrl, token, user, syncCtBook])
+
   const saveTokenAndVerify = async (rawToken: string) => {
     const tok = rawToken.trim()
     setVerifying(true)
@@ -71,6 +110,15 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
       setTokenState(tok)
       const cats = await ctGetSongCategories(baseUrl, tok)
       setCategories(cats)
+      // Trigger initial sync after first successful token verification
+      if (user) {
+        setCtSyncing(true)
+        setCtSyncError(null)
+        syncCtSongs(user.id, user.displayName, baseUrl, tok, categoryId)
+          .then(result => { setCtSyncResult(result); setCtLastSync(Date.now()) })
+          .catch(e => { setCtSyncError(e instanceof Error ? e.message : 'Sync failed') })
+          .finally(() => setCtSyncing(false))
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Verification failed'
       setVerifyError(
@@ -87,6 +135,8 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
     setTokenState('')
     setPersonName(null)
     setCategories([])
+    setCtLastSync(null)
+    setCtSyncResult(null)
     await clearToken()
   }
 
@@ -109,7 +159,8 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
     <ChurchToolsContext.Provider value={{
       isConfigured, baseUrl, token, categoryId, personName,
       categories, verifying, verifyError,
-      saveTokenAndVerify, disconnect, setBaseUrl, setCategoryId,
+      ctSyncing, ctLastSync, ctSyncResult, ctSyncError,
+      saveTokenAndVerify, disconnect, setBaseUrl, setCategoryId, syncCtBook,
     }}>
       {children}
     </ChurchToolsContext.Provider>

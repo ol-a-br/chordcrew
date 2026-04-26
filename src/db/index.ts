@@ -43,6 +43,11 @@ export class ChordCrewDB extends Dexie {
     this.version(3).stores({
       songNotes: 'id, songId, userId, updatedAt',
     })
+
+    // Version 4: ctSongId index for ChurchTools-backed songs
+    this.version(4).stores({
+      songs: 'id, bookId, title, artist, isFavorite, updatedAt, *tags, ctSongId',
+    })
   }
 }
 

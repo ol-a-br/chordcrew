@@ -5,6 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users,
   CheckSquare, Square, Trash2, FolderInput, Pencil, Check, X, Upload,
+  RefreshCw, Cloud,
 } from 'lucide-react'
 import { db, generateId, markPending, markDeleted, getTeamRole } from '@/db'
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
@@ -12,6 +13,7 @@ import { Button } from '@/components/shared/Button'
 import { buildSearchText } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
+import { ctDeleteSong } from '@/churchtools/api'
 import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
 import type { Song } from '@/types'
 
@@ -63,7 +65,7 @@ export default function LibraryPage() {
   const [bulkTagInput, setBulkTagInput] = useState('')
   const tagMenuRef = useRef<HTMLDivElement>(null)
 
-  const { isConfigured: ctConfigured } = useChurchTools()
+  const { isConfigured: ctConfigured, syncCtBook, ctSyncing, token: ctToken, baseUrl: ctBaseUrl } = useChurchTools()
   const [showCtUpload, setShowCtUpload] = useState(false)
   const [ctUploadSongs, setCtUploadSongs] = useState<Song[]>([])
 
@@ -78,8 +80,17 @@ export default function LibraryPage() {
   const allSongs = useLiveQuery(() => db.songs.toArray(), [])
   const teams    = useLiveQuery(() => db.teams.toArray(), [])
 
-  // Personal books only (no team books in the "Books" sidebar section)
-  const personalBooks = useMemo(() => (books ?? []).filter(b => !b.sharedTeamId), [books])
+  // Personal books only (no team books, no CT books in the "Books" sidebar section)
+  const personalBooks = useMemo(() => (books ?? []).filter(b => !b.sharedTeamId && b.sourceType !== 'churchtools'), [books])
+
+  // ChurchTools-backed books
+  const ctBooks = useMemo(() => (books ?? []).filter(b => b.sourceType === 'churchtools'), [books])
+
+  // Is the currently selected book a CT book?
+  const activeBookIsCT = useMemo(() => {
+    if (activeBookId === 'all' || activeBookId === 'favorites') return false
+    return (books ?? []).find(b => b.id === activeBookId)?.sourceType === 'churchtools'
+  }, [activeBookId, books])
 
   // Teams the current user belongs to
   const myTeams = useMemo(() => {
@@ -268,15 +279,22 @@ export default function LibraryPage() {
     if (!confirm(`Delete ${count} song${count !== 1 ? 's' : ''}? This cannot be undone.`)) return
     const songs = sortedSongs.filter(s => selectedIds.has(s.id))
     for (const song of songs) {
-      if (user) {
+      if (song.ctSongId != null) {
+        // CT song: delete via CT API, then remove locally (no Firestore tombstone)
+        if (ctBaseUrl && ctToken) {
+          ctDeleteSong(ctBaseUrl, ctToken, song.ctSongId).catch(() => {})
+        }
+        await db.songs.delete(song.id)
+      } else if (user) {
         const teamId = bookTeamMap[song.bookId]
         const paths = [`users/${user.id}/songs/${song.id}`]
         if (teamId) paths.push(`teams/${teamId}/songs/${song.id}`)
         await markDeleted('song', song.id, paths)
-        // Best-effort immediate cloud delete; uploadPending retries if this fails
         deleteSongFromCloud(song.id, user.id, teamId).catch(() => {})
+        await db.songs.delete(song.id)
+      } else {
+        await db.songs.delete(song.id)
       }
-      await db.songs.delete(song.id)
     }
     exitSelectMode()
     showBulkToast(`Deleted ${count} song${count !== 1 ? 's' : ''}`)
@@ -521,6 +539,26 @@ export default function LibraryPage() {
             </div>
           )}
         </>
+
+        {ctBooks.length > 0 && (
+          <>
+            <div className="px-2 pt-3 pb-1 flex items-center gap-1">
+              <span className="text-[11px] text-ink-faint uppercase tracking-wider flex-1">ChurchTools</span>
+              {ctSyncing && <RefreshCw size={11} className="text-ink-faint animate-spin" />}
+            </div>
+            {ctBooks.map(book => (
+              <CtBookNavItem
+                key={book.id}
+                book={book}
+                active={activeBookId === book.id && !activeTeamId}
+                count={allSongs?.filter(s => s.bookId === book.id).length}
+                onClick={() => handleNavClick(book.id)}
+                onSync={syncCtBook}
+                syncing={ctSyncing}
+              />
+            ))}
+          </>
+        )}
 
         {myTeams.length > 0 && (
           <>
@@ -792,7 +830,12 @@ export default function LibraryPage() {
                 </button>
               )}
 
-              {!isActiveReadOnly && (
+              {activeBookIsCT ? (
+                <Button variant="ghost" size="sm" onClick={syncCtBook} disabled={ctSyncing}>
+                  <RefreshCw size={14} className={ctSyncing ? 'animate-spin' : ''} />
+                  {ctSyncing ? 'Syncing…' : 'Sync CT'}
+                </Button>
+              ) : !isActiveReadOnly && (
                 <Button variant="primary" size="sm" onClick={createSong}>
                   <Plus size={15} />
                   {t('library.newSong')}
@@ -1006,6 +1049,39 @@ function BookNavItem({ book, active, count, onClick, onRename, onDelete }: {
             </span>
           </span>
         )}
+      </button>
+    </div>
+  )
+}
+
+function CtBookNavItem({ book, active, count, onClick, onSync, syncing }: {
+  book: { id: string; title: string }
+  active: boolean
+  count?: number
+  onClick: () => void
+  onSync: () => void
+  syncing: boolean
+}) {
+  return (
+    <div className="relative group/ct">
+      <button
+        onClick={onClick}
+        className={`flex items-center gap-2 px-2 py-2 rounded-lg text-sm w-full text-left transition-colors
+          ${active ? 'bg-chord/10 text-chord' : 'text-ink-muted hover:bg-surface-2 hover:text-ink'}`}
+      >
+        <Cloud size={15} />
+        <span className="flex-1 truncate">{book.title}</span>
+        {count !== undefined && (
+          <span className="text-xs text-ink-faint group-hover/ct:hidden">{count}</span>
+        )}
+        <span
+          role="button"
+          onClick={e => { e.stopPropagation(); onSync() }}
+          className={`hidden group-hover/ct:inline-flex p-0.5 rounded transition-colors ${syncing ? 'text-chord' : 'text-ink-faint hover:text-ink-muted'}`}
+          title="Sync from ChurchTools"
+        >
+          <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
+        </span>
       </button>
     </div>
   )

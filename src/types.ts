@@ -14,6 +14,7 @@ export interface Book {
   author: string
   ownerId: string
   sharedTeamId?: string
+  sourceType?: 'churchtools'  // CT-backed songbook; songs are pulled from ChurchTools
   readOnly: boolean
   shareable: boolean
   createdAt: number   // Unix ms
@@ -44,6 +45,8 @@ export interface Song {
   savedAt: number
   updatedAt: number
   accessedAt?: number       // last time the song was opened in viewer (for "recently accessed" sort)
+  ctSongId?: number         // ChurchTools song ID (set only for CT-backed songs)
+  ctArrangementId?: number  // ChurchTools arrangement ID (default arrangement of ctSongId)
   transcription: Transcription
 }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2 } from 'lucide-react'
+import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2, Cloud } from 'lucide-react'
 import { db, upsertSongVersions, markPending } from '@/db'
 import { deleteSongFromCloud, fetchTeamNoteIndicator } from '@/sync/firestoreSync'
 import { buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
@@ -10,6 +10,8 @@ import type { ChordProEditorHandle } from '@/components/editor/ChordProEditor'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
 import { useAuth } from '@/auth/AuthContext'
+import { useChurchTools } from '@/churchtools/ChurchToolsContext'
+import { ctDeleteSong, ctUpdateSong, ctUpdateArrangement } from '@/churchtools/api'
 import type { SongVersion } from '@/types'
 
 const AUTOSAVE_DELAY_MS = 1000
@@ -32,7 +34,9 @@ export default function EditorPage() {
   const setlistId = searchParams.get('setlistId')
   const setlistPos = searchParams.get('pos')
   const { user } = useAuth()
+  const { baseUrl: ctBaseUrl, token: ctToken } = useChurchTools()
   const song = useLiveQuery(() => id ? db.songs.get(id) : undefined, [id])
+  const isCTSong = !!(song?.ctSongId)
 
   const [content, setContent] = useState('')
   const [tags, setTags] = useState<string[]>([])
@@ -119,12 +123,14 @@ export default function EditorPage() {
     const currentContent = contentRef.current
     const currentTags = tagsRef.current
     const meta = extractMeta(currentContent)
-
-    // Create a version at most every VERSION_INTERVAL_MS to avoid flooding history
     const now = Date.now()
-    if (now - lastVersionSavedRef.current > VERSION_INTERVAL_MS) {
-      await upsertSongVersions(s.id, s.transcription.content, user.id, user.displayName)
-      lastVersionSavedRef.current = now
+
+    if (!s.ctSongId) {
+      // Normal song: version history + Firestore sync
+      if (now - lastVersionSavedRef.current > VERSION_INTERVAL_MS) {
+        await upsertSongVersions(s.id, s.transcription.content, user.id, user.displayName)
+        lastVersionSavedRef.current = now
+      }
     }
 
     await db.songs.update(s.id, {
@@ -142,8 +148,28 @@ export default function EditorPage() {
         timeSignature: meta.time ?? s.transcription.timeSignature,
       },
     })
-    await markPending('song', s.id)
-  }, [user])
+
+    if (s.ctSongId && ctBaseUrl && ctToken) {
+      // CT song: push metadata back to ChurchTools (best-effort, no retry)
+      const title = meta.title ?? s.title
+      const artist = meta.artist ?? s.artist
+      ctUpdateSong(ctBaseUrl, ctToken, s.ctSongId, {
+        name: title,
+        author: artist || null,
+        ccli: meta.ccli ?? null,
+        copyright: meta.copyright ?? null,
+      }).catch(() => {})
+      if (s.ctArrangementId) {
+        ctUpdateArrangement(ctBaseUrl, ctToken, s.ctSongId, s.ctArrangementId, {
+          key: meta.key ?? s.transcription.key,
+          tempo: meta.tempo ?? s.transcription.tempo,
+          beat: meta.time ?? s.transcription.timeSignature,
+        }).catch(() => {})
+      }
+    } else {
+      await markPending('song', s.id)
+    }
+  }, [user, ctBaseUrl, ctToken])
 
   const scheduleAutoSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -172,9 +198,17 @@ export default function EditorPage() {
   const confirmDelete = async () => {
     if (!song || !user) return
     deletedSongRef.current = song
-    await db.songs.delete(song.id)
-    await db.syncStates.delete(`song:${song.id}`)
-    deleteSongFromCloud(song.id, user.id, undefined).catch(() => {})
+    if (song.ctSongId) {
+      // CT song: delete via CT API, then remove locally
+      if (ctBaseUrl && ctToken) {
+        ctDeleteSong(ctBaseUrl, ctToken, song.ctSongId).catch(() => {})
+      }
+      await db.songs.delete(song.id)
+    } else {
+      await db.songs.delete(song.id)
+      await db.syncStates.delete(`song:${song.id}`)
+      deleteSongFromCloud(song.id, user.id, undefined).catch(() => {})
+    }
     setDeletePhase('deleted')
     deleteTimerRef.current = setTimeout(() => navigate('/library'), 5000)
   }
@@ -260,21 +294,30 @@ export default function EditorPage() {
             </span>
           )}
         </div>
-        <button
-          onClick={() => setShowPreview(p => !p)}
-          className={`p-1.5 rounded ${showPreview ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
-          title="Toggle preview"
-        >
-          <Eye size={17} />
-        </button>
-        {(versions?.length ?? 0) > 0 && (
-          <button
-            onClick={() => setShowHistory(h => !h)}
-            className={`p-1.5 rounded ${showHistory ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
-            title="Version history"
-          >
-            <History size={17} />
-          </button>
+        {!isCTSong && (
+          <>
+            <button
+              onClick={() => setShowPreview(p => !p)}
+              className={`p-1.5 rounded ${showPreview ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
+              title="Toggle preview"
+            >
+              <Eye size={17} />
+            </button>
+            {(versions?.length ?? 0) > 0 && (
+              <button
+                onClick={() => setShowHistory(h => !h)}
+                className={`p-1.5 rounded ${showHistory ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
+                title="Version history"
+              >
+                <History size={17} />
+              </button>
+            )}
+          </>
+        )}
+        {isCTSong && (
+          <span className="text-xs px-2 py-0.5 rounded bg-chord/10 text-chord border border-chord/20 shrink-0" title="Managed by ChurchTools">
+            CT
+          </span>
         )}
         {deletePhase === 'confirm' ? (
           <>
@@ -418,24 +461,35 @@ export default function EditorPage() {
 
       {/* Split pane */}
       <div className="flex flex-1 min-h-0 relative">
-        {/* Editor */}
-        <div className={`flex flex-col min-h-0 ${showPreview ? 'w-1/2' : 'w-full'}`}>
-          <ChordProEditor ref={editorRef} value={content} onChange={handleChange} />
-        </div>
-
-        {/* Preview */}
-        {showPreview && (
+        {isCTSong ? (
+          /* CT song: no ChordPro editor — lyrics are managed in ChurchTools */
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
+            <Cloud size={32} className="text-ink-faint" />
+            <p className="text-sm text-ink-muted">Song content is managed in ChurchTools.</p>
+            <p className="text-xs text-ink-faint">Edit the fields above to update metadata. Changes are sent to ChurchTools on save.</p>
+          </div>
+        ) : (
           <>
-            <div className="w-px bg-surface-3 shrink-0" />
-            <div className="flex-1 overflow-y-auto p-6">
-              <SongRenderer
-                content={content}
-                columns={1}
-                fontScale={0.95}
-                errors={lintErrors}
-                onJumpToLine={line => editorRef.current?.jumpToLine(line)}
-              />
+            {/* Editor */}
+            <div className={`flex flex-col min-h-0 ${showPreview ? 'w-1/2' : 'w-full'}`}>
+              <ChordProEditor ref={editorRef} value={content} onChange={handleChange} />
             </div>
+
+            {/* Preview */}
+            {showPreview && (
+              <>
+                <div className="w-px bg-surface-3 shrink-0" />
+                <div className="flex-1 overflow-y-auto p-6">
+                  <SongRenderer
+                    content={content}
+                    columns={1}
+                    fontScale={0.95}
+                    errors={lintErrors}
+                    onJumpToLine={line => editorRef.current?.jumpToLine(line)}
+                  />
+                </div>
+              </>
+            )}
           </>
         )}
 
