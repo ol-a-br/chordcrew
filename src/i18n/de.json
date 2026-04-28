@@ -13,7 +13,12 @@
     "signOut": "Abmelden",
     "welcome": "Willkommen bei ChordCrew",
     "subtitle": "Die Akkord-Bibliothek deines Worship-Teams — online und offline",
-    "localMode": "Lokaler Modus (kein Firebase konfiguriert)"
+    "localMode": "Lokaler Modus (kein Firebase konfiguriert)",
+    "signInError_popup-blocked": "Anmeldung blockiert — bitte erlaube Pop-ups für diese Seite und versuche es erneut.",
+    "signInError_cancelled": "Anmeldung abgebrochen.",
+    "signInError_network": "Anmeldung fehlgeschlagen — bitte Internetverbindung prüfen.",
+    "signInError_unauthorized-domain": "Anmeldung fehlgeschlagen — diese Domain ist nicht autorisiert. Bitte den App-Administrator kontaktieren.",
+    "signInError_default": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
   },
   "library": {
     "allSongs": "Alle Songs",

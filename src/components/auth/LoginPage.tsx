@@ -5,7 +5,7 @@ import { Button } from '@/components/shared/Button'
 
 export function LoginPage() {
   const { t } = useTranslation()
-  const { signInWithGoogle, configured } = useAuth()
+  const { signInWithGoogle, signInError, configured } = useAuth()
 
   return (
     <div className="min-h-screen bg-surface-0 flex items-center justify-center p-6">
@@ -31,6 +31,10 @@ export function LoginPage() {
             <GoogleIcon />
             {t('auth.signIn')}
           </Button>
+
+          {signInError && (
+            <p className="text-xs text-red-400">{t(`auth.signInError_${signInError}`, t('auth.signInError_default'))}</p>
+          )}
 
           {!configured && (
             <p className="text-xs text-ink-faint">{t('auth.localMode')}</p>
