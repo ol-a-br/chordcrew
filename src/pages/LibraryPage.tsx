@@ -14,7 +14,7 @@ import { Button } from '@/components/shared/Button'
 import { buildSearchText } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
-import { ctDeleteSong, ctUpdateSong } from '@/churchtools/api'
+import { ctDeleteSong, ctUpdateSong, ctGetAllSongs, ctPutSong } from '@/churchtools/api'
 import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
 import type { Song } from '@/types'
 
@@ -390,25 +390,36 @@ export default function LibraryPage() {
     const songs = sortedSongs.filter(s => selectedIds.has(s.id) && s.ctSongId != null)
     setShowCtCategoryMenu(false)
     setShowOrganizeMenu(false)
-    let updated = 0, rejected = 0
-    for (const song of songs) {
-      if (!song.ctSongId) continue
-      try {
-        const result = await ctUpdateSong(ctBaseUrl, ctToken, song.ctSongId, { categoryId })
-        if (result.category.id === categoryId) updated++
-        else {
-          rejected++
-          console.warn(`[CT] category not applied for song ${song.ctSongId} — returned category.id=${result.category.id}`)
-        }
-      } catch { rejected++ }
+
+    // Fetch all CT songs once to get the full objects needed for PUT
+    let ctSongMap: Map<number, import('@/churchtools/types').CTSong>
+    try {
+      const all = await ctGetAllSongs(ctBaseUrl, ctToken)
+      ctSongMap = new Map(all.map(s => [s.id, s]))
+    } catch {
+      exitSelectMode()
+      showBulkToast('Failed to load CT songs — check connection')
+      return
     }
+
+    let updated = 0, skipped = 0
+    for (const song of songs) {
+      if (!song.ctSongId) { skipped++; continue }
+      const ctSong = ctSongMap.get(song.ctSongId)
+      if (!ctSong) { skipped++; continue }
+      try {
+        const result = await ctPutSong(ctBaseUrl, ctToken, ctSong, { categoryId })
+        result.category.id === categoryId ? updated++ : skipped++
+      } catch { skipped++ }
+    }
+
     if (updated > 0) await syncCtBook()
     exitSelectMode()
-    if (rejected > 0 && updated === 0) {
-      showBulkToast(`CT does not support category changes via API — please update in ChurchTools directly`)
-    } else {
-      showBulkToast(`Set category "${categoryName}" on ${updated} CT song${updated !== 1 ? 's' : ''}${rejected > 0 ? ` (${rejected} failed)` : ''}`)
-    }
+    showBulkToast(
+      updated > 0
+        ? `Set category "${categoryName}" on ${updated} CT song${updated !== 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} skipped` : ''}`
+        : `Category change failed — check CT permissions`
+    )
   }
 
   const bulkPushCcliToCT = async () => {
