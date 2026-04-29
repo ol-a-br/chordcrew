@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import {
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type User as FirebaseUser,
@@ -38,10 +39,7 @@ function toAppUser(fb: FirebaseUser): User {
 
 function mapFirebaseAuthError(code: string): string {
   switch (code) {
-    case 'auth/popup-blocked':
-      return 'popup-blocked'
-    case 'auth/popup-closed-by-user':
-    case 'auth/cancelled-popup-request':
+    case 'auth/redirect-cancelled-by-user':
       return 'cancelled'
     case 'auth/network-request-failed':
       return 'network'
@@ -64,6 +62,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false)
       return
     }
+    // Pick up the result of a signInWithRedirect call (no-op if we didn't redirect)
+    getRedirectResult(auth).catch(err => {
+      const code = (err as { code?: string }).code ?? 'unknown'
+      // Ignore the benign "no redirect pending" case
+      if (code !== 'auth/no-current-user' && code !== 'auth/null-user') {
+        console.error('[auth] getRedirectResult failed:', code, err)
+        setSignInError(mapFirebaseAuthError(code))
+      }
+    })
     return onAuthStateChanged(auth, (fb) => {
       setUser(fb ? toAppUser(fb) : null)
       setLoading(false)
@@ -75,10 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSignInError(null)
     try {
       const provider = new GoogleAuthProvider()
-      await signInWithPopup(auth, provider)
+      await signInWithRedirect(auth, provider)
+      // Page navigates away — nothing runs after this line
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? 'unknown'
-      console.error('[auth] signInWithPopup failed:', code, err)
+      console.error('[auth] signInWithRedirect failed:', code, err)
       setSignInError(mapFirebaseAuthError(code))
     }
   }
