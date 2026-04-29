@@ -255,5 +255,7 @@ To be completed before onboarding any additional contributors. Full details and 
 | 2026-04-26 | CT songbook: metadata-only editing, no ChordPro body | ChurchTools does not store ChordPro; single source of truth is CT. Editing lyrics in CT is outside ChordCrew scope. |
 | 2026-04-26 | CT sync manual + auto on app start; no background/optimistic sync | Consistent with the global no-background-sync rule; CT songs are read-only in terms of content so freshness is low-risk. |
 | 2026-04-26 | CT song delete calls `ctDeleteSong` directly, no Firestore tombstone | CT books bypass Firestore sync entirely; each device re-syncs from CT independently. |
+| 2026-04-29 | CT category change requires `PUT /api/songs/{id}` (not PATCH) | `PATCH /api/songs/{id}` silently ignores `categoryId`/`song_category_id` — returns 200 but makes no change. CT only updates the category via a full `PUT` with the complete song object: `{ id: String(song.id), name, author, copyright, ccli, categoryId, practice_yn: 0, shouldPractice: false, arrangements: [{ name, isDefault, tempo }] }`. Implemented as `ctPutSong` in `src/churchtools/api.ts`. |
+| 2026-04-29 | `uploadPending` accumulates errors rather than throwing on first failure | A permissions error on one entity type (e.g. teams) was blocking all subsequent entity syncs (songs, setlists). Now collects errors and reports a summary at the end so partial syncs succeed. |
 
-*Last updated: 2026-04-26*
+*Last updated: 2026-04-29*

@@ -3,7 +3,7 @@ import { Calendar, Upload, X, CheckCircle2, AlertCircle, Loader2, ChevronRight, 
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import {
   ctGetEvents, ctGetAllSongs, ctGetAgenda,
-  ctCreateSong, ctCreateArrangement, ctAddAgendaItem, ctPutAgendaWithSection,
+  ctCreateSong, ctCreateArrangement, ctAddAgendaItem, ctPutAgendaWithSection, ctPutSong,
 } from '@/churchtools/api'
 import type { Song, Setlist } from '@/types'
 import type { CTEvent, CTSongPreview, CTSongUploadResult, CTAgenda, CTAgendaItem } from '@/churchtools/types'
@@ -18,7 +18,7 @@ interface Props {
 type Phase = 'events' | 'loading-preview' | 'preview' | 'uploading' | 'done'
 
 export function EventPickerDialog({ setlist, songs, onClose }: Props) {
-  const { baseUrl, token, categoryId } = useChurchTools()
+  const { baseUrl, token, categoryId, categories } = useChurchTools()
   const [phase, setPhase] = useState<Phase>('events')
   const [events, setEvents] = useState<CTEvent[]>([])
   const [eventsError, setEventsError] = useState<string | null>(null)
@@ -29,6 +29,14 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
   const [previews, setPreviews] = useState<CTSongPreview[]>([])
   const [results, setResults] = useState<CTSongUploadResult[]>([])
   const [error, setError] = useState<string | null>(null)
+
+  // "Set songs to Active" option
+  const [activateSongs, setActivateSongs] = useState(false)
+  const [activateCategoryId, setActivateCategoryId] = useState(() => {
+    const match = categories.find(c => /aktiv|active/i.test(`${c.name} ${c.nameTranslated}`))
+    return match?.id ?? categories[0]?.id ?? 0
+  })
+  const [activatedCount, setActivatedCount] = useState(0)
 
   const lookupDate = setlist.date
     ? setlist.date.slice(0, 10)
@@ -91,17 +99,19 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
     setPhase('uploading')
     const uploadResults: CTSongUploadResult[] = []
     const newArrangementIds: number[] = []
+    const allCtSongIds: number[] = []  // collect every setlist song's CT ID for activation
 
     for (const preview of previews) {
       if (preview.status === 'exists') {
         uploadResults.push({ localTitle: preview.localTitle, status: 'exists' })
+        if (preview.ctSongId) allCtSongIds.push(preview.ctSongId)
         continue
       }
       const song = songs.find(s => s.id === preview.localId)!
       try {
         let arrangementId = preview.ctArrangementId
+        let ctSongId = preview.ctSongId
         if (!arrangementId) {
-          let ctSongId = preview.ctSongId
           if (!ctSongId) {
             const created = await ctCreateSong(baseUrl, token, {
               name: song.title,
@@ -120,6 +130,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
           })
           arrangementId = arr.id
         }
+        if (ctSongId) allCtSongIds.push(ctSongId)
         newArrangementIds.push(arrangementId)
         uploadResults.push({ localTitle: song.title, status: 'created' })
       } catch (e) {
@@ -147,6 +158,23 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
       }
     }
 
+    // Activate songs in ChurchTools if requested
+    let activated = 0
+    if (activateSongs && allCtSongIds.length > 0 && activateCategoryId) {
+      try {
+        const freshCtSongs = await ctGetAllSongs(baseUrl, token)
+        const ctSongMap = new Map(freshCtSongs.map(s => [s.id, s]))
+        for (const ctSongId of allCtSongIds) {
+          const ctSong = ctSongMap.get(ctSongId)
+          if (!ctSong) continue
+          if (ctSong.category.id === activateCategoryId) { activated++; continue }
+          const result = await ctPutSong(baseUrl, token, ctSong, { categoryId: activateCategoryId })
+          if (result.category.id === activateCategoryId) activated++
+        }
+      } catch { /* best-effort — agenda upload already succeeded */ }
+    }
+
+    setActivatedCount(activated)
     setResults(uploadResults)
     setPhase('done')
   }
@@ -294,6 +322,32 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
               {toAdd.length === 0 && !error && (
                 <p className="text-sm text-ink-muted">All songs are already on the event agenda.</p>
               )}
+
+              {/* Set songs to Active option */}
+              {!error && categories.length > 0 && (
+                <div className="border-t border-surface-3 pt-3">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={activateSongs}
+                      onChange={e => setActivateSongs(e.target.checked)}
+                      className="rounded border-surface-3 bg-surface-2 text-chord focus:ring-chord/50"
+                    />
+                    <span className="text-sm">Set songs to category in ChurchTools</span>
+                  </label>
+                  {activateSongs && (
+                    <select
+                      value={activateCategoryId}
+                      onChange={e => setActivateCategoryId(Number(e.target.value))}
+                      className="mt-2 w-full text-sm bg-surface-2 border border-surface-3 rounded-lg px-3 py-1.5 text-ink focus:outline-none focus:border-chord/60"
+                    >
+                      {categories.map(c => (
+                        <option key={c.id} value={c.id}>{c.nameTranslated || c.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -327,6 +381,15 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
                   </span>
                 </div>
               ))}
+              {activateSongs && activatedCount > 0 && (
+                <div className="flex items-center gap-2 text-sm text-green-400 pt-2 border-t border-surface-3 mt-2">
+                  <CheckCircle2 size={15} className="shrink-0" />
+                  {activatedCount} song{activatedCount !== 1 ? 's' : ''} set to "{categories.find(c => c.id === activateCategoryId)?.nameTranslated || categories.find(c => c.id === activateCategoryId)?.name}"
+                </div>
+              )}
+              {activateSongs && activatedCount === 0 && (
+                <p className="text-xs text-ink-faint pt-2 border-t border-surface-3 mt-2">No songs needed category update.</p>
+              )}
             </div>
           )}
         </div>
