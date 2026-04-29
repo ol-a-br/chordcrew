@@ -231,7 +231,11 @@ export async function ctUpdateSong(
   if ('author' in patch) body.author = patch.author ?? ''
   if ('ccli' in patch) body.ccli = patch.ccli ?? ''
   if ('copyright' in patch) body.copyright = patch.copyright ?? ''
-  if (patch.categoryId !== undefined) body.categoryId = patch.categoryId
+  // Send both naming variants — CT versions differ on which they honour
+  if (patch.categoryId !== undefined) {
+    body.categoryId = patch.categoryId
+    body.song_category_id = patch.categoryId
+  }
   const res = await fetch(endpoint(baseUrl, `/songs/${songId}`), {
     method: 'PATCH',
     headers: headers(baseUrl, token),

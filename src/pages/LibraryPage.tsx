@@ -390,14 +390,25 @@ export default function LibraryPage() {
     const songs = sortedSongs.filter(s => selectedIds.has(s.id) && s.ctSongId != null)
     setShowCtCategoryMenu(false)
     setShowOrganizeMenu(false)
-    let updated = 0
+    let updated = 0, rejected = 0
     for (const song of songs) {
       if (!song.ctSongId) continue
-      try { await ctUpdateSong(ctBaseUrl, ctToken, song.ctSongId, { categoryId }); updated++ } catch { /* skip */ }
+      try {
+        const result = await ctUpdateSong(ctBaseUrl, ctToken, song.ctSongId, { categoryId })
+        if (result.category.id === categoryId) updated++
+        else {
+          rejected++
+          console.warn(`[CT] category not applied for song ${song.ctSongId} — returned category.id=${result.category.id}`)
+        }
+      } catch { rejected++ }
     }
     if (updated > 0) await syncCtBook()
     exitSelectMode()
-    showBulkToast(`Set category "${categoryName}" on ${updated} CT song${updated !== 1 ? 's' : ''}`)
+    if (rejected > 0 && updated === 0) {
+      showBulkToast(`CT does not support category changes via API — please update in ChurchTools directly`)
+    } else {
+      showBulkToast(`Set category "${categoryName}" on ${updated} CT song${updated !== 1 ? 's' : ''}${rejected > 0 ? ` (${rejected} failed)` : ''}`)
+    }
   }
 
   const bulkPushCcliToCT = async () => {
