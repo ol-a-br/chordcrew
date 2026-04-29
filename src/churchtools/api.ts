@@ -224,13 +224,14 @@ export async function ctUpdateSong(
   baseUrl: string,
   token: string,
   songId: number,
-  patch: { name?: string; author?: string | null; ccli?: string | null; copyright?: string | null },
+  patch: { name?: string; author?: string | null; ccli?: string | null; copyright?: string | null; categoryId?: number },
 ): Promise<CTSong> {
   const body: Record<string, unknown> = {}
   if (patch.name !== undefined) body.name = patch.name
   if ('author' in patch) body.author = patch.author ?? ''
   if ('ccli' in patch) body.ccli = patch.ccli ?? ''
   if ('copyright' in patch) body.copyright = patch.copyright ?? ''
+  if (patch.categoryId !== undefined) body.categoryId = patch.categoryId
   const res = await fetch(endpoint(baseUrl, `/songs/${songId}`), {
     method: 'PATCH',
     headers: headers(baseUrl, token),
