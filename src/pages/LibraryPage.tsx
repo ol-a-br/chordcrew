@@ -466,18 +466,24 @@ export default function LibraryPage() {
     let updated = 0, skipped = 0
     for (const song of selectedCtSongs) {
       if (!song.ctSongId) { skipped++; continue }
-      const local = localByTitle.get(song.title.toLowerCase())
-      if (!local) { skipped++; continue }
       const ctSong = ctSongMap.get(song.ctSongId)
       if (!ctSong) { skipped++; continue }
 
-      const meta = extractMeta(local.transcription.content)
-      // CCLI: prefer {ccli:} directive in content, fall back to static mapping
-      const ccli = meta.ccli || CCLI_MAP[local.title] || CCLI_MAP[song.title] || undefined
       const patch: { ccli?: string | null; author?: string | null; copyright?: string | null } = {}
-      if (ccli           && ccli           !== (ctSong.ccli      ?? '')) patch.ccli      = ccli
-      if (local.artist   && local.artist   !== (ctSong.author     ?? '')) patch.author    = local.artist
-      if (meta.copyright && meta.copyright !== (ctSong.copyright  ?? '')) patch.copyright = meta.copyright
+
+      // CCLI: try static mapping by CT title first (no title-match needed, same path as
+      // bulkPushCcliToCT), then fall back to {ccli:} directive in the local song content.
+      const ccliFromMap = CCLI_MAP[song.title]
+      const local = localByTitle.get(song.title.toLowerCase())
+      const meta = local ? extractMeta(local.transcription.content) : {}
+      const ccli = ccliFromMap || meta.ccli || (local ? CCLI_MAP[local.title] : undefined) || undefined
+      if (ccli && ccli !== (ctSong.ccli ?? '')) patch.ccli = ccli
+
+      // Author and copyright require a local song title match
+      if (local) {
+        if (local.artist   && local.artist   !== (ctSong.author    ?? '')) patch.author    = local.artist
+        if (meta.copyright && meta.copyright !== (ctSong.copyright ?? '')) patch.copyright = meta.copyright
+      }
 
       if (Object.keys(patch).length === 0) { skipped++; continue }
       try { await ctUpdateSong(ctBaseUrl, ctToken, song.ctSongId, patch); updated++ } catch { skipped++ }
