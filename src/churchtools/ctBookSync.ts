@@ -1,15 +1,26 @@
 import { db, generateId } from '@/db'
-import { buildSearchText } from '@/utils/chordpro'
+import { buildSearchText, extractMeta } from '@/utils/chordpro'
 import { ctGetAllSongs } from './api'
 import type { CTSong } from './types'
 import type { Book } from '@/types'
 
-function buildCtContent(ctSong: CTSong, arrangement?: CTSong['arrangements'][number]): string {
+// CT is source of truth for arrangement fields (key/tempo/time) and song identity.
+// For optional metadata (ccli, author, copyright), if CT has no value we fall back
+// to whatever the local copy already has — so a locally-known CCLI isn't erased
+// just because CT hasn't been updated yet.
+function buildCtContent(
+  ctSong: CTSong,
+  arrangement?: CTSong['arrangements'][number],
+  localFallback?: { ccli?: string; author?: string; copyright?: string },
+): string {
   const lines: string[] = []
   lines.push(`{title: ${ctSong.name}}`)
-  if (ctSong.author) lines.push(`{artist: ${ctSong.author}}`)
-  if (ctSong.ccli) lines.push(`{ccli: ${ctSong.ccli}}`)
-  if (ctSong.copyright) lines.push(`{copyright: ${ctSong.copyright}}`)
+  const author    = ctSong.author    || localFallback?.author    || ''
+  const ccli      = ctSong.ccli      || localFallback?.ccli      || ''
+  const copyright = ctSong.copyright || localFallback?.copyright || ''
+  if (author)    lines.push(`{artist: ${author}}`)
+  if (ccli)      lines.push(`{ccli: ${ccli}}`)
+  if (copyright) lines.push(`{copyright: ${copyright}}`)
   if (arrangement?.key) lines.push(`{key: ${arrangement.key}}`)
   if (arrangement?.tempo && arrangement.tempo > 0) lines.push(`{tempo: ${arrangement.tempo}}`)
   if (arrangement?.beat) lines.push(`{time: ${arrangement.beat}}`)
@@ -99,18 +110,22 @@ export async function syncCtSongs(
       })
       added++
     } else {
-      const newContent = buildCtContent(ctSong, arrangement)
+      const localMeta = extractMeta(local.transcription.content)
+      const localFallback = { ccli: localMeta.ccli, author: local.artist, copyright: localMeta.copyright }
+      const newContent = buildCtContent(ctSong, arrangement, localFallback)
+      // Use CT author when CT has one; otherwise keep local artist
+      const artist = ctSong.author || local.artist
       const changed =
         local.title !== ctSong.name ||
-        local.artist !== (ctSong.author ?? '') ||
+        local.artist !== artist ||
         local.ctArrangementId !== arrangement?.id ||
         local.transcription.content !== newContent
       if (changed) {
         await db.songs.update(local.id, {
           title: ctSong.name,
-          artist: ctSong.author ?? '',
+          artist,
           ctArrangementId: arrangement?.id,
-          searchText: buildSearchText(ctSong.name, ctSong.author ?? '', local.tags, ''),
+          searchText: buildSearchText(ctSong.name, artist, local.tags, ''),
           updatedAt: now,
           transcription: {
             ...local.transcription,
