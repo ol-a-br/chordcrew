@@ -11,7 +11,7 @@ import ccliMapping from '../../data/ccli_mapping.json'
 import { db, generateId, markPending, markDeleted, getTeamRole } from '@/db'
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { Button } from '@/components/shared/Button'
-import { buildSearchText } from '@/utils/chordpro'
+import { buildSearchText, extractMeta } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import { ctDeleteSong, ctUpdateSong, ctGetAllSongs, ctPutSong } from '@/churchtools/api'
@@ -441,6 +441,55 @@ export default function LibraryPage() {
     )
   }
 
+  const bulkFillFromLocalSongs = async () => {
+    const selectedCtSongs = sortedSongs.filter(s => selectedIds.has(s.id) && s.ctSongId != null)
+    setShowOrganizeMenu(false)
+
+    // Build title → local song map from non-CT books; team books take priority over personal
+    const nonCtBookIds = new Set((books ?? []).filter(b => b.sourceType !== 'churchtools').map(b => b.id))
+    const teamBookIds  = new Set((books ?? []).filter(b => b.sharedTeamId && b.sourceType !== 'churchtools').map(b => b.id))
+    const localByTitle = new Map<string, Song>()
+    const localSongs = (allSongs ?? []).filter(s => nonCtBookIds.has(s.bookId))
+    for (const s of localSongs) if (!teamBookIds.has(s.bookId)) localByTitle.set(s.title.toLowerCase(), s)
+    for (const s of localSongs) if (teamBookIds.has(s.bookId))  localByTitle.set(s.title.toLowerCase(), s)
+
+    let ctSongMap: Map<number, import('@/churchtools/types').CTSong>
+    try {
+      const all = await ctGetAllSongs(ctBaseUrl, ctToken)
+      ctSongMap = new Map(all.map(s => [s.id, s]))
+    } catch {
+      exitSelectMode()
+      showBulkToast('Failed to load CT songs — check connection')
+      return
+    }
+
+    let updated = 0, skipped = 0
+    for (const song of selectedCtSongs) {
+      if (!song.ctSongId) { skipped++; continue }
+      const local = localByTitle.get(song.title.toLowerCase())
+      if (!local) { skipped++; continue }
+      const ctSong = ctSongMap.get(song.ctSongId)
+      if (!ctSong) { skipped++; continue }
+
+      const meta = extractMeta(local.transcription.content)
+      const patch: { ccli?: string | null; author?: string | null; copyright?: string | null } = {}
+      if (meta.ccli      && meta.ccli      !== (ctSong.ccli      ?? '')) patch.ccli      = meta.ccli
+      if (local.artist   && local.artist   !== (ctSong.author     ?? '')) patch.author    = local.artist
+      if (meta.copyright && meta.copyright !== (ctSong.copyright  ?? '')) patch.copyright = meta.copyright
+
+      if (Object.keys(patch).length === 0) { skipped++; continue }
+      try { await ctUpdateSong(ctBaseUrl, ctToken, song.ctSongId, patch); updated++ } catch { skipped++ }
+    }
+
+    if (updated > 0) await syncCtBook()
+    exitSelectMode()
+    showBulkToast(
+      updated > 0
+        ? `Updated ${updated} CT song${updated !== 1 ? 's' : ''} from local metadata${skipped > 0 ? `, ${skipped} skipped` : ''}`
+        : `No metadata differences found — ${skipped} songs had no local match or already matched`
+    )
+  }
+
   // ─── Create book ──────────────────────────────────────────────────────────────
 
   const createBook = async () => {
@@ -866,6 +915,14 @@ export default function LibraryPage() {
                                 >
                                   <Hash size={11} />
                                   Push CCLI to ChurchTools
+                                </button>
+                                {/* Fill from local songs */}
+                                <button
+                                  onClick={bulkFillFromLocalSongs}
+                                  className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
+                                >
+                                  <RefreshCw size={11} />
+                                  Fill from local songs
                                 </button>
                               </>
                             )}
