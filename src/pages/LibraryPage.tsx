@@ -472,8 +472,10 @@ export default function LibraryPage() {
       if (!ctSong) { skipped++; continue }
 
       const meta = extractMeta(local.transcription.content)
+      // CCLI: prefer {ccli:} directive in content, fall back to static mapping
+      const ccli = meta.ccli || CCLI_MAP[local.title] || CCLI_MAP[song.title] || undefined
       const patch: { ccli?: string | null; author?: string | null; copyright?: string | null } = {}
-      if (meta.ccli      && meta.ccli      !== (ctSong.ccli      ?? '')) patch.ccli      = meta.ccli
+      if (ccli           && ccli           !== (ctSong.ccli      ?? '')) patch.ccli      = ccli
       if (local.artist   && local.artist   !== (ctSong.author     ?? '')) patch.author    = local.artist
       if (meta.copyright && meta.copyright !== (ctSong.copyright  ?? '')) patch.copyright = meta.copyright
 
