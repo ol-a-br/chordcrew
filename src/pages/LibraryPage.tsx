@@ -445,13 +445,26 @@ export default function LibraryPage() {
     const selectedCtSongs = sortedSongs.filter(s => selectedIds.has(s.id) && s.ctSongId != null)
     setShowOrganizeMenu(false)
 
-    // Build title → local song map from non-CT books; team books take priority over personal
+    // Group all non-CT local songs by lowercase title (multiple books may have the same song)
     const nonCtBookIds = new Set((books ?? []).filter(b => b.sourceType !== 'churchtools').map(b => b.id))
     const teamBookIds  = new Set((books ?? []).filter(b => b.sharedTeamId && b.sourceType !== 'churchtools').map(b => b.id))
-    const localByTitle = new Map<string, Song>()
-    const localSongs = (allSongs ?? []).filter(s => nonCtBookIds.has(s.bookId))
-    for (const s of localSongs) if (!teamBookIds.has(s.bookId)) localByTitle.set(s.title.toLowerCase(), s)
-    for (const s of localSongs) if (teamBookIds.has(s.bookId))  localByTitle.set(s.title.toLowerCase(), s)
+    const localByTitle = new Map<string, Song[]>()
+    for (const s of (allSongs ?? [])) {
+      if (!nonCtBookIds.has(s.bookId)) continue
+      const key = s.title.toLowerCase()
+      const arr = localByTitle.get(key) ?? []
+      arr.push(s)
+      localByTitle.set(key, arr)
+    }
+    // Pick the best local song for a title: prefer whichever has the CCLI directive, then
+    // team books over personal, then first available
+    const pickBest = (candidates: Song[]): Song => {
+      return (
+        candidates.find(s => !!extractMeta(s.transcription.content).ccli) ??
+        candidates.find(s => teamBookIds.has(s.bookId)) ??
+        candidates[0]
+      )
+    }
 
     let ctSongMap: Map<number, import('@/churchtools/types').CTSong>
     try {
@@ -474,7 +487,8 @@ export default function LibraryPage() {
       // CCLI: try static mapping by CT title first (no title-match needed, same path as
       // bulkPushCcliToCT), then fall back to {ccli:} directive in the local song content.
       const ccliFromMap = CCLI_MAP[song.title]
-      const local = localByTitle.get(song.title.toLowerCase())
+      const candidates = localByTitle.get(song.title.toLowerCase())
+      const local = candidates ? pickBest(candidates) : undefined
       const meta = local ? extractMeta(local.transcription.content) : {}
       const ccli = ccliFromMap || meta.ccli || (local ? CCLI_MAP[local.title] : undefined) || undefined
       if (ccli && ccli !== (ctSong.ccli ?? '')) patch.ccli = ccli
