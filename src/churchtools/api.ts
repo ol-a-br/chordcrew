@@ -248,14 +248,14 @@ export async function ctPutSong(
   baseUrl: string,
   token: string,
   song: CTSong,
-  overrides: { categoryId?: number },
+  overrides: { categoryId?: number; ccli?: string | null; author?: string | null; copyright?: string | null },
 ): Promise<CTSong> {
   const body = {
     id: String(song.id),
     name: song.name,
-    author: song.author ?? '',
-    copyright: song.copyright ?? '',
-    ccli: song.ccli ?? '',
+    author: 'author' in overrides ? (overrides.author ?? '') : (song.author ?? ''),
+    copyright: 'copyright' in overrides ? (overrides.copyright ?? '') : (song.copyright ?? ''),
+    ccli: 'ccli' in overrides ? (overrides.ccli ?? '') : (song.ccli ?? ''),
     categoryId: overrides.categoryId ?? song.category.id,
     practice_yn: 0,
     shouldPractice: false,

@@ -445,14 +445,9 @@ export default function LibraryPage() {
     const selectedCtSongs = sortedSongs.filter(s => selectedIds.has(s.id) && s.ctSongId != null)
     setShowOrganizeMenu(false)
 
-    console.group('[fillFromLocal] start')
-    console.log('selected CT songs:', selectedCtSongs.map(s => ({ title: s.title, ctSongId: s.ctSongId })))
-
     // Group all non-CT local songs by lowercase title (multiple books may have the same song)
     const nonCtBookIds = new Set((books ?? []).filter(b => b.sourceType !== 'churchtools').map(b => b.id))
     const teamBookIds  = new Set((books ?? []).filter(b => b.sharedTeamId && b.sourceType !== 'churchtools').map(b => b.id))
-    console.log('nonCtBookIds:', [...nonCtBookIds], 'teamBookIds:', [...teamBookIds])
-
     const localByTitle = new Map<string, Song[]>()
     for (const s of (allSongs ?? [])) {
       if (!nonCtBookIds.has(s.bookId)) continue
@@ -461,26 +456,18 @@ export default function LibraryPage() {
       arr.push(s)
       localByTitle.set(key, arr)
     }
-    console.log('local song titles indexed:', [...localByTitle.keys()].length)
-
-    // Pick the best local song for a title: prefer whichever has the CCLI directive, then
-    // team books over personal, then first available
-    const pickBest = (candidates: Song[]): Song => {
-      return (
-        candidates.find(s => !!extractMeta(s.transcription.content).ccli) ??
-        candidates.find(s => teamBookIds.has(s.bookId)) ??
-        candidates[0]
-      )
-    }
+    // When multiple books have the same song, pick the one with a {ccli:} directive first,
+    // then prefer team books over personal, then first available
+    const pickBest = (candidates: Song[]): Song =>
+      candidates.find(s => !!extractMeta(s.transcription.content).ccli) ??
+      candidates.find(s => teamBookIds.has(s.bookId)) ??
+      candidates[0]
 
     let ctSongMap: Map<number, import('@/churchtools/types').CTSong>
     try {
       const all = await ctGetAllSongs(ctBaseUrl, ctToken)
       ctSongMap = new Map(all.map(s => [s.id, s]))
-      console.log('fetched CT songs from API:', all.length)
-    } catch (e) {
-      console.error('[fillFromLocal] failed to fetch CT songs', e)
-      console.groupEnd()
+    } catch {
       exitSelectMode()
       showBulkToast('Failed to load CT songs — check connection')
       return
@@ -488,67 +475,32 @@ export default function LibraryPage() {
 
     let updated = 0, skipped = 0
     for (const song of selectedCtSongs) {
-      console.group(`[fillFromLocal] song: "${song.title}" ctSongId=${song.ctSongId}`)
-
-      if (!song.ctSongId) {
-        console.log('SKIP: no ctSongId')
-        console.groupEnd(); skipped++; continue
-      }
+      if (!song.ctSongId) { skipped++; continue }
       const ctSong = ctSongMap.get(song.ctSongId)
-      if (!ctSong) {
-        console.log('SKIP: ctSongId not found in fresh CT data')
-        console.groupEnd(); skipped++; continue
-      }
-      console.log('CT song current state:', { ccli: ctSong.ccli, author: ctSong.author, copyright: ctSong.copyright })
-
-      const patch: { ccli?: string | null; author?: string | null; copyright?: string | null } = {}
+      if (!ctSong) { skipped++; continue }
 
       const ccliFromMap = CCLI_MAP[song.title]
       const candidates = localByTitle.get(song.title.toLowerCase())
       const local = candidates ? pickBest(candidates) : undefined
       const meta = local ? extractMeta(local.transcription.content) : {}
-
-      console.log('ccliFromMap:', ccliFromMap)
-      console.log('local candidates count:', candidates?.length ?? 0)
-      console.log('local picked:', local ? { title: local.title, bookId: local.bookId, isTeam: teamBookIds.has(local.bookId) } : null)
-      console.log('meta from local content:', meta)
-
       const ccli = ccliFromMap || meta.ccli || (local ? CCLI_MAP[local.title] : undefined) || undefined
-      console.log('resolved ccli:', ccli, '| CT ccli:', ctSong.ccli)
 
-      if (ccli && ccli !== (ctSong.ccli ?? '')) patch.ccli = ccli
+      const overrides: { ccli?: string | null; author?: string | null; copyright?: string | null } = {}
+      if (ccli        && ccli        !== (ctSong.ccli      ?? '')) overrides.ccli      = ccli
+      if (local?.artist && local.artist !== (ctSong.author  ?? '')) overrides.author    = local.artist
+      if (meta.copyright && meta.copyright !== (ctSong.copyright ?? '')) overrides.copyright = meta.copyright
 
-      if (local) {
-        if (local.artist   && local.artist   !== (ctSong.author    ?? '')) patch.author    = local.artist
-        if (meta.copyright && meta.copyright !== (ctSong.copyright ?? '')) patch.copyright = meta.copyright
-      }
-
-      console.log('patch to send:', patch)
-
-      if (Object.keys(patch).length === 0) {
-        console.log('SKIP: nothing to patch')
-        console.groupEnd(); skipped++; continue
-      }
-      try {
-        await ctUpdateSong(ctBaseUrl, ctToken, song.ctSongId, patch)
-        console.log('OK: ctUpdateSong succeeded')
-        updated++
-      } catch (e) {
-        console.error('FAIL: ctUpdateSong threw', e)
-        skipped++
-      }
-      console.groupEnd()
+      if (Object.keys(overrides).length === 0) { skipped++; continue }
+      // Use PUT (not PATCH) — PATCH returns a server error on some CT songs
+      try { await ctPutSong(ctBaseUrl, ctToken, ctSong, overrides); updated++ } catch { skipped++ }
     }
-
-    console.log(`[fillFromLocal] done — updated=${updated} skipped=${skipped}`)
-    console.groupEnd()
 
     if (updated > 0) await syncCtBook()
     exitSelectMode()
     showBulkToast(
       updated > 0
-        ? `Updated ${updated} CT song${updated !== 1 ? 's' : ''} from local metadata${skipped > 0 ? `, ${skipped} skipped` : ''}`
-        : `No metadata differences found — ${skipped} songs had no local match or already matched`
+        ? `Updated ${updated} CT song${updated !== 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} skipped` : ''}`
+        : `No changes needed — ${skipped} songs had no local match or already matched`
     )
   }
 
