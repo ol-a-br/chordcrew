@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2, Cloud } from 'lucide-react'
+import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2, Cloud, ExternalLink } from 'lucide-react'
 import { db, upsertSongVersions, markPending } from '@/db'
 import { deleteSongFromCloud, fetchTeamNoteIndicator } from '@/sync/firestoreSync'
 import { buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
@@ -407,8 +407,29 @@ export default function EditorPage() {
         <>
           {/* Row 2: attribution (CCLI / copyright / URL) */}
           <div className="flex items-center gap-3 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
+            {/* CCLI — rendered separately so we can add the SongSelect lookup link */}
+            <label className="flex items-center gap-1 text-xs">
+              <span className="text-ink-faint shrink-0">CCLI</span>
+              <input
+                type="text"
+                defaultValue={derivedMeta.ccli ?? ''}
+                key={`ccli-${song?.id}-${derivedMeta.ccli ?? ''}`}
+                placeholder="5281015"
+                onBlur={e => commitMetaField('ccli', e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                className="w-24 bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50 placeholder:text-ink-faint/40"
+              />
+            </label>
+            <a
+              href={`https://songselect.ccli.com/search/results?SearchText=${encodeURIComponent(derivedMeta.title ?? song?.title ?? '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Look up on SongSelect"
+              className="-ml-2 p-0.5 text-ink-faint hover:text-chord transition-colors"
+            >
+              <ExternalLink size={11} />
+            </a>
             {([
-              { label: 'CCLI',      directive: 'ccli',      value: derivedMeta.ccli      ?? '', width: 'w-24', type: 'text', placeholder: '5281015' },
               { label: 'Copyright', directive: 'copyright', value: derivedMeta.copyright ?? '', width: 'w-64', type: 'text', placeholder: '© Year Author' },
               { label: 'URL',       directive: 'url',       value: derivedMeta.url       ?? '', width: 'w-64', type: 'url',  placeholder: 'https://…' },
             ] as const).map(({ label, directive, value, width, type, placeholder }) => (

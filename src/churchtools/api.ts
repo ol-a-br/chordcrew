@@ -241,6 +241,40 @@ export async function ctUpdateSong(
   return data.data as CTSong
 }
 
+// CT requires a full PUT (not PATCH) to change categoryId.
+// Mirrors what the CT web app sends — preserves all existing fields
+// and overrides only what's in `overrides`.
+export async function ctPutSong(
+  baseUrl: string,
+  token: string,
+  song: CTSong,
+  overrides: { categoryId?: number; ccli?: string | null; author?: string | null; copyright?: string | null },
+): Promise<CTSong> {
+  const body = {
+    id: String(song.id),
+    name: song.name,
+    author: 'author' in overrides ? (overrides.author ?? '') : (song.author ?? ''),
+    copyright: 'copyright' in overrides ? (overrides.copyright ?? '') : (song.copyright ?? ''),
+    ccli: 'ccli' in overrides ? (overrides.ccli ?? '') : (song.ccli ?? ''),
+    categoryId: overrides.categoryId ?? song.category.id,
+    practice_yn: 0,
+    shouldPractice: false,
+    arrangements: song.arrangements.map(a => ({
+      name: a.name,
+      isDefault: a.isDefault,
+      tempo: a.tempo,
+    })),
+  }
+  const res = await fetch(endpoint(baseUrl, `/songs/${song.id}`), {
+    method: 'PUT',
+    headers: headers(baseUrl, token),
+    body: JSON.stringify(body),
+  })
+  await checkResponse(res)
+  const data = await res.json()
+  return data.data as CTSong
+}
+
 export async function ctUpdateArrangement(
   baseUrl: string,
   token: string,

@@ -13,7 +13,12 @@
     "signOut": "Sign out",
     "welcome": "Welcome to ChordCrew",
     "subtitle": "Your worship team's chord library — online and offline",
-    "localMode": "Running in local mode (no Firebase configured)"
+    "localMode": "Running in local mode (no Firebase configured)",
+    "signInError_popup-blocked": "Sign-in blocked — please allow pop-ups for this site and try again.",
+    "signInError_cancelled": "Sign-in cancelled.",
+    "signInError_network": "Sign-in failed — check your internet connection.",
+    "signInError_unauthorized-domain": "Sign-in failed — this domain is not authorised. Contact the app administrator.",
+    "signInError_default": "Sign-in failed. Please try again."
   },
   "library": {
     "allSongs": "All Songs",

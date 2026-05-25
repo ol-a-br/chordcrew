@@ -34,6 +34,8 @@ async function uploadPending(userId: string): Promise<void> {
   const pending = await db.syncStates.where('status').anyOf('pending', 'deleted').toArray()
   if (pending.length === 0) return
 
+  const errors: Error[] = []
+
   // Find which teams this user belongs to (for team-scoped uploads)
   const allTeams = await db.teams.toArray()
   const myTeamIds = new Set(
@@ -151,8 +153,16 @@ async function uploadPending(userId: string): Promise<void> {
       })
     } catch (err) {
       console.error(`Failed to sync ${entityType}:${entityId}`, err)
-      throw err
+      errors.push(err as Error)
     }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(
+      errors.length === 1
+        ? errors[0].message
+        : `${errors.length} entities failed to sync`
+    )
   }
 }
 

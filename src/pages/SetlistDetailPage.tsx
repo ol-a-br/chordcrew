@@ -13,7 +13,7 @@ import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import { EventPickerDialog } from '@/components/churchtools/EventPickerDialog'
 import { encodeSetlistShare, buildShareUrl, buildSetlistShareUrl, copyShareUrl, publishSetlistShare } from '@/utils/share'
 import { transposeKey, extractMeta, isValidKey } from '@/utils/chordpro'
-import type { SetlistItem, Song } from '@/types'
+import type { SetlistItem, Song, Book } from '@/types'
 
 export default function SetlistDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -72,6 +72,12 @@ export default function SetlistDetailPage() {
     if (!setlist?.sharedTeamId || !books) return null
     return new Set(books.filter(b => b.sharedTeamId === setlist.sharedTeamId).map(b => b.id))
   }, [books, setlist?.sharedTeamId])
+
+  const bookMap = useMemo(() => {
+    const m: Record<string, Book> = {}
+    ;(books ?? []).forEach(b => { m[b.id] = b })
+    return m
+  }, [books])
 
   // Books available in the "Add Song" filter — personal books hidden for team setlists
   const availableBooksForFilter = useMemo(() => {
@@ -783,6 +789,11 @@ export default function SetlistDetailPage() {
                       <div className="text-sm font-medium truncate">{song.title}</div>
                       {song.artist && (
                         <div className="text-xs text-ink-muted truncate">{song.artist}</div>
+                      )}
+                      {bookMap[song.bookId] && (
+                        <div className="text-xs text-amber-600 truncate">
+                          {bookMap[song.bookId].title} · {new Date(song.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </div>
                       )}
                     </div>
 

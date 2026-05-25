@@ -5,17 +5,18 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users,
   CheckSquare, Square, Trash2, FolderInput, Pencil, Check, X, Upload,
-  RefreshCw, Cloud,
+  RefreshCw, Cloud, Hash,
 } from 'lucide-react'
+import ccliMapping from '../../data/ccli_mapping.json'
 import { db, generateId, markPending, markDeleted, getTeamRole } from '@/db'
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { Button } from '@/components/shared/Button'
-import { buildSearchText } from '@/utils/chordpro'
+import { buildSearchText, extractMeta } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
-import { ctDeleteSong } from '@/churchtools/api'
+import { ctDeleteSong, ctUpdateSong, ctGetAllSongs, ctPutSong } from '@/churchtools/api'
 import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
-import type { Song } from '@/types'
+import type { Song, Book } from '@/types'
 
 type SortKey = 'title' | 'artist' | 'updatedAt' | 'savedAt' | 'accessedAt'
 
@@ -65,7 +66,7 @@ export default function LibraryPage() {
   const [bulkTagInput, setBulkTagInput] = useState('')
   const tagMenuRef = useRef<HTMLDivElement>(null)
 
-  const { isConfigured: ctConfigured, syncCtBook, ctSyncing, token: ctToken, baseUrl: ctBaseUrl } = useChurchTools()
+  const { isConfigured: ctConfigured, syncCtBook, ctSyncing, token: ctToken, baseUrl: ctBaseUrl, categories: ctCategories } = useChurchTools()
   const [showCtUpload, setShowCtUpload] = useState(false)
   const [ctUploadSongs, setCtUploadSongs] = useState<Song[]>([])
 
@@ -73,6 +74,7 @@ export default function LibraryPage() {
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showOrganizeMenu, setShowOrganizeMenu] = useState(false)
+  const [showCtCategoryMenu, setShowCtCategoryMenu] = useState(false)
   const [bulkToast, setBulkToast] = useState<string | null>(null)
   const bulkToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -115,6 +117,12 @@ export default function LibraryPage() {
     const map: Record<string, string> = {}
     ;(books ?? []).forEach(b => { if (b.sharedTeamId) map[b.id] = b.sharedTeamId })
     return map
+  }, [books])
+
+  const bookMap = useMemo(() => {
+    const m: Record<string, Book> = {}
+    ;(books ?? []).forEach(b => { m[b.id] = b })
+    return m
   }, [books])
 
   // Role for the active context (team or personal)
@@ -272,6 +280,7 @@ export default function LibraryPage() {
     setSelectMode(false)
     setSelectedIds(new Set())
     setShowOrganizeMenu(false)
+    setShowCtCategoryMenu(false)
   }
 
   const bulkDelete = async () => {
@@ -377,6 +386,128 @@ export default function LibraryPage() {
     setBulkTagInput('')
     setShowTagMenu(false)
     showBulkToast(`Tagged ${songs.length} song${songs.length !== 1 ? 's' : ''} with "${normalized}"`)
+  }
+
+  // ─── CT bulk ops ─────────────────────────────────────────────────────────────
+
+  const CCLI_MAP = ccliMapping as Record<string, string | null>
+
+  const bulkSetCtCategory = async (categoryId: number, categoryName: string) => {
+    const songs = sortedSongs.filter(s => selectedIds.has(s.id) && s.ctSongId != null)
+    setShowCtCategoryMenu(false)
+    setShowOrganizeMenu(false)
+
+    // Fetch all CT songs once to get the full objects needed for PUT
+    let ctSongMap: Map<number, import('@/churchtools/types').CTSong>
+    try {
+      const all = await ctGetAllSongs(ctBaseUrl, ctToken)
+      ctSongMap = new Map(all.map(s => [s.id, s]))
+    } catch {
+      exitSelectMode()
+      showBulkToast('Failed to load CT songs — check connection')
+      return
+    }
+
+    let updated = 0, skipped = 0
+    for (const song of songs) {
+      if (!song.ctSongId) { skipped++; continue }
+      const ctSong = ctSongMap.get(song.ctSongId)
+      if (!ctSong) { skipped++; continue }
+      try {
+        const result = await ctPutSong(ctBaseUrl, ctToken, ctSong, { categoryId })
+        result.category.id === categoryId ? updated++ : skipped++
+      } catch { skipped++ }
+    }
+
+    if (updated > 0) await syncCtBook()
+    exitSelectMode()
+    showBulkToast(
+      updated > 0
+        ? `Set category "${categoryName}" on ${updated} CT song${updated !== 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} skipped` : ''}`
+        : `Category change failed — check CT permissions`
+    )
+  }
+
+  const bulkPushCcliToCT = async () => {
+    const songs = sortedSongs.filter(s => selectedIds.has(s.id))
+    setShowOrganizeMenu(false)
+    let pushed = 0, skipped = 0
+    for (const song of songs) {
+      if (!song.ctSongId) { skipped++; continue }
+      const ccliId = CCLI_MAP[song.title]
+      if (!ccliId) { skipped++; continue }
+      try { await ctUpdateSong(ctBaseUrl, ctToken, song.ctSongId, { ccli: ccliId }); pushed++ } catch { skipped++ }
+    }
+    if (pushed > 0) await syncCtBook()
+    exitSelectMode()
+    showBulkToast(
+      pushed > 0
+        ? `Pushed CCLI to ${pushed} CT song${pushed !== 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} skipped` : ''}`
+        : `No CCLI matches found for selected songs`
+    )
+  }
+
+  const bulkFillFromLocalSongs = async () => {
+    const selectedCtSongs = sortedSongs.filter(s => selectedIds.has(s.id) && s.ctSongId != null)
+    setShowOrganizeMenu(false)
+
+    // Group all non-CT local songs by lowercase title (multiple books may have the same song)
+    const nonCtBookIds = new Set((books ?? []).filter(b => b.sourceType !== 'churchtools').map(b => b.id))
+    const teamBookIds  = new Set((books ?? []).filter(b => b.sharedTeamId && b.sourceType !== 'churchtools').map(b => b.id))
+    const localByTitle = new Map<string, Song[]>()
+    for (const s of (allSongs ?? [])) {
+      if (!nonCtBookIds.has(s.bookId)) continue
+      const key = s.title.toLowerCase()
+      const arr = localByTitle.get(key) ?? []
+      arr.push(s)
+      localByTitle.set(key, arr)
+    }
+    // When multiple books have the same song, pick the one with a {ccli:} directive first,
+    // then prefer team books over personal, then first available
+    const pickBest = (candidates: Song[]): Song =>
+      candidates.find(s => !!extractMeta(s.transcription.content).ccli) ??
+      candidates.find(s => teamBookIds.has(s.bookId)) ??
+      candidates[0]
+
+    let ctSongMap: Map<number, import('@/churchtools/types').CTSong>
+    try {
+      const all = await ctGetAllSongs(ctBaseUrl, ctToken)
+      ctSongMap = new Map(all.map(s => [s.id, s]))
+    } catch {
+      exitSelectMode()
+      showBulkToast('Failed to load CT songs — check connection')
+      return
+    }
+
+    let updated = 0, skipped = 0
+    for (const song of selectedCtSongs) {
+      if (!song.ctSongId) { skipped++; continue }
+      const ctSong = ctSongMap.get(song.ctSongId)
+      if (!ctSong) { skipped++; continue }
+
+      const ccliFromMap = CCLI_MAP[song.title]
+      const candidates = localByTitle.get(song.title.toLowerCase())
+      const local = candidates ? pickBest(candidates) : undefined
+      const meta = local ? extractMeta(local.transcription.content) : {}
+      const ccli = ccliFromMap || meta.ccli || (local ? CCLI_MAP[local.title] : undefined) || undefined
+
+      const overrides: { ccli?: string | null; author?: string | null; copyright?: string | null } = {}
+      if (ccli        && ccli        !== (ctSong.ccli      ?? '')) overrides.ccli      = ccli
+      if (local?.artist && local.artist !== (ctSong.author  ?? '')) overrides.author    = local.artist
+      if (meta.copyright && meta.copyright !== (ctSong.copyright ?? '')) overrides.copyright = meta.copyright
+
+      if (Object.keys(overrides).length === 0) { skipped++; continue }
+      // Use PUT (not PATCH) — PATCH returns a server error on some CT songs
+      try { await ctPutSong(ctBaseUrl, ctToken, ctSong, overrides); updated++ } catch { skipped++ }
+    }
+
+    if (updated > 0) await syncCtBook()
+    exitSelectMode()
+    showBulkToast(
+      updated > 0
+        ? `Updated ${updated} CT song${updated !== 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} skipped` : ''}`
+        : `No changes needed — ${skipped} songs had no local match or already matched`
+    )
   }
 
   // ─── Create book ──────────────────────────────────────────────────────────────
@@ -739,7 +870,7 @@ export default function LibraryPage() {
                       </button>
                       {showOrganizeMenu && (
                         <>
-                          <div className="fixed inset-0 z-10" onClick={() => setShowOrganizeMenu(false)} />
+                          <div className="fixed inset-0 z-10" onClick={() => { setShowOrganizeMenu(false); setShowCtCategoryMenu(false) }} />
                           <div className="absolute right-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl py-1 min-w-[200px]">
                             {organizeTargets.length > 0 ? (
                               <>
@@ -770,7 +901,53 @@ export default function LibraryPage() {
                             ) : (
                               <p className="px-3 py-2 text-xs text-ink-faint">No other books or teams available</p>
                             )}
-                            {ctConfigured && (
+                            {/* CT-specific bulk ops — only when viewing a CT book */}
+                            {activeBookIsCT && ctConfigured && (
+                              <>
+                                <hr className="border-surface-3 my-1" />
+                                <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">ChurchTools</div>
+                                {/* Set category — inline expand */}
+                                <button
+                                  onClick={() => setShowCtCategoryMenu(v => !v)}
+                                  className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
+                                >
+                                  <FolderInput size={11} />
+                                  Set category…
+                                  <ChevronRight size={11} className={`ml-auto transition-transform ${showCtCategoryMenu ? 'rotate-90' : ''}`} />
+                                </button>
+                                {showCtCategoryMenu && ctCategories.length > 0 && (
+                                  <div className="border-t border-surface-3 pt-0.5 pb-0.5">
+                                    {ctCategories.map(cat => (
+                                      <button
+                                        key={cat.id}
+                                        onClick={() => bulkSetCtCategory(cat.id, cat.nameTranslated || cat.name)}
+                                        className="flex items-center w-full text-left pl-6 pr-3 py-1.5 text-xs text-ink-muted hover:bg-surface-3 hover:text-ink"
+                                      >
+                                        {cat.nameTranslated || cat.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* Push CCLI */}
+                                <button
+                                  onClick={bulkPushCcliToCT}
+                                  className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
+                                >
+                                  <Hash size={11} />
+                                  Push CCLI to ChurchTools
+                                </button>
+                                {/* Fill from local songs */}
+                                <button
+                                  onClick={bulkFillFromLocalSongs}
+                                  className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
+                                >
+                                  <RefreshCw size={11} />
+                                  Fill from local songs
+                                </button>
+                              </>
+                            )}
+                            {/* Upload to CT — only when NOT in a CT book */}
+                            {ctConfigured && !activeBookIsCT && (
                               <>
                                 <hr className="border-surface-3 my-1" />
                                 <button
@@ -887,6 +1064,8 @@ export default function LibraryPage() {
                   <SongRow
                     key={song.id}
                     song={song}
+                    book={bookMap[song.bookId]}
+                    showMeta={query.trim().length > 0}
                     navigate={navigate}
                     readOnly={readOnly}
                     selectMode={selectMode}
@@ -921,9 +1100,11 @@ export default function LibraryPage() {
 }
 
 function SongRow({
-  song, navigate, readOnly, selectMode, selected, onToggleSelect
+  song, book, showMeta, navigate, readOnly, selectMode, selected, onToggleSelect
 }: {
   song: Song
+  book?: Book
+  showMeta?: boolean
   navigate: (path: string) => void
   readOnly?: boolean
   selectMode?: boolean
@@ -946,6 +1127,11 @@ function SongRow({
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm truncate">{song.title}</div>
         <div className="text-xs text-ink-muted truncate">{song.artist || '—'}</div>
+        {showMeta && book && (
+          <div className="text-xs text-amber-600 truncate">
+            {book.title} · {new Date(song.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
         {song.transcription.key && (
