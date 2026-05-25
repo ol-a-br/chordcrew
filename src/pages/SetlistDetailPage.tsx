@@ -6,7 +6,7 @@ import {
   GripVertical, Trash2, Plus, Search, Copy,
   ChevronUp, ChevronDown, Printer, Link2, AlertTriangle, FileDown, Upload,
 } from 'lucide-react'
-import { db, generateId, markPending } from '@/db'
+import { db, generateId, markPending, linkSongs } from '@/db'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/shared/Button'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
@@ -360,8 +360,10 @@ export default function SetlistDetailPage() {
     setAddSongDialog(null)
     if (copyToTeam && targetBook) {
       const newId = generateId()
-      await db.songs.add({ ...song, id: newId, bookId: targetBook.id, updatedAt: Date.now(), accessedAt: undefined })
+      await db.songs.add({ ...song, id: newId, bookId: targetBook.id, updatedAt: Date.now(), accessedAt: undefined, linkedSongIds: [song.id] })
+      await linkSongs(song.id, newId)
       await markPending('song', newId)
+      await markPending('song', song.id)
       await addSong(newId)
     } else {
       await addSong(song.id)

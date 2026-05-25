@@ -8,7 +8,7 @@ import {
   RefreshCw, Cloud, Hash,
 } from 'lucide-react'
 import ccliMapping from '../../data/ccli_mapping.json'
-import { db, generateId, markPending, markDeleted, getTeamRole } from '@/db'
+import { db, generateId, markPending, markDeleted, getTeamRole, linkSongs } from '@/db'
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { Button } from '@/components/shared/Button'
 import { buildSearchText, extractMeta } from '@/utils/chordpro'
@@ -339,9 +339,14 @@ export default function LibraryPage() {
       savedAt: now, updatedAt: now,
       accessedAt: undefined as number | undefined,
       searchText: buildSearchText(song.title, song.artist, song.tags, song.transcription.content),
+      linkedSongIds: [song.id],
     }))
     await db.songs.bulkAdd(newSongs)
-    for (const s of newSongs) await markPending('song', s.id)
+    for (let i = 0; i < songs.length; i++) {
+      await linkSongs(songs[i].id, newSongs[i].id)
+      await markPending('song', newSongs[i].id)
+      await markPending('song', songs[i].id)
+    }
     exitSelectMode()
     // Navigate to the target context
     if (targetType === 'team') handleTeamClick(targetId)
