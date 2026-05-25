@@ -16,7 +16,7 @@ import { useAuth } from '@/auth/AuthContext'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import { ctDeleteSong, ctUpdateSong, ctGetAllSongs, ctPutSong } from '@/churchtools/api'
 import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
-import type { Song } from '@/types'
+import type { Song, Book } from '@/types'
 
 type SortKey = 'title' | 'artist' | 'updatedAt' | 'savedAt' | 'accessedAt'
 
@@ -117,6 +117,12 @@ export default function LibraryPage() {
     const map: Record<string, string> = {}
     ;(books ?? []).forEach(b => { if (b.sharedTeamId) map[b.id] = b.sharedTeamId })
     return map
+  }, [books])
+
+  const bookMap = useMemo(() => {
+    const m: Record<string, Book> = {}
+    ;(books ?? []).forEach(b => { m[b.id] = b })
+    return m
   }, [books])
 
   // Role for the active context (team or personal)
@@ -1058,6 +1064,8 @@ export default function LibraryPage() {
                   <SongRow
                     key={song.id}
                     song={song}
+                    book={bookMap[song.bookId]}
+                    showMeta={query.trim().length > 0}
                     navigate={navigate}
                     readOnly={readOnly}
                     selectMode={selectMode}
@@ -1092,9 +1100,11 @@ export default function LibraryPage() {
 }
 
 function SongRow({
-  song, navigate, readOnly, selectMode, selected, onToggleSelect
+  song, book, showMeta, navigate, readOnly, selectMode, selected, onToggleSelect
 }: {
   song: Song
+  book?: Book
+  showMeta?: boolean
   navigate: (path: string) => void
   readOnly?: boolean
   selectMode?: boolean
@@ -1117,6 +1127,11 @@ function SongRow({
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm truncate">{song.title}</div>
         <div className="text-xs text-ink-muted truncate">{song.artist || '—'}</div>
+        {showMeta && book && (
+          <div className="text-xs text-amber-600 truncate">
+            {book.title} · {new Date(song.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
         {song.transcription.key && (
