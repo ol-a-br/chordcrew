@@ -312,4 +312,79 @@ ChordCrew can push songs and setlists to a ChurchTools instance. The ChurchTools
 
 ---
 
-*Last updated: 2026-04-24*
+## REQ-LINKED — Linked Song Copies
+
+When a personal song is copied into a team book the two instances immediately begin to diverge independently. This feature tracks the relationship, detects drift, and lets the user reconcile them manually.
+
+### Resolved design decisions
+
+| # | Decision | Resolution |
+|---|----------|------------|
+| D1 | **Sync direction** | **Automatic: newer `updatedAt` wins.** The sync dialog reports which copy is newer and which will be overwritten ("Book A · updated 3 days ago → overwrites → Book B · updated 2 weeks ago"). User confirms or cancels. Before overwriting, `upsertSongVersions` is called on the target so the displaced content lands in its 3-snapshot version history and can be restored from the Editor. |
+| D2 | **Sync scope** | **Full sync** — all song fields (content, key, tempo, capo, title, artist, tags) are written on sync. |
+| D3 | **Key differences as divergence** | **Skip key for detection only.** `transcription.key` differences do not trigger the divergence badge. The divergence check compares `transcription.content` (normalised whitespace) plus title/artist/tags/tempo/capo. Key is still written on a confirmed sync (full sync, D2). |
+| D4 | **N-way copies** | **Many links allowed.** `linkedSongIds: string[]` on each song. Sync is always pairwise; when multiple copies exist the dialog asks the user to pick which pair to reconcile first. |
+| D5 | **Indicator placement** | **Library, Editor, and Viewer** (not Performance/presentation mode). |
+| D6 | **Unlinking** | **No unlink action.** If the user wants independent copies they can duplicate the song instead. Removes LINKED-CUR04 from scope. |
+| D7 | **Retroactive linking** | **Both options**: (a) Jaccard-based suggestions (reuse existing duplicate detection) with user confirmation, and (b) free-text search-and-select for songs that fall below the similarity threshold. |
+
+### REQ-LINKED-DATA — Data model
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-D01 | `Song` gains an optional `linkedSongIds?: string[]` field — the IDs of all other copies of this song across books. | planned |
+| LINKED-D02 | Dexie schema bumped to version 5; `songs` table adds `*linkedSongIds` multi-entry index so copies can be found by querying any linked ID. | planned |
+| LINKED-D03 | A link is always bidirectional: when song A lists song B in its `linkedSongIds`, song B must also list song A. Write helpers in `db/index.ts` enforce this atomically (`linkSongs(idA, idB)` / `unlinkSongs(idA, idB)`). | planned |
+| LINKED-D04 | `linkedSongIds` is included in the Firestore sync payload so links survive across devices and team members. | planned |
+
+### REQ-LINKED-COPY — Copy-to-team creates a link
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-C01 | The "Copy to team & add to setlist" action in `SetlistDetailPage` sets `linkedSongIds` on both the original personal song and the new team copy at creation time. | planned |
+| LINKED-C02 | Any future copy path (e.g. bulk copy via Library Organize) must also establish the link at creation time. | planned |
+
+### REQ-LINKED-DETECT — Divergence detection
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-DET01 | Two linked songs are considered **diverged** when any of the following differ (after normalising whitespace): `transcription.content`, `title`, `artist`, `tags`, `transcription.tempo`, `transcription.capo`. `transcription.key` is **excluded** from divergence detection (key differences are intentional). | planned |
+| LINKED-DET02 | Divergence is computed client-side on the fly from Dexie data; no background job or server round-trip. | planned |
+| LINKED-DET03 | A song with no linked counterpart in local Dexie (the linked ID is missing — deleted or not yet synced) is shown with a "link broken" indicator rather than a divergence badge. | planned |
+
+### REQ-LINKED-IND — Unobtrusive indicator
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-IND01 | A small icon badge appears on the song row in **Library** when any linked copy has diverged. Badge is amber-coloured (`GitCompare` or similar icon); tooltip names the diverged copy's book. | planned |
+| LINKED-IND02 | The same badge appears in the **Editor** toolbar. Clicking it opens the sync dialog directly. | planned |
+| LINKED-IND03 | The same badge appears in the **Viewer** toolbar. Clicking it opens the sync dialog. Badge is absent in Performance/presentation mode. | planned |
+| LINKED-IND04 | The badge is suppressed if the user has no linked copies or all linked copies are identical. | planned |
+| LINKED-IND05 | A "link broken" variant (grey, chain-broken icon) appears when a linked ID no longer resolves to a song in local Dexie. | planned |
+
+### REQ-LINKED-SYNC — Manual sync dialog
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-S01 | Clicking the divergence badge opens a modal "Sync Copies" dialog. | planned |
+| LINKED-S02 | When there are multiple linked copies, the user first picks which pair to reconcile (dropdown or list); then continues to the diff view for that pair. | planned |
+| LINKED-S03 | The dialog shows a stacked diff: fields that differ are highlighted (amber); identical fields are collapsed. Each side shows the book name and last-modified date. | planned |
+| LINKED-S04 | Direction is determined automatically: the copy with the higher `updatedAt` is labelled "newer" and will overwrite the other. The dialog states this clearly: *"[Book A] · updated 3 days ago → will overwrite → [Book B] · updated 2 weeks ago."* | planned |
+| LINKED-S05 | Before writing, `upsertSongVersions` is called on the song being overwritten so its current content is snapshotted into version history (max 3 rolling). This allows the user to restore the overwritten version from the Editor. | planned |
+| LINKED-S06 | On confirm, the target song is fully overwritten (all fields per D2), `updatedAt` is refreshed, and `markPending` is called so the change syncs to Firestore on the next manual sync. | planned |
+| LINKED-S07 | After sync both copies are identical; the divergence badge disappears immediately (reactive via `useLiveQuery`). | planned |
+
+### REQ-LINKED-CUR — Curation: Linked Copies tab
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-CUR01 | A new "Linked Copies" tab is added to `CurationPage` alongside Duplicates / Parse Errors / Export. | planned |
+| LINKED-CUR02 | The tab lists all linked song pairs/groups, grouped by link cluster. Each entry shows: song titles, book names, last-modified dates, and a divergence status badge (in-sync / diverged / link broken). | planned |
+| LINKED-CUR03 | A "Sync" button on each diverged group opens the same sync dialog as LINKED-S01. | planned |
+| LINKED-CUR04 | *(removed — no unlink action, D6)* | — |
+| LINKED-CUR05 | A "Connect songs" action allows the user to retroactively link two songs. **Option A**: Jaccard-based suggestions (songs in different books with title similarity ≥ 0.75) are listed with a "Link" button per candidate pair. **Option B**: free-text search-and-select for songs below the threshold. Both options create the bidirectional link. | planned |
+| LINKED-CUR06 | Songs surfaced by the existing Jaccard duplicate finder that live in **different books** are flagged as "possible linked copy?" with a one-click "Link" button. Same-book duplicates retain the existing "delete" flow. | planned |
+
+---
+
+*Last updated: 2026-05-25 — REQ-LINKED decisions D1–D7 resolved*
