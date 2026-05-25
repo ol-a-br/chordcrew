@@ -16,6 +16,9 @@ import { useAuth } from '@/auth/AuthContext'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import { ctDeleteSong, ctUpdateSong, ctGetAllSongs, ctPutSong } from '@/churchtools/api'
 import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
+import { getLinkStatus, resolveLinkedSongs } from '@/utils/linkedSongs'
+import { LinkStatusBadge } from '@/components/songs/LinkStatusBadge'
+import { SyncCopiesDialog } from '@/components/songs/SyncCopiesDialog'
 import type { Song, Book } from '@/types'
 
 type SortKey = 'title' | 'artist' | 'updatedAt' | 'savedAt' | 'accessedAt'
@@ -47,6 +50,7 @@ export default function LibraryPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
+  const [syncDialogSong, setSyncDialogSong] = useState<Song | null>(null)
   const [activeBookId, setActiveBookId] = useState<string | 'all' | 'favorites'>('all')
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -124,6 +128,16 @@ export default function LibraryPage() {
     ;(books ?? []).forEach(b => { m[b.id] = b })
     return m
   }, [books])
+
+  const songMap = useMemo(() => new Map((allSongs ?? []).map(s => [s.id, s])), [allSongs])
+
+  const linkStatusMap = useMemo(() => {
+    const m = new Map<string, import('@/utils/linkedSongs').LinkStatus>()
+    for (const s of allSongs ?? []) {
+      m.set(s.id, getLinkStatus(s, songMap))
+    }
+    return m
+  }, [allSongs, songMap])
 
   // Role for the active context (team or personal)
   const activeTeamRole = useMemo(() => {
@@ -1071,6 +1085,10 @@ export default function LibraryPage() {
                     song={song}
                     book={bookMap[song.bookId]}
                     showMeta={query.trim().length > 0}
+                    linkStatus={linkStatusMap.get(song.id) ?? 'none'}
+                    songMap={songMap}
+                    bookMap={bookMap}
+                    onSyncClick={() => setSyncDialogSong(song)}
                     navigate={navigate}
                     readOnly={readOnly}
                     selectMode={selectMode}
@@ -1100,16 +1118,30 @@ export default function LibraryPage() {
         onClose={() => { setShowCtUpload(false); setCtUploadSongs([]) }}
       />
     )}
+
+    {syncDialogSong && (
+      <SyncCopiesDialog
+        song={syncDialogSong}
+        linkedSongs={(syncDialogSong.linkedSongIds ?? []).flatMap(id => songMap.get(id) ? [songMap.get(id)!] : [])}
+        books={books ?? []}
+        onClose={() => setSyncDialogSong(null)}
+      />
+    )}
     </>
   )
 }
 
 function SongRow({
-  song, book, showMeta, navigate, readOnly, selectMode, selected, onToggleSelect
+  song, book, showMeta, linkStatus, songMap, bookMap, onSyncClick,
+  navigate, readOnly, selectMode, selected, onToggleSelect
 }: {
   song: Song
   book?: Book
   showMeta?: boolean
+  linkStatus?: import('@/utils/linkedSongs').LinkStatus
+  songMap?: Map<string, Song>
+  bookMap?: Record<string, Book>
+  onSyncClick?: () => void
   navigate: (path: string) => void
   readOnly?: boolean
   selectMode?: boolean
@@ -1148,6 +1180,16 @@ function SongRow({
           <span className="text-xs text-ink-faint truncate max-w-[80px]">{song.tags[0]}</span>
         )}
         {song.isFavorite && <Star size={13} className="text-chord fill-chord" />}
+        {linkStatus && linkStatus !== 'none' && linkStatus !== 'in-sync' && !selectMode && (
+          <LinkStatusBadge
+            status={linkStatus}
+            bookNames={(song.linkedSongIds ?? [])
+              .flatMap(id => songMap?.get(id) ? [bookMap?.[songMap.get(id)!.bookId]?.title ?? ''] : [])
+              .filter(Boolean)}
+            onClick={onSyncClick}
+            size="sm"
+          />
+        )}
         {!readOnly && !selectMode && (
           <button
             className="text-ink-faint hover:text-ink opacity-0 group-hover:opacity-100 p-1"

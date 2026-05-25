@@ -12,7 +12,10 @@ import { useAuth } from '@/auth/AuthContext'
 import { NotesPanel } from '@/components/shared/NotesPanel'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
-import type { SetlistItem, Book } from '@/types'
+import { getLinkStatus } from '@/utils/linkedSongs'
+import { LinkStatusBadge } from '@/components/songs/LinkStatusBadge'
+import { SyncCopiesDialog } from '@/components/songs/SyncCopiesDialog'
+import type { SetlistItem, Book, Song } from '@/types'
 
 export default function ViewerPage() {
   const { id } = useParams<{ id: string }>()
@@ -21,6 +24,7 @@ export default function ViewerPage() {
   const { user } = useAuth()
   const { isConfigured: ctConfigured } = useChurchTools()
   const [showCtUpload, setShowCtUpload] = useState(false)
+  const [showSyncDialog, setShowSyncDialog] = useState(false)
   const song = useLiveQuery(() => id ? db.songs.get(id) : undefined, [id])
 
   const setlistId = searchParams.get('setlistId')
@@ -51,6 +55,26 @@ export default function ViewerPage() {
   // Book for team ID (needed by notes panel)
   const book = useLiveQuery(() => song?.bookId ? db.books.get(song.bookId) : undefined, [song?.bookId])
   const teamId = book?.sharedTeamId
+
+  const viewerLinkedSongs = useLiveQuery(async (): Promise<Song[]> => {
+    if (!song?.linkedSongIds?.length) return []
+    const found = await Promise.all(song.linkedSongIds.map(lid => db.songs.get(lid)))
+    return found.filter((s): s is Song => !!s)
+  }, [song?.id, song?.linkedSongIds?.join(',')])
+
+  const allViewerBooks = useLiveQuery(() => db.books.toArray(), [])
+
+  const viewerSongMap = useMemo(() => {
+    const m = new Map<string, Song>()
+    if (song) m.set(song.id, song)
+    viewerLinkedSongs?.forEach(s => m.set(s.id, s))
+    return m
+  }, [song, viewerLinkedSongs])
+
+  const viewerLinkStatus = useMemo(
+    () => song ? getLinkStatus(song, viewerSongMap) : 'none',
+    [song, viewerSongMap]
+  )
 
   // Setlist context for prev/next navigation
   // Track last-accessed time for "recently accessed" sort in library
@@ -453,6 +477,13 @@ export default function ViewerPage() {
           <Star size={16} className={song.isFavorite ? 'text-chord fill-chord' : 'text-ink-muted'} />
         </button>
 
+        {/* Linked copy divergence badge */}
+        <LinkStatusBadge
+          status={viewerLinkStatus}
+          bookNames={(viewerLinkedSongs ?? []).map(s => allViewerBooks?.find(b => b.id === s.bookId)?.title ?? '')}
+          onClick={() => setShowSyncDialog(true)}
+        />
+
         {/* Notes toggle */}
         {user && (
           <button
@@ -623,6 +654,15 @@ export default function ViewerPage() {
 
     {showCtUpload && song && (
       <SongUploadDialog songs={[song]} onClose={() => setShowCtUpload(false)} />
+    )}
+
+    {showSyncDialog && song && (
+      <SyncCopiesDialog
+        song={song}
+        linkedSongs={viewerLinkedSongs ?? []}
+        books={allViewerBooks ?? []}
+        onClose={() => setShowSyncDialog(false)}
+      />
     )}
     </>
   )

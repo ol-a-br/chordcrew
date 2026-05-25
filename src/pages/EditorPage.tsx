@@ -5,14 +5,17 @@ import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2, Cloud, ExternalLi
 import { db, upsertSongVersions, markPending } from '@/db'
 import { deleteSongFromCloud, fetchTeamNoteIndicator } from '@/sync/firestoreSync'
 import { buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
+import { getLinkStatus } from '@/utils/linkedSongs'
 import { ChordProEditor } from '@/components/editor/ChordProEditor'
 import type { ChordProEditorHandle } from '@/components/editor/ChordProEditor'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
+import { LinkStatusBadge } from '@/components/songs/LinkStatusBadge'
+import { SyncCopiesDialog } from '@/components/songs/SyncCopiesDialog'
 import { useAuth } from '@/auth/AuthContext'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import { ctDeleteSong, ctUpdateSong, ctUpdateArrangement } from '@/churchtools/api'
-import type { SongVersion } from '@/types'
+import type { Song, SongVersion } from '@/types'
 
 const AUTOSAVE_DELAY_MS = 1000
 const VERSION_INTERVAL_MS = 5 * 60 * 1000  // create a version at most every 5 min
@@ -45,6 +48,7 @@ export default function EditorPage() {
   const [showExtraMeta, setShowExtraMeta] = useState(false)
   const [deletePhase, setDeletePhase] = useState<'idle' | 'confirm' | 'deleted'>('idle')
   const [teamHasNotes, setTeamHasNotes] = useState(false)
+  const [showSyncDialog, setShowSyncDialog] = useState(false)
   const deletedSongRef = useRef<typeof song | null>(null)
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
@@ -62,6 +66,26 @@ export default function EditorPage() {
       ? db.songVersions.where('songId').equals(id).sortBy('savedAt')
       : [],
     [id]
+  )
+
+  const linkedSongs = useLiveQuery(async (): Promise<Song[]> => {
+    if (!song?.linkedSongIds?.length) return []
+    const found = await Promise.all(song.linkedSongIds.map(lid => db.songs.get(lid)))
+    return found.filter((s): s is Song => !!s)
+  }, [song?.id, song?.linkedSongIds?.join(',')])
+
+  const allBooks = useLiveQuery(() => db.books.toArray(), [])
+
+  const editorSongMap = useMemo(() => {
+    const m = new Map<string, Song>()
+    if (song) m.set(song.id, song)
+    linkedSongs?.forEach(s => m.set(s.id, s))
+    return m
+  }, [song, linkedSongs])
+
+  const linkStatus = useMemo(
+    () => song ? getLinkStatus(song, editorSongMap) : 'none',
+    [song, editorSongMap]
   )
 
   // ── Team note indicator ───────────────────────────────────────────────────
@@ -273,6 +297,7 @@ export default function EditorPage() {
   }
 
   return (
+    <>
     <div className="flex flex-col h-full">
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-surface-3 bg-surface-1 shrink-0">
@@ -319,6 +344,11 @@ export default function EditorPage() {
             CT
           </span>
         )}
+        <LinkStatusBadge
+          status={linkStatus}
+          bookNames={(linkedSongs ?? []).map(s => allBooks?.find(b => b.id === s.bookId)?.title ?? '')}
+          onClick={() => setShowSyncDialog(true)}
+        />
         {deletePhase === 'confirm' ? (
           <>
             <span className="text-xs text-red-400 font-medium">Delete this song?</span>
@@ -559,5 +589,15 @@ export default function EditorPage() {
         )}
       </div>
     </div>
+
+    {showSyncDialog && song && (
+      <SyncCopiesDialog
+        song={song}
+        linkedSongs={linkedSongs ?? []}
+        books={allBooks ?? []}
+        onClose={() => setShowSyncDialog(false)}
+      />
+    )}
+    </>
   )
 }
