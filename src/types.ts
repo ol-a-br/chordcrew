@@ -47,6 +47,7 @@ export interface Song {
   accessedAt?: number       // last time the song was opened in viewer (for "recently accessed" sort)
   ctSongId?: number         // ChurchTools song ID (set only for CT-backed songs)
   ctArrangementId?: number  // ChurchTools arrangement ID (default arrangement of ctSongId)
+  linkedSongIds?: string[]  // IDs of linked copies in other books (bidirectional)
   transcription: Transcription
 }
 

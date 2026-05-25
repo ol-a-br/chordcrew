@@ -48,6 +48,11 @@ export class ChordCrewDB extends Dexie {
     this.version(4).stores({
       songs: 'id, bookId, title, artist, isFavorite, updatedAt, *tags, ctSongId',
     })
+
+    // Version 5: linkedSongIds multi-entry index for cross-book copy tracking
+    this.version(5).stores({
+      songs: 'id, bookId, title, artist, isFavorite, updatedAt, *tags, ctSongId, *linkedSongIds',
+    })
   }
 }
 
@@ -196,6 +201,46 @@ export async function saveSongNote(songId: string, userId: string, content: stri
 
 export async function deleteSongNote(songId: string, userId: string): Promise<void> {
   await db.songNotes.delete(`${userId}:${songId}`)
+}
+
+// ─── Linked song copy helpers ─────────────────────────────────────────────────
+
+/**
+ * Establish a bidirectional link between two songs.
+ * Safe to call multiple times — adding an already-present ID is a no-op.
+ */
+export async function linkSongs(idA: string, idB: string): Promise<void> {
+  await db.transaction('rw', db.songs, async () => {
+    const [a, b] = await Promise.all([db.songs.get(idA), db.songs.get(idB)])
+    if (!a || !b) return
+    const aLinks = new Set(a.linkedSongIds ?? [])
+    const bLinks = new Set(b.linkedSongIds ?? [])
+    if (!aLinks.has(idB)) {
+      aLinks.add(idB)
+      await db.songs.update(idA, { linkedSongIds: [...aLinks] })
+    }
+    if (!bLinks.has(idA)) {
+      bLinks.add(idA)
+      await db.songs.update(idB, { linkedSongIds: [...bLinks] })
+    }
+  })
+}
+
+/**
+ * Remove the bidirectional link between two songs.
+ */
+export async function unlinkSongs(idA: string, idB: string): Promise<void> {
+  await db.transaction('rw', db.songs, async () => {
+    const [a, b] = await Promise.all([db.songs.get(idA), db.songs.get(idB)])
+    if (a) {
+      const links = (a.linkedSongIds ?? []).filter(id => id !== idB)
+      await db.songs.update(idA, { linkedSongIds: links.length ? links : undefined })
+    }
+    if (b) {
+      const links = (b.linkedSongIds ?? []).filter(id => id !== idA)
+      await db.songs.update(idB, { linkedSongIds: links.length ? links : undefined })
+    }
+  })
 }
 
 // ─── Re-export Team types used by helpers ────────────────────────────────────
