@@ -294,7 +294,10 @@ export function SongRenderer({
         if (!prevLyricsEl || !nextLyricsEl) { i++; continue }
         const prevLyrics = prevLyricsEl.textContent ?? ''
         const nextLyrics = nextLyricsEl.textContent ?? ''
-        const isMidWord = prevLyrics.length > 0
+        const prevChordEl = cols[i].querySelector('.chord')
+        const prevChordEmpty = !prevChordEl || prevChordEl.textContent?.trim() === ''
+        const isMidWord = prevChordEmpty   // only repair chordsheetjs auto-splits (empty-chord cols)
+          && prevLyrics.length > 0
           && !prevLyrics.endsWith(' ')
           && !nextLyrics.startsWith(' ')
           && nextLyrics.length > 0
@@ -304,8 +307,7 @@ export function SongRenderer({
           const prefix    = lastSpace === -1 ? ''         : prevLyrics.slice(0, lastSpace + 1)
           nextLyricsEl.textContent = wordStart + nextLyrics
           prevLyricsEl.textContent = prefix
-          const prevChordEl = cols[i].querySelector('.chord')
-          if (!prefix && (!prevChordEl || prevChordEl.textContent?.trim() === '')) {
+          if (!prefix && prevChordEmpty) {
             cols[i].remove()
           } else {
             i++
@@ -331,6 +333,15 @@ export function SongRenderer({
     container.querySelectorAll<HTMLElement>('.row').forEach(row => {
       if (row.classList.contains('section-header-row')) return
       const cols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
+      // Chord-only rows (e.g. an instrumental "[Em] [D] [Cmaj7]" line) have no
+      // lyrics at all -- chordsheetjs drops the spaces between brackets, leaving
+      // every column's lyrics empty. Browsers size a ruby's box to fit the wider
+      // of base/rt (here, the rt), so adjacent rubies abut with exactly 0px
+      // between them -- the base's width contributes nothing, so padding its
+      // text doesn't help. Give the ruby element itself a margin-right instead,
+      // only for chord-only rows -- a normal lyric line must never get extra
+      // spacing injected between chord stacks like [C][G]word.
+      const isChordOnlyRow = cols.every(col => (col.querySelector('.lyrics')?.textContent ?? '') === '')
       cols.forEach((col, idx) => {
         const chordEl  = col.querySelector('.chord')
         const lyricsEl = col.querySelector('.lyrics')
@@ -343,6 +354,9 @@ export function SongRenderer({
           rt.innerHTML = chordEl.innerHTML   // preserves quality/bass child spans
         }
         ruby.appendChild(rt)
+        if (isChordOnlyRow && idx < cols.length - 1) {
+          ruby.style.marginRight = '0.75em'
+        }
         col.replaceWith(ruby)
         if (idx < cols.length - 1) {
           ruby.insertAdjacentElement('afterend', document.createElement('wbr'))

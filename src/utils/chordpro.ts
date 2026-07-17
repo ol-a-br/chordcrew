@@ -108,7 +108,14 @@ export function renderToHtml(content: string, transposeOffset = 0): string {
     })
   }
 
-  const formatter = new HtmlDivFormatter()
+  // chordsheetjs's Html formatters auto-transpose chords by -capo semitones and
+  // re-normalize chord suffixes (e.g. "Cmaj7" → "Cma7") at render time whenever a
+  // {capo} directive is present — regardless of any transpose we already applied.
+  // ChordCrew treats {capo} as informational only (shown via a separate "Capo N"
+  // helper in the UI); the chords in the body are what should render, verbatim.
+  song = song.setCapo(null)
+
+  const formatter = new HtmlDivFormatter({ normalizeChords: false })
   return formatter.format(song)
 }
 
@@ -119,7 +126,8 @@ export function renderToText(content: string, transposeOffset = 0): string {
   if (transposeOffset !== 0) {
     song = song.transpose(transposeOffset)
   }
-  return new TextFormatter().format(song)
+  song = song.setCapo(null)
+  return new TextFormatter({ normalizeChords: false }).format(song)
 }
 
 // ─── Extract metadata from ChordPro ──────────────────────────────────────────
@@ -312,7 +320,11 @@ export function buildSearchText(
 
 // ─── Standard chord names (for validation hints) ─────────────────────────────
 
-const ROOTS = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
+// Includes the rare theoretical naturals (Cb, Fb, E#, B#) that show up when
+// transposing into keys with extreme flat/sharp signatures — e.g. transposing
+// a G major song down a half-step to Gb major respells the IV chord "Cmaj7"
+// as "Cbmaj7" (Gb major's key signature uses Cb, not B).
+const ROOTS = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'E#', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B', 'B#', 'Cb', 'Fb']
 const QUALITIES = [
   '', 'm', 'maj7', 'm7', '7', 'sus', 'sus2', 'sus4', 'dim', 'aug',
   'add9', 'add2', 'add4', 'add11', '6', '9', '11', '13',
