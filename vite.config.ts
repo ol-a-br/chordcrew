@@ -43,8 +43,18 @@ export default defineConfig({
         // SPA fallback: serve index.html for all navigation requests that don't
         // match a cached file. Without this, deep links (e.g. /setlists/:id)
         // return 404 when the installed PWA or a hard-reload intercepts the request.
+        //
+        // /__/ is excluded because Firebase Hosting reserves it for its own
+        // infrastructure pages — notably /__/auth/handler and /__/auth/iframe,
+        // which Firebase Auth navigates to as part of signInWithRedirect. Without
+        // this exclusion, the service worker intercepts that top-level navigation
+        // and serves our cached SPA shell instead of Firebase's real OAuth relay
+        // page, so the redirect never completes and sign-in hangs on "Loading…"
+        // forever. Confirmed via curl (bypasses the SW, returns Firebase's actual
+        // handler.js page) vs. an in-browser navigation with the SW active
+        // (returns our index.html) to the identical /__/auth/handler URL.
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/ct-api\//, /\.json$/],
+        navigateFallbackDenylist: [/^\/api\//, /^\/ct-api\//, /\.json$/, /^\/__\//],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
