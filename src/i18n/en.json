@@ -13,7 +13,12 @@
     "signOut": "Sign out",
     "welcome": "Welcome to ChordCrew",
     "subtitle": "Your worship team's chord library — online and offline",
-    "localMode": "Running in local mode (no Firebase configured)"
+    "localMode": "Running in local mode (no Firebase configured)",
+    "signInError_popup-blocked": "Sign-in blocked — please allow pop-ups for this site and try again.",
+    "signInError_cancelled": "Sign-in cancelled.",
+    "signInError_network": "Sign-in failed — check your internet connection.",
+    "signInError_unauthorized-domain": "Sign-in failed — this domain is not authorised. Contact the app administrator.",
+    "signInError_default": "Sign-in failed. Please try again."
   },
   "library": {
     "allSongs": "All Songs",
@@ -87,6 +92,43 @@
     },
     "syncNow": "Sync Now",
     "lastSync": "Last sync: {{time}}"
+  },
+  "onboarding": {
+    "signInTitle": "Sign in to unlock sync & teams",
+    "benefit1": "Access your songs on any device — phone, tablet, or laptop",
+    "benefit2": "Share setlists and songs with your worship team",
+    "benefit3": "Your data is always backed up to the cloud",
+    "privacyNote": "We only use your Google account for authentication. No data is shared with third parties.",
+    "dataNoticeTitle": "Please note before you start",
+    "dataNotice": "Do not store sensitive personal data (contact details, addresses, or any data requiring protection) in this app. ChordCrew is a volunteer project — there is no company behind it, no professional support, and no guarantee against data loss or service interruption.",
+    "skipLogin": "Continue without signing in",
+    "continueLocal": "Continue in local mode",
+    "signInError": "Sign-in failed. Please try again.",
+    "skip": "Skip",
+    "next": "Next",
+    "getStarted": "Get started",
+    "slide1Title": "Your song library",
+    "slide1Desc": "Store all your ChordPro songs in organised books. Search by title, artist, key, or tag.",
+    "slide2Title": "Editor & live preview",
+    "slide2Desc": "Write and edit songs in ChordPro format with a side-by-side preview. Transpose with one click.",
+    "slide3Title": "Setlists",
+    "slide3Desc": "Build service setlists, reorder songs, and present them in full-screen performance mode.",
+    "slide4Title": "Performance mode",
+    "slide4Desc": "Full-screen display with pedal navigation support. Keep your hands on your instrument."
+  },
+  "feedback": {
+    "title": "Feedback",
+    "subtitle": "Help us improve ChordCrew",
+    "starsLabel": "How would you rate your experience?",
+    "categoryLabel": "Category",
+    "categoryGeneral": "General feedback",
+    "categoryBug": "Bug report",
+    "categoryFeature": "Feature request",
+    "messagePlaceholder": "Tell us more… what worked well, what's missing, what confused you?",
+    "submit": "Send feedback",
+    "submitted": "Thank you — your feedback was sent!",
+    "requiresAuth": "Sign in to submit feedback.",
+    "error": "Could not send feedback. Please try again."
   },
   "common": {
     "save": "Save",

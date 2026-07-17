@@ -1,5 +1,43 @@
 import { useMemo, useRef, useEffect } from 'react'
-import { renderToHtml, isKnownChord } from '@/utils/chordpro'
+import { renderToHtml, isKnownChord, expandRepeatSections, transposeKey, transposeChordName, extractMeta } from '@/utils/chordpro'
+
+// ─── Module-level render cache ────────────────────────────────────────────────
+// Persists across component remounts for the session lifetime.
+// Key: `${transposeOffset}|${expandRepeats}|${content}` — putting content last
+// means short prefixes separate different settings of the same song quickly.
+const renderCache = new Map<string, string>()
+
+export function isSongCached(content: string, transposeOffset: number, expandRepeats: boolean): boolean {
+  const key = `${transposeOffset}|${expandRepeats ? 1 : 0}|${content}`
+  return renderCache.has(key)
+}
+
+export function getCachedHtml(content: string, transposeOffset: number, expandRepeats: boolean): string {
+  const key = `${transposeOffset}|${expandRepeats ? 1 : 0}|${content}`
+  const cached = renderCache.get(key)
+  if (cached !== undefined) return cached
+  const processed = expandRepeats ? expandRepeatSections(content) : content
+  const html = renderToHtml(processed, transposeOffset)
+  renderCache.set(key, html)
+  return html
+}
+
+/**
+ * Pre-render a song's HTML in the background so the cache is warm before
+ * the user navigates to it. Call after the current song has rendered.
+ */
+export function prewarmSongCache(
+  content: string,
+  transposeOffset: number,
+  expandRepeats: boolean
+): void {
+  const key = `${transposeOffset}|${expandRepeats ? 1 : 0}|${content}`
+  if (renderCache.has(key)) return
+  // Use setTimeout(0) rather than requestIdleCallback: on Android under wake lock
+  // the browser is rarely idle, so rIC with a 2s timeout could defer the parse
+  // until right before the user swipes — defeating the warm-cache strategy.
+  setTimeout(() => getCachedHtml(content, transposeOffset, expandRepeats), 0)
+}
 import type { ChordProError } from '@/utils/chordpro'
 import { clsx } from 'clsx'
 import { AlertTriangle } from 'lucide-react'
@@ -11,9 +49,12 @@ interface SongRendererProps {
   lyricsOnly?: boolean
   fontScale?: number
   pageFlip?: boolean
+  expandRepeats?: boolean   // expand empty repeat sections with first-occurrence content
   className?: string
   errors?: ChordProError[]
   onJumpToLine?: (line: number) => void
+  songKey?: string           // transposed key — injected as meta line below title/subtitle
+  tempo?: number             // BPM — injected alongside songKey
 }
 
 /** Terms (lowercase) that identify a chorus section by label text */
@@ -48,15 +89,19 @@ export function SongRenderer({
   lyricsOnly = false,
   fontScale = 1,
   pageFlip = false,
+  expandRepeats = false,
   className,
   errors,
   onJumpToLine,
+  songKey,
+  tempo,
 }: SongRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // Use module-level cache — cache hits are instant even after component remount
   const html = useMemo(
-    () => renderToHtml(content, transposeOffset),
-    [content, transposeOffset]
+    () => getCachedHtml(content, transposeOffset, expandRepeats ?? false),
+    [content, transposeOffset, expandRepeats]
   )
 
   useEffect(() => {
@@ -64,7 +109,7 @@ export function SongRenderer({
     if (!container) return
 
     // ── Clear previous injections ─────────────────────────────────────────────
-    container.querySelectorAll('.section-badge').forEach(el => el.remove())
+    container.querySelectorAll('.section-badge, .song-meta-line').forEach(el => el.remove())
     container.querySelectorAll('.chorus-section, .section-header-row').forEach(el => {
       el.classList.remove('chorus-section', 'section-header-row')
     })
@@ -89,17 +134,17 @@ export function SongRenderer({
       return { letter, count: 1 }
     }
 
-    function makeBadgeHtml(letter: string, count: number): string {
-      return count === 1 ? letter : `${letter}${count}`
+    function createBadge(letter: string, count: number): HTMLSpanElement {
+      const badge = document.createElement('span')
+      badge.className = 'section-badge'
+      badge.textContent = count === 1 ? letter : `${letter}${count}`
+      return badge
     }
 
     function injectBadge(anchor: Element, sectionName: string): void {
       const { letter, count } = assignBadge(sectionName)
-      const badge = document.createElement('span')
-      badge.className = 'section-badge'
-      badge.innerHTML = makeBadgeHtml(letter, count)
       // Prepend inside anchor so badge + label text share the same inline baseline
-      anchor.prepend(badge)
+      anchor.prepend(createBadge(letter, count))
     }
 
     // ── Process each paragraph in document order ──────────────────────────────
@@ -154,10 +199,7 @@ export function SongRenderer({
 
       firstRow.classList.add('section-header-row')
       const { letter, count } = assignBadge(chordText)
-      const badge = document.createElement('span')
-      badge.className = 'section-badge'
-      badge.innerHTML = makeBadgeHtml(letter, count)
-      firstRow.insertBefore(badge, firstRow.firstChild)
+      firstRow.insertBefore(createBadge(letter, count), firstRow.firstChild)
 
       // If additional chord columns follow the section name, move them to a new row
       if (cols.length > 1) {
@@ -196,25 +238,128 @@ export function SongRenderer({
       // Split into root + quality modifier (slightly smaller, slightly raised)
       const { root, quality, bass } = splitChordName(text)
       if (!quality && !bass) return                     // plain root like 'A', 'G'
-      el.innerHTML =
-        `<span>${root}</span>` +
-        (quality ? `<span class="chord-quality">${quality}</span>` : '') +
-        (bass    ? `<span class="chord-bass">${bass}</span>` : '')
+      el.textContent = ''
+      const rootSpan = document.createElement('span')
+      rootSpan.textContent = root
+      el.appendChild(rootSpan)
+      if (quality) {
+        const qSpan = document.createElement('span')
+        qSpan.className = 'chord-quality'
+        qSpan.textContent = quality
+        el.appendChild(qSpan)
+      }
+      if (bass) {
+        const bSpan = document.createElement('span')
+        bSpan.className = 'chord-bass'
+        bSpan.textContent = bass
+        el.appendChild(bSpan)
+      }
     })
-    // ── Mid-word column spacing fix ───────────────────────────────────────────
-    // The .row flex container has column-gap:0.3em between ALL .column children.
-    // For chords placed inside a word (e.g. Vat[A]er), the gap inserts a visual
-    // space between "Vat" and "er". Detect these and cancel the gap with a
-    // negative margin-left. Gap is preserved when previous lyrics end in space
-    // (word boundary) or both lyric sides are empty (chord-only lines).
+    // ── Merge empty-chord columns into their predecessor ────────────────────
+    // chordsheetjs splits long lyrics text at the first word boundary, creating
+    // extra columns with empty chords.  E.g. [F]hello world → col(F,"hello ")
+    // + col("","world").  This creates tiny columns that wrap awkwardly on
+    // narrow screens.  Merge the empty-chord column's lyrics back into the
+    // predecessor so the text stays in a single column.
     container.querySelectorAll<HTMLElement>('.row').forEach(row => {
-      const rowCols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
-      rowCols.forEach((col, i) => {
-        if (i === 0) return
-        const prevLyrics = rowCols[i - 1].querySelector('.lyrics')?.textContent ?? ''
-        const thisLyrics = col.querySelector('.lyrics')?.textContent ?? ''
-        if (prevLyrics && !prevLyrics.endsWith(' ') && !thisLyrics.startsWith(' ')) {
-          col.style.marginLeft = '-0.3em'
+      const cols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
+      for (let i = cols.length - 1; i >= 1; i--) {
+        const chordEl = cols[i].querySelector('.chord')
+        if (chordEl && chordEl.textContent?.trim() === '') {
+          const prevLyricsEl = cols[i - 1].querySelector('.lyrics')
+          const thisLyricsEl = cols[i].querySelector('.lyrics')
+          if (prevLyricsEl && thisLyricsEl) {
+            prevLyricsEl.textContent = (prevLyricsEl.textContent ?? '') + (thisLyricsEl.textContent ?? '')
+          }
+          cols[i].remove()
+        }
+      }
+    })
+
+    // ── Word-boundary repair: move word-prefix into the chord column ─────────
+    // After empty-chord merging, a mid-word chord like Me[F]nschen still leaves:
+    //   col_i   = (chord="" | lyrics="Wo die Me")
+    //   col_i+1 = (chord=F  | lyrics="nschen zu Ihm flehn...")
+    // Moving "Me" into col_i+1 gives col_i "Wo die " (ends with space, wraps
+    // freely) and col_i+1 the full word "Menschen…".  This prevents the
+    // two-sub-column layout that halved the usable width.
+    container.querySelectorAll<HTMLElement>('.row').forEach(row => {
+      if (row.classList.contains('section-header-row')) return
+      let i = 0
+      while (true) {
+        const cols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
+        if (i >= cols.length - 1) break
+        const prevLyricsEl = cols[i].querySelector('.lyrics')
+        const nextLyricsEl = cols[i + 1].querySelector('.lyrics')
+        if (!prevLyricsEl || !nextLyricsEl) { i++; continue }
+        const prevLyrics = prevLyricsEl.textContent ?? ''
+        const nextLyrics = nextLyricsEl.textContent ?? ''
+        const prevChordEl = cols[i].querySelector('.chord')
+        const prevChordEmpty = !prevChordEl || prevChordEl.textContent?.trim() === ''
+        const isMidWord = prevChordEmpty   // only repair chordsheetjs auto-splits (empty-chord cols)
+          && prevLyrics.length > 0
+          && !prevLyrics.endsWith(' ')
+          && !nextLyrics.startsWith(' ')
+          && nextLyrics.length > 0
+        if (isMidWord) {
+          const lastSpace = prevLyrics.lastIndexOf(' ')
+          const wordStart = lastSpace === -1 ? prevLyrics : prevLyrics.slice(lastSpace + 1)
+          const prefix    = lastSpace === -1 ? ''         : prevLyrics.slice(0, lastSpace + 1)
+          nextLyricsEl.textContent = wordStart + nextLyrics
+          prevLyricsEl.textContent = prefix
+          if (!prefix && prevChordEmpty) {
+            cols[i].remove()
+          } else {
+            i++
+          }
+        } else {
+          i++
+        }
+      }
+    })
+
+    // ── Convert columns to native <ruby> elements for inline text flow ────────
+    // CSS flex columns force sub-column splitting on narrow screens.  Native
+    // <ruby> elements flow inline in the block row so lyrics from different
+    // chord positions share one text flow and wrap together at real word
+    // boundaries.  ruby-align:start (set in CSS) anchors each chord to the
+    // left edge of its base text, matching chord-sheet notation conventions.
+    //
+    // Safari/WebKit treats display:ruby as an atomic inline box — adjacent ruby
+    // elements have no break opportunity between them and lines overflow into
+    // the next CSS column.  We insert a <wbr> (word-break opportunity) after
+    // each ruby (except the last in the row) so the browser can wrap the line
+    // at chord-position boundaries when the column width is exceeded.
+    container.querySelectorAll<HTMLElement>('.row').forEach(row => {
+      if (row.classList.contains('section-header-row')) return
+      const cols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
+      // Chord-only rows (e.g. an instrumental "[Em] [D] [Cmaj7]" line) have no
+      // lyrics at all -- chordsheetjs drops the spaces between brackets, leaving
+      // every column's lyrics empty. Browsers size a ruby's box to fit the wider
+      // of base/rt (here, the rt), so adjacent rubies abut with exactly 0px
+      // between them -- the base's width contributes nothing, so padding its
+      // text doesn't help. Give the ruby element itself a margin-right instead,
+      // only for chord-only rows -- a normal lyric line must never get extra
+      // spacing injected between chord stacks like [C][G]word.
+      const isChordOnlyRow = cols.every(col => (col.querySelector('.lyrics')?.textContent ?? '') === '')
+      cols.forEach((col, idx) => {
+        const chordEl  = col.querySelector('.chord')
+        const lyricsEl = col.querySelector('.lyrics')
+        const ruby = document.createElement('ruby')
+        ruby.appendChild(document.createTextNode(lyricsEl?.textContent ?? ''))
+        const rt = document.createElement('rt')
+        rt.className = 'chord'
+        if (chordEl) {
+          chordEl.classList.forEach(cls => { if (cls !== 'chord') rt.classList.add(cls) })
+          rt.innerHTML = chordEl.innerHTML   // preserves quality/bass child spans
+        }
+        ruby.appendChild(rt)
+        if (isChordOnlyRow && idx < cols.length - 1) {
+          ruby.style.marginRight = '0.75em'
+        }
+        col.replaceWith(ruby)
+        if (idx < cols.length - 1) {
+          ruby.insertAdjacentElement('afterend', document.createElement('wbr'))
         }
       })
     })
@@ -241,17 +386,15 @@ export function SongRenderer({
       const letter = nameToLetter.get(key)!
       const count = (letterCount.get(letter) ?? 1) + 1
       letterCount.set(letter, count)
-      const badge = document.createElement('span')
-      badge.className = 'section-badge'
-      badge.innerHTML = makeBadgeHtml(letter, count)
       // Prepend inside the comment so badge + ↺ text share the same inline baseline
-      commentEl.prepend(badge)
+      commentEl.prepend(createBadge(letter, count))
     })
 
     // ── Inline chord comments (from {inline:} directive) ─────────────────────
     // The preprocessor converts {inline: | [C] / / / |} to a {comment:} line
     // with chord names wrapped in «guillemet» markers. We expand those into
     // chord-styled <span>s so everything sits on the same baseline as | and /.
+    const originalKey = extractMeta(content).key || ''
     container.querySelectorAll<HTMLElement>('.comment').forEach(commentEl => {
       const text = commentEl.textContent ?? ''
       if (!text.includes('«')) return
@@ -259,13 +402,40 @@ export function SongRenderer({
       // Split on «ChordName» markers using textContent (avoids &laquo; entity issues)
       // Odd indices are chord names, even indices are plain text (|, /, spaces)
       const parts = text.split(/«([^»]*)»/)
-      commentEl.innerHTML = parts.map((part, i) =>
-        i % 2 === 1
-          ? `<span class="chord inline-chord">${part}</span>`
-          : part
-      ).join('')
+      commentEl.textContent = ''
+      parts.forEach((part, i) => {
+        if (i % 2 === 1) {
+          const span = document.createElement('span')
+          span.className = 'chord inline-chord'
+          let chordText = part
+          if (chordText.startsWith('(') && chordText.endsWith(')')) {
+            chordText = chordText.slice(1, -1).trim()
+            span.classList.add('chord-optional')
+          }
+          // Transpose inline chords using the same offset as the rendered song
+          span.textContent = transposeOffset !== 0 ? transposeChordName(chordText, transposeOffset, originalKey) : chordText
+          commentEl.appendChild(span)
+        } else {
+          commentEl.appendChild(document.createTextNode(part))
+        }
+      })
     })
-  }, [html])
+    // ── Song meta (key + tempo) below title/subtitle ──────────────────────────
+    if (songKey || (tempo ?? 0) > 0) {
+      const meta = document.createElement('div')
+      meta.className = 'song-meta-line'
+      const parts: string[] = []
+      if (songKey) parts.push(songKey)
+      if (tempo && tempo > 0) parts.push(`♩\u202f${tempo}`)
+      meta.textContent = parts.join(' · ')
+      const anchor = container.querySelector<HTMLElement>('h2') ?? container.querySelector<HTMLElement>('h1')
+      if (anchor) {
+        anchor.after(meta)
+      } else {
+        container.insertBefore(meta, container.firstChild)
+      }
+    }
+  }, [html, songKey, tempo, transposeOffset])
 
   return (
     <>

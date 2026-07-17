@@ -1,8 +1,24 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// In dev, proxy /ct-api/* through the Firebase Functions emulator.
+// Start the emulator with: firebase emulators:start --only functions
+// The emulator URL is: http://localhost:5001/{project}/{region}/{fn}
+const FUNCTIONS_EMULATOR = 'http://localhost:5001'
+const FIREBASE_PROJECT = 'chordcrew-50c55'
+const CT_PROXY_FN = `${FUNCTIONS_EMULATOR}/${FIREBASE_PROJECT}/europe-west1/ctProxy`
+
 export default defineConfig({
+  server: {
+    proxy: {
+      '/ct-api': {
+        target: CT_PROXY_FN,
+        changeOrigin: true,
+        rewrite: path => path, // keep /ct-api prefix — the function strips it
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -27,8 +43,18 @@ export default defineConfig({
         // SPA fallback: serve index.html for all navigation requests that don't
         // match a cached file. Without this, deep links (e.g. /setlists/:id)
         // return 404 when the installed PWA or a hard-reload intercepts the request.
+        //
+        // /__/ is excluded because Firebase Hosting reserves it for its own
+        // infrastructure pages — notably /__/auth/handler and /__/auth/iframe,
+        // which Firebase Auth navigates to as part of signInWithRedirect. Without
+        // this exclusion, the service worker intercepts that top-level navigation
+        // and serves our cached SPA shell instead of Firebase's real OAuth relay
+        // page, so the redirect never completes and sign-in hangs on "Loading…"
+        // forever. Confirmed via curl (bypasses the SW, returns Firebase's actual
+        // handler.js page) vs. an in-browser navigation with the SW active
+        // (returns our index.html) to the identical /__/auth/handler URL.
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//, /\.json$/],
+        navigateFallbackDenylist: [/^\/api\//, /^\/ct-api\//, /\.json$/, /^\/__\//],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -39,7 +65,14 @@ export default defineConfig({
       }
     })
   ],
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   resolve: {
     alias: { '@': '/src' }
-  }
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
+  },
 })

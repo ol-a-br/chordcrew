@@ -21,7 +21,15 @@ npm run test:ui   # Playwright interactive UI
 
 - `docs/requirements.md` — requirements spec with implementation status (REQ-IDs)
 - `docs/roadmap.md` — phased implementation plan with decision log
+- `docs/deployment.md` — CI/CD setup, branch strategy, security checklist, Dependabot notes
 - `data/chords_wiki_library_export_20260329.json` — real export (4 books, 298 songs, 88 setlists)
+
+## Branch strategy
+
+- **`develop`** — active development; all commits go here (default branch)
+- **`main`** — production-stable; updated via PR at major milestones only; triggers Firebase deploy when CI is re-enabled
+
+Auto-deploy is currently **disabled** (workflow_dispatch only). Deploy manually with `npm run deploy`. See `docs/deployment.md` for the full checklist to re-enable CI/CD safely when adding collaborators.
 
 ## Architecture
 
@@ -32,6 +40,17 @@ npm run test:ui   # Playwright interactive UI
 **Stage-safe**: Performance mode disables all sync and notifications. Do not add network calls or toasts in `PerformancePage`.
 
 **Teams**: Scoped via `Book.sharedTeamId`. Team songs/setlists live in the same Dexie tables as personal content; role enforcement is at the read/write layer. Firestore paths: `/users/{uid}/songs|books|setlists` (personal) and `/teams/{teamId}/songs|setlists` (shared).
+
+## Commit discipline
+
+Commit after each logical unit of work — not at the end of the session. Specifically:
+
+- **After each feature or fix** that builds cleanly (`npm run build`) and has passed any relevant tests
+- **Before starting something new** — never carry uncommitted changes across task boundaries
+- **Before context gets large** — long sessions compress context; uncommitted code in a rewrite can silently drop earlier features (see: transpose dropdown incident)
+- **One concern per commit** — do not bundle unrelated changes; a commit message should describe one thing
+
+Use targeted `Edit` calls on specific code sections rather than full-file `Write` rewrites. Full rewrites are the main way existing features get silently lost across context boundaries.
 
 ## Key constraints — never violate these
 
@@ -121,10 +140,14 @@ const transposed = song.transpose(semitones)  // returns new Song, does not muta
 const html = new ChordSheetJS.HtmlDivFormatter().format(transposed)
 ```
 
+After `dangerouslySetInnerHTML` renders the `.column` divs from chordsheetjs, a `useEffect` in `SongRenderer` runs a post-processing pass that converts each `.column` into a native `<ruby>` element so lyric text from different chord positions flows inline and wraps at real word boundaries. The chord name moves into `<rt class="chord">`. A `<wbr>` element is inserted after each `<ruby>` (except the last in a row) to provide explicit line-break opportunities between chord positions.
+
 Key CSS rules that must not be removed:
-- `.row { break-inside: avoid; }` — prevents chord/lyric pairs splitting across CSS columns
-- `.column { white-space: pre-wrap; overflow-wrap: break-word; max-width: 100%; }` — word-wraps long lines without losing chord spacing
-- `.paragraph { break-inside: avoid; }` — prevents whole sections from splitting mid-paragraph
+- `.row { break-inside: avoid; overflow-wrap: break-word; }` — keeps chord+lyric pairs in one CSS column; `overflow-wrap` handles single words wider than the column width
+- `.row <wbr> between rubies` — injected by SongRenderer JS; without these, Safari/WebKit treats adjacent ruby elements as an unbreakable run and lyric lines overflow into the next CSS column instead of wrapping
+- `ruby { white-space: pre-wrap; }` — **do not remove**; removing it causes Safari/WebKit to stop rendering `<rt>` chord annotations entirely (chords disappear). The `<wbr>` elements sit outside ruby so `pre-wrap` does not suppress the break opportunities they provide.
+- `.paragraph { break-inside: avoid; }` — prevents whole sections from splitting mid-paragraph in normal layout
+- `.page-flip .paragraph { break-inside: auto; }` — overrides the above in performance/page-flip mode so sections taller than one column (at large font scales) flow across columns rather than overflowing
 
 ## Pedal navigation (PageFlip Cicada V7)
 
@@ -134,6 +157,21 @@ The pedal pairs as a Bluetooth keyboard — no Web Bluetooth API needed. Set ped
 - `ArrowLeft` → previous column (or previous song; shows toast at boundary)
 
 Column stride = `containerWidth / columns`. At the last column, navigating right advances to the next setlist song.
+
+## iOS/iPadOS safe area handling
+
+The viewport meta uses `viewport-fit=cover` so web content extends under the system status bar (clock, battery). Every top-level UI surface must account for `env(safe-area-inset-top)`.
+
+**AppShell (sidebar + page content)**
+- **Sidebar logo row**: `paddingTop: max(1rem, env(safe-area-inset-top))`. The sidebar is `fixed inset-y-0` on mobile (overlay starts at viewport top=0) **and** `static` on iPad landscape — both cases need the guard.
+- **Mobile top bar** (`lg:hidden`): already uses `paddingTop: max(0.75rem, env(safe-area-inset-top))`.
+- **Main content on iPad** (lg, mobile header hidden): a `hidden lg:block` spacer div with `height: env(safe-area-inset-top)` sits between the (hidden) mobile header and the page content, pushing content below the status bar without affecting the mobile layout.
+
+**PerformancePage (full-screen, outside AppShell)**
+- The controls overlay at the top uses `paddingTop: max(0.75rem, env(safe-area-inset-top))`.
+- The bottom already uses `paddingBottom: env(safe-area-inset-bottom)`.
+
+Do not add `env(safe-area-inset-top)` to the root `<div>` — it would double-count with the mobile header's own safe-area padding.
 
 ## Sync architecture
 

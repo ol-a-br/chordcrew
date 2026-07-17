@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Library, ListMusic, Users, Download, Settings, Menu, X, Music2, RefreshCw, Wand2, HelpCircle } from 'lucide-react'
+import { Library, ListMusic, Users, Download, Settings, Menu, X, Music2, RefreshCw, Wand2, HelpCircle, MessageSquarePlus } from 'lucide-react'
 import { useAuth } from '@/auth/AuthContext'
 import { useSync } from '@/sync/SyncContext'
 import { firebaseConfigured } from '@/firebase'
 import { TeamInviteNotification } from '@/components/teams/TeamInviteNotification'
+import { FeedbackModal } from '@/components/feedback/FeedbackModal'
 import { clsx } from 'clsx'
 
 const baseNavItems = [
@@ -69,9 +70,10 @@ export function AppShell() {
   const { t } = useTranslation()
   const { user, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface-0 text-ink font-ui">
+    <div className="flex h-dvh overflow-hidden bg-surface-0 text-ink font-ui">
 
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -87,8 +89,11 @@ export function AppShell() {
         'transition-transform duration-200',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       )}>
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 px-4 py-4 border-b border-surface-3">
+        {/* Logo — paddingTop covers the iOS/iPadOS status bar (safe area) */}
+        <div
+          className="flex items-center gap-2.5 px-4 pb-4 border-b border-surface-3"
+          style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
+        >
           <Music2 className="text-chord" size={22} />
           <span className="font-semibold text-lg tracking-tight">ChordCrew</span>
           <button
@@ -149,6 +154,13 @@ export function AppShell() {
                 {t(labelKey)}
               </NavLink>
             ))}
+            <button
+              onClick={() => { setShowFeedback(true); setSidebarOpen(false) }}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm w-full text-left transition-colors text-ink-muted hover:bg-surface-2 hover:text-ink"
+            >
+              <MessageSquarePlus size={17} />
+              {t('feedback.title')}
+            </button>
           </div>
         </nav>
 
@@ -167,7 +179,7 @@ export function AppShell() {
             <SyncBadge />
             <button
               onClick={signOut}
-              className="w-full text-xs text-ink-faint hover:text-ink-muted text-left px-1 mt-1"
+              className="w-full text-xs text-ink-faint hover:text-ink-muted text-left px-1 mt-1 py-0.5"
             >
               {t('auth.signOut')}
             </button>
@@ -177,8 +189,11 @@ export function AppShell() {
 
       {/* Main */}
       <div className="flex flex-col flex-1 min-w-0">
-        {/* Mobile top bar */}
-        <header className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-surface-3 bg-surface-1">
+        {/* Mobile top bar — handles safe-area-inset-top on small screens */}
+        <header
+          className="lg:hidden flex items-center gap-3 px-4 pb-3 border-b border-surface-3 bg-surface-1"
+          style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+        >
           <button onClick={() => setSidebarOpen(true)} className="text-ink-muted hover:text-ink">
             <Menu size={20} />
           </button>
@@ -186,8 +201,15 @@ export function AppShell() {
           <span className="font-semibold text-sm">ChordCrew</span>
         </header>
 
+        {/* Safe-area spacer for lg layout (sidebar visible, mobile header hidden).
+            On small screens this is hidden — the mobile header above handles it. */}
+        <div className="hidden lg:block shrink-0" style={{ height: 'env(safe-area-inset-top)' }} />
+
         {/* Team invite notifications */}
         <TeamInviteNotification />
+
+        {/* Feedback modal */}
+        {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">

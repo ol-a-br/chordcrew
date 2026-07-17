@@ -1,39 +1,46 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash } from 'lucide-react'
-import { db, generateId, markPending, getTeamRole } from '@/db'
+import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash, Link2, StickyNote, X, Upload } from 'lucide-react'
+import { encodeSongShare, buildShareUrl, copyShareUrl } from '@/utils/share'
+import { db, generateId, markPending, getTeamRole, getSettings, saveSettings } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
-import { transposeKey, getFirstChords, buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
+import { transposeKey, getFirstChords, buildSearchText, extractMeta, lintChordPro, isValidKey } from '@/utils/chordpro'
 import { useFontScale } from '@/hooks/useFontScale'
 import { useAuth } from '@/auth/AuthContext'
-import type { SetlistItem, Book } from '@/types'
-
-function getDefaultColumns(): number {
-  if (typeof window === 'undefined') return 2
-  return window.matchMedia('(orientation: landscape)').matches ? 4 : 2
-}
+import { NotesPanel } from '@/components/shared/NotesPanel'
+import { useChurchTools } from '@/churchtools/ChurchToolsContext'
+import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
+import { getLinkStatus } from '@/utils/linkedSongs'
+import { LinkStatusBadge } from '@/components/songs/LinkStatusBadge'
+import { SyncCopiesDialog } from '@/components/songs/SyncCopiesDialog'
+import type { SetlistItem, Book, Song } from '@/types'
 
 export default function ViewerPage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { isConfigured: ctConfigured } = useChurchTools()
+  const [showCtUpload, setShowCtUpload] = useState(false)
+  const [showSyncDialog, setShowSyncDialog] = useState(false)
   const song = useLiveQuery(() => id ? db.songs.get(id) : undefined, [id])
 
   const setlistId = searchParams.get('setlistId')
   const currentPos = parseInt(searchParams.get('pos') ?? '0', 10)
 
   const [transpose, setTranspose] = useState(0)
-  const [columns, setColumns] = useState(getDefaultColumns)
+  const [columns, setColumns] = useState(2)
   const [lyricsOnly, setLyricsOnly] = useState(false)
   const [fontScale, setFontScale] = useFontScale()
   const [showShareMenu, setShowShareMenu] = useState(false)
   const [showKeyDropdown, setShowKeyDropdown] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
 
   // Teams — for copy/move to team space
   const teams = useLiveQuery(() => db.teams.toArray(), [])
@@ -44,6 +51,30 @@ export default function ViewerPage() {
       return role === 'owner' || role === 'contributor'
     })
   }, [teams, user])
+
+  // Book for team ID (needed by notes panel)
+  const book = useLiveQuery(() => song?.bookId ? db.books.get(song.bookId) : undefined, [song?.bookId])
+  const teamId = book?.sharedTeamId
+
+  const viewerLinkedSongs = useLiveQuery(async (): Promise<Song[]> => {
+    if (!song?.linkedSongIds?.length) return []
+    const found = await Promise.all(song.linkedSongIds.map(lid => db.songs.get(lid)))
+    return found.filter((s): s is Song => !!s)
+  }, [song?.id, song?.linkedSongIds?.join(',')])
+
+  const allViewerBooks = useLiveQuery(() => db.books.toArray(), [])
+
+  const viewerSongMap = useMemo(() => {
+    const m = new Map<string, Song>()
+    if (song) m.set(song.id, song)
+    viewerLinkedSongs?.forEach(s => m.set(s.id, s))
+    return m
+  }, [song, viewerLinkedSongs])
+
+  const viewerLinkStatus = useMemo(
+    () => song ? getLinkStatus(song, viewerSongMap) : 'none',
+    [song, viewerSongMap]
+  )
 
   // Setlist context for prev/next navigation
   // Track last-accessed time for "recently accessed" sort in library
@@ -63,7 +94,12 @@ export default function ViewerPage() {
   const nextSongId = songItems[currentPos + 1]?.songId
   const currentSetlistItem = songItems[currentPos]
 
-  // Apply per-slot overrides once when the setlist item changes
+  // Load default column count from settings on mount
+  useEffect(() => {
+    getSettings().then(s => setColumns(s.defaultColumnCount))
+  }, [])
+
+  // Apply per-slot overrides once when the setlist item changes (overrides default)
   const appliedItemRef = useRef<string | null>(null)
   useEffect(() => {
     if (!currentSetlistItem || currentSetlistItem.id === appliedItemRef.current) return
@@ -77,6 +113,19 @@ export default function ViewerPage() {
     if (toastTimer.current) clearTimeout(toastTimer.current)
     setToast(msg)
     toastTimer.current = setTimeout(() => setToast(null), 2000)
+  }
+
+  const handleShareReadOnly = async () => {
+    if (!song) return
+    const encoded = await encodeSongShare({
+      title: song.title,
+      artist: song.artist,
+      key: song.transcription.key,
+      content: song.transcription.content,
+    })
+    const url = buildShareUrl(encoded)
+    const ok = await copyShareUrl(url)
+    showToast(ok ? 'Read-only link copied!' : 'Could not copy link')
   }
 
   // Setlist navigation helpers (used by buttons AND keyboard)
@@ -139,36 +188,49 @@ export default function ViewerPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columns, setlistId, prevSongId, nextSongId, currentPos])
 
+  // Effective key: content directive takes priority over stored field; validate both
+  const effectiveKey = useMemo(() => {
+    if (!song) return ''
+    const fromContent = extractMeta(song.transcription.content).key ?? ''
+    const candidate = fromContent || song.transcription.key || ''
+    return isValidKey(candidate) ? candidate : ''
+  }, [song])
+
   // Transposed key and first-3-chords for musician preview
   const transposedKey = useMemo(
-    () => transposeKey(song?.transcription.key ?? '', transpose),
-    [song?.transcription.key, transpose]
+    () => transposeKey(effectiveKey, transpose),
+    [effectiveKey, transpose]
   )
   const firstChords = useMemo(
     () => transpose !== 0 ? getFirstChords(song?.transcription.content ?? '', transpose) : [],
     [song?.transcription.content, transpose]
   )
-  // Pre-compute all 12 key entries for the transpose dropdown.
-  // Rows: delta -5 … +6 from original key. Original (0) is in position 6 of 12.
-  // Chords are computed once when the song loads; cached by useMemo.
   const keyDropdownEntries = useMemo(() => {
-    if (!song?.transcription.key) return []
-    const originalKey = song.transcription.key
+    if (!effectiveKey || !song) return []
+    const originalKey = effectiveKey
     const content = song.transcription.content
     return Array.from({ length: 12 }, (_, i) => {
-      const delta = i - 5  // -5, -4, ..., 0, ..., +6
+      const delta = i - 5
       const key   = transposeKey(originalKey, delta)
       const chords = getFirstChords(content, delta, 4)
       return { delta, key, chords }
     })
-  }, [song?.transcription.key, song?.transcription.content])
-
+  }, [effectiveKey, song?.transcription.content])
   // Capo helper: sounding key = written key transposed up by capo value
   const capo = song?.transcription.capo ?? 0
   const soundingKey = useMemo(
-    () => (capo > 0 && song?.transcription.key) ? transposeKey(song.transcription.key, capo) : '',
-    [capo, song?.transcription.key]
+    () => (capo > 0 && effectiveKey) ? transposeKey(effectiveKey, capo) : '',
+    [capo, effectiveKey]
   )
+
+  const applyTranspose = (next: number) => {
+    setTranspose(next)
+    if (currentSetlistItem && setlistId) {
+      db.setlistItems.update(currentSetlistItem.id, { transposeOffset: next })
+      db.setlists.update(setlistId, { updatedAt: Date.now() })
+      markPending('setlist', setlistId)
+    }
+  }
 
   // Extra metadata (CCLI, copyright, URL) extracted from ChordPro content
   const derivedMeta = useMemo(
@@ -230,12 +292,48 @@ export default function ViewerPage() {
     setShowShareMenu(false)
   }
 
-  if (!song) return <div className="p-8 text-ink-muted">Loading…</div>
+  // Horizontal swipe in single-column setlist mode → prev/next song
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || !setlistId || columns > 1) return
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y
+    touchStartRef.current = null
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) goNext()
+      else goPrev()
+    }
+  }
+
+  if (!song) return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="w-7 h-7 border-2 border-chord border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
 
   return (
-    <div className="flex flex-col h-full">
+    <>
+    <div className="flex flex-col h-full" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
+
+        {/* Back to setlist */}
+        {setlistId && (
+          <button
+            onClick={() => navigate(`/setlists/${setlistId}`)}
+            className="p-1.5 rounded text-ink-muted hover:text-ink"
+            title="Back to setlist"
+          >
+            <X size={16} />
+          </button>
+        )}
+
+        {/* Edit — leftmost for consistency with performance mode */}
+        <Button variant="ghost" size="sm" onClick={() => navigate(`/editor/${song.id}${setlistId ? `?setlistId=${setlistId}&pos=${currentPos}` : ''}`)}>
+          <Pencil size={14} />
+        </Button>
 
         {/* Setlist prev nav */}
         {setlistId && (
@@ -271,14 +369,14 @@ export default function ViewerPage() {
         )}
 
         {/* Key badge — click to open 12-key transpose picker */}
-        {song.transcription.key && (
+        {effectiveKey && (
           <div className="relative shrink-0">
             <button
               onClick={() => setShowKeyDropdown(v => !v)}
               className="text-xs font-mono text-chord bg-chord/10 hover:bg-chord/20 px-2 py-1 rounded transition-colors"
               title="Click to change key"
             >
-              𝄞 {transpose !== 0 ? `${song.transcription.key} → ${transposedKey}` : song.transcription.key}
+              𝄞 {transpose !== 0 ? `${effectiveKey} → ${transposedKey}` : effectiveKey}
             </button>
             {showKeyDropdown && (
               <>
@@ -287,7 +385,7 @@ export default function ViewerPage() {
                   {keyDropdownEntries.map(({ delta, key, chords }) => (
                     <button
                       key={delta}
-                      onClick={() => { setTranspose(delta); setShowKeyDropdown(false) }}
+                      onClick={() => { applyTranspose(delta); setShowKeyDropdown(false) }}
                       className={`flex items-center gap-3 w-full text-left px-3 py-2 text-xs transition-colors
                         ${delta === transpose
                           ? 'bg-chord/15 text-chord'
@@ -312,11 +410,7 @@ export default function ViewerPage() {
             )}
           </div>
         )}
-        {song.transcription.tempo > 0 && (
-          <span className="text-xs font-mono text-ink-muted shrink-0" title="Tempo">
-            ♩ {song.transcription.tempo}
-          </span>
-        )}
+
         {capo > 0 && (
           <span className="text-xs font-mono text-ink-muted shrink-0" title="Capo helper">
             Capo {capo}{soundingKey ? ` → ${soundingKey}` : ''}
@@ -326,13 +420,13 @@ export default function ViewerPage() {
         {/* Transpose */}
         <div className="flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1">
-            <button onClick={() => setTranspose(t => t - 1)} aria-label="Transpose down" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
+            <button onClick={() => applyTranspose(transpose - 1)} aria-label="Transpose down" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
               <ChevronDown size={16} />
             </button>
             <span className="text-xs font-mono w-8 text-center">
               {transpose > 0 ? `+${transpose}` : transpose === 0 ? '0' : transpose}
             </span>
-            <button onClick={() => setTranspose(t => t + 1)} aria-label="Transpose up" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
+            <button onClick={() => applyTranspose(transpose + 1)} aria-label="Transpose up" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
               <ChevronUp size={16} />
             </button>
           </div>
@@ -351,7 +445,7 @@ export default function ViewerPage() {
           {[1, 2, 3, 4, 5].map(n => (
             <button
               key={n}
-              onClick={() => setColumns(n)}
+              onClick={() => { setColumns(n); saveSettings({ defaultColumnCount: n }) }}
               className={`px-2 py-1.5 text-xs ${columns === n ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:bg-surface-2'}`}
             >
               {n}
@@ -383,6 +477,24 @@ export default function ViewerPage() {
           <Star size={16} className={song.isFavorite ? 'text-chord fill-chord' : 'text-ink-muted'} />
         </button>
 
+        {/* Linked copy divergence badge */}
+        <LinkStatusBadge
+          status={viewerLinkStatus}
+          bookNames={(viewerLinkedSongs ?? []).map(s => allViewerBooks?.find(b => b.id === s.bookId)?.title ?? '')}
+          onClick={() => setShowSyncDialog(true)}
+        />
+
+        {/* Notes toggle */}
+        {user && (
+          <button
+            onClick={() => setShowNotes(v => !v)}
+            className={`p-1.5 rounded ${showNotes ? 'text-chord bg-chord/10' : 'text-ink-muted hover:bg-surface-2 hover:text-ink'}`}
+            title="My notes"
+          >
+            <StickyNote size={16} />
+          </button>
+        )}
+
         {/* External URL link */}
         {derivedMeta.url && (
           <a
@@ -407,6 +519,26 @@ export default function ViewerPage() {
           >
             <Hash size={16} />
           </a>
+        )}
+
+        {/* Share read-only link */}
+        <button
+          onClick={handleShareReadOnly}
+          className="p-1.5 text-ink-muted hover:text-ink rounded"
+          title="Copy read-only share link"
+        >
+          <Link2 size={16} />
+        </button>
+
+        {/* ChurchTools upload */}
+        {ctConfigured && (
+          <button
+            onClick={() => setShowCtUpload(true)}
+            className="p-1.5 text-ink-muted hover:text-ink rounded"
+            title="Upload to ChurchTools"
+          >
+            <Upload size={16} />
+          </button>
         )}
 
         {/* Print / PDF */}
@@ -460,12 +592,19 @@ export default function ViewerPage() {
           <Maximize2 size={14} />
           Present
         </Button>
-
-        {/* Edit */}
-        <Button variant="ghost" size="sm" onClick={() => navigate(`/editor/${song.id}`)}>
-          <Pencil size={14} />
-        </Button>
       </div>
+
+      {/* Notes panel */}
+      {showNotes && user && (
+        <div className="shrink-0 px-4 pt-2 pb-1">
+          <NotesPanel
+            songId={song.id}
+            userId={user.id}
+            teamId={teamId}
+            onClose={() => setShowNotes(false)}
+          />
+        </div>
+      )}
 
       {/* Song content — multi-column: wrap to columns (no vertical scroll);
           single-column: normal vertical scroll */}
@@ -481,6 +620,8 @@ export default function ViewerPage() {
                 fontScale={fontScale}
                 pageFlip
                 errors={lintErrors}
+                songKey={transposedKey}
+                tempo={song.transcription.tempo}
               />
             </div>
           </div>
@@ -494,6 +635,8 @@ export default function ViewerPage() {
               fontScale={fontScale}
               errors={lintErrors}
               onJumpToLine={() => navigate(`/editor/${id}`)}
+              songKey={transposedKey}
+              tempo={song.transcription.tempo}
             />
           </div>
         )}
@@ -508,5 +651,19 @@ export default function ViewerPage() {
         )}
       </div>
     </div>
+
+    {showCtUpload && song && (
+      <SongUploadDialog songs={[song]} onClose={() => setShowCtUpload(false)} />
+    )}
+
+    {showSyncDialog && song && (
+      <SyncCopiesDialog
+        song={song}
+        linkedSongs={viewerLinkedSongs ?? []}
+        books={allViewerBooks ?? []}
+        onClose={() => setShowSyncDialog(false)}
+      />
+    )}
+    </>
   )
 }

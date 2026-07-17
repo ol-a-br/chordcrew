@@ -1,16 +1,21 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2 } from 'lucide-react'
+import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2, Cloud, ExternalLink } from 'lucide-react'
 import { db, upsertSongVersions, markPending } from '@/db'
-import { deleteSongFromCloud } from '@/sync/firestoreSync'
+import { deleteSongFromCloud, fetchTeamNoteIndicator } from '@/sync/firestoreSync'
 import { buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
+import { getLinkStatus } from '@/utils/linkedSongs'
 import { ChordProEditor } from '@/components/editor/ChordProEditor'
 import type { ChordProEditorHandle } from '@/components/editor/ChordProEditor'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { Button } from '@/components/shared/Button'
+import { LinkStatusBadge } from '@/components/songs/LinkStatusBadge'
+import { SyncCopiesDialog } from '@/components/songs/SyncCopiesDialog'
 import { useAuth } from '@/auth/AuthContext'
-import type { SongVersion } from '@/types'
+import { useChurchTools } from '@/churchtools/ChurchToolsContext'
+import { ctDeleteSong, ctUpdateSong, ctUpdateArrangement } from '@/churchtools/api'
+import type { Song, SongVersion } from '@/types'
 
 const AUTOSAVE_DELAY_MS = 1000
 const VERSION_INTERVAL_MS = 5 * 60 * 1000  // create a version at most every 5 min
@@ -28,8 +33,13 @@ function updateDirective(content: string, directive: string, value: string): str
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const setlistId = searchParams.get('setlistId')
+  const setlistPos = searchParams.get('pos')
   const { user } = useAuth()
+  const { baseUrl: ctBaseUrl, token: ctToken } = useChurchTools()
   const song = useLiveQuery(() => id ? db.songs.get(id) : undefined, [id])
+  const isCTSong = !!(song?.ctSongId)
 
   const [content, setContent] = useState('')
   const [tags, setTags] = useState<string[]>([])
@@ -37,6 +47,8 @@ export default function EditorPage() {
   const [showHistory, setShowHistory] = useState(false)
   const [showExtraMeta, setShowExtraMeta] = useState(false)
   const [deletePhase, setDeletePhase] = useState<'idle' | 'confirm' | 'deleted'>('idle')
+  const [teamHasNotes, setTeamHasNotes] = useState(false)
+  const [showSyncDialog, setShowSyncDialog] = useState(false)
   const deletedSongRef = useRef<typeof song | null>(null)
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
@@ -55,6 +67,35 @@ export default function EditorPage() {
       : [],
     [id]
   )
+
+  const linkedSongs = useLiveQuery(async (): Promise<Song[]> => {
+    if (!song?.linkedSongIds?.length) return []
+    const found = await Promise.all(song.linkedSongIds.map(lid => db.songs.get(lid)))
+    return found.filter((s): s is Song => !!s)
+  }, [song?.id, song?.linkedSongIds?.join(',')])
+
+  const allBooks = useLiveQuery(() => db.books.toArray(), [])
+
+  const editorSongMap = useMemo(() => {
+    const m = new Map<string, Song>()
+    if (song) m.set(song.id, song)
+    linkedSongs?.forEach(s => m.set(s.id, s))
+    return m
+  }, [song, linkedSongs])
+
+  const linkStatus = useMemo(
+    () => song ? getLinkStatus(song, editorSongMap) : 'none',
+    [song, editorSongMap]
+  )
+
+  // ── Team note indicator ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!song) return
+    db.books.get(song.bookId).then(book => {
+      if (!book?.sharedTeamId) return
+      fetchTeamNoteIndicator(book.sharedTeamId, song.id).then(setTeamHasNotes)
+    })
+  }, [song?.id, song?.bookId])
 
   // ── Tap-tempo ─────────────────────────────────────────────────────────────
   const tapTimesRef = useRef<number[]>([])
@@ -106,12 +147,14 @@ export default function EditorPage() {
     const currentContent = contentRef.current
     const currentTags = tagsRef.current
     const meta = extractMeta(currentContent)
-
-    // Create a version at most every VERSION_INTERVAL_MS to avoid flooding history
     const now = Date.now()
-    if (now - lastVersionSavedRef.current > VERSION_INTERVAL_MS) {
-      await upsertSongVersions(s.id, s.transcription.content, user.id, user.displayName)
-      lastVersionSavedRef.current = now
+
+    if (!s.ctSongId) {
+      // Normal song: version history + Firestore sync
+      if (now - lastVersionSavedRef.current > VERSION_INTERVAL_MS) {
+        await upsertSongVersions(s.id, s.transcription.content, user.id, user.displayName)
+        lastVersionSavedRef.current = now
+      }
     }
 
     await db.songs.update(s.id, {
@@ -129,8 +172,28 @@ export default function EditorPage() {
         timeSignature: meta.time ?? s.transcription.timeSignature,
       },
     })
-    await markPending('song', s.id)
-  }, [user])
+
+    if (s.ctSongId && ctBaseUrl && ctToken) {
+      // CT song: push metadata back to ChurchTools (best-effort, no retry)
+      const title = meta.title ?? s.title
+      const artist = meta.artist ?? s.artist
+      ctUpdateSong(ctBaseUrl, ctToken, s.ctSongId, {
+        name: title,
+        author: artist || null,
+        ccli: meta.ccli ?? null,
+        copyright: meta.copyright ?? null,
+      }).catch(() => {})
+      if (s.ctArrangementId) {
+        ctUpdateArrangement(ctBaseUrl, ctToken, s.ctSongId, s.ctArrangementId, {
+          key: meta.key ?? s.transcription.key,
+          tempo: meta.tempo ?? s.transcription.tempo,
+          beat: meta.time ?? s.transcription.timeSignature,
+        }).catch(() => {})
+      }
+    } else {
+      await markPending('song', s.id)
+    }
+  }, [user, ctBaseUrl, ctToken])
 
   const scheduleAutoSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -159,9 +222,17 @@ export default function EditorPage() {
   const confirmDelete = async () => {
     if (!song || !user) return
     deletedSongRef.current = song
-    await db.songs.delete(song.id)
-    await db.syncStates.delete(`song:${song.id}`)
-    deleteSongFromCloud(song.id, user.id, undefined).catch(() => {})
+    if (song.ctSongId) {
+      // CT song: delete via CT API, then remove locally
+      if (ctBaseUrl && ctToken) {
+        ctDeleteSong(ctBaseUrl, ctToken, song.ctSongId).catch(() => {})
+      }
+      await db.songs.delete(song.id)
+    } else {
+      await db.songs.delete(song.id)
+      await db.syncStates.delete(`song:${song.id}`)
+      deleteSongFromCloud(song.id, user.id, undefined).catch(() => {})
+    }
     setDeletePhase('deleted')
     deleteTimerRef.current = setTimeout(() => navigate('/library'), 5000)
   }
@@ -226,31 +297,58 @@ export default function EditorPage() {
   }
 
   return (
+    <>
     <div className="flex flex-col h-full">
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-surface-3 bg-surface-1 shrink-0">
-        <button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink">
+        <button
+          onClick={() => setlistId ? navigate(`/setlists/${setlistId}`) : navigate(-1)}
+          className="text-ink-muted hover:text-ink"
+          title={setlistId ? 'Back to setlist' : 'Close'}
+        >
           <X size={18} />
         </button>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex items-center gap-2">
           <span className="font-medium text-sm truncate">{song.title}</span>
+          {teamHasNotes && (
+            <span
+              className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-chord/10 text-chord border border-chord/20"
+              title="Team members have notes on this song"
+            >
+              notes
+            </span>
+          )}
         </div>
-        <button
-          onClick={() => setShowPreview(p => !p)}
-          className={`p-1.5 rounded ${showPreview ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
-          title="Toggle preview"
-        >
-          <Eye size={17} />
-        </button>
-        {(versions?.length ?? 0) > 0 && (
-          <button
-            onClick={() => setShowHistory(h => !h)}
-            className={`p-1.5 rounded ${showHistory ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
-            title="Version history"
-          >
-            <History size={17} />
-          </button>
+        {!isCTSong && (
+          <>
+            <button
+              onClick={() => setShowPreview(p => !p)}
+              className={`p-1.5 rounded ${showPreview ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
+              title="Toggle preview"
+            >
+              <Eye size={17} />
+            </button>
+            {(versions?.length ?? 0) > 0 && (
+              <button
+                onClick={() => setShowHistory(h => !h)}
+                className={`p-1.5 rounded ${showHistory ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
+                title="Version history"
+              >
+                <History size={17} />
+              </button>
+            )}
+          </>
         )}
+        {isCTSong && (
+          <span className="text-xs px-2 py-0.5 rounded bg-chord/10 text-chord border border-chord/20 shrink-0" title="Managed by ChurchTools">
+            CT
+          </span>
+        )}
+        <LinkStatusBadge
+          status={linkStatus}
+          bookNames={(linkedSongs ?? []).map(s => allBooks?.find(b => b.id === s.bookId)?.title ?? '')}
+          onClick={() => setShowSyncDialog(true)}
+        />
         {deletePhase === 'confirm' ? (
           <>
             <span className="text-xs text-red-400 font-medium">Delete this song?</span>
@@ -276,7 +374,7 @@ export default function EditorPage() {
             >
               <Trash2 size={15} />
             </button>
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/view/${song.id}`)}>
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/view/${song.id}${setlistId ? `?setlistId=${setlistId}&pos=${setlistPos ?? 0}` : ''}`)}>
               <RotateCcw size={14} />
               View
             </Button>
@@ -289,7 +387,7 @@ export default function EditorPage() {
         {([
           { label: 'Title',  directive: 'title',  value: derivedMeta.title  ?? '', width: 'w-36', type: 'text' },
           { label: 'Artist', directive: 'artist', value: derivedMeta.artist ?? '', width: 'w-28', type: 'text' },
-          { label: 'Key',    directive: 'key',    value: derivedMeta.key    ?? '', width: 'w-12', type: 'text' },
+          { label: 'Key',    directive: 'key',    value: derivedMeta.key    ?? song?.transcription.key ?? '', width: 'w-12', type: 'text' },
           { label: 'Tempo',  directive: 'tempo',  value: derivedMeta.tempo  ? String(derivedMeta.tempo) : '', width: 'w-14', type: 'number' },
           { label: 'Capo',   directive: 'capo',   value: derivedMeta.capo   ? String(derivedMeta.capo)  : '', width: 'w-12', type: 'number' },
           { label: 'Time',   directive: 'time',   value: derivedMeta.time   ?? '', width: 'w-14', type: 'text' },
@@ -339,8 +437,29 @@ export default function EditorPage() {
         <>
           {/* Row 2: attribution (CCLI / copyright / URL) */}
           <div className="flex items-center gap-3 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
+            {/* CCLI — rendered separately so we can add the SongSelect lookup link */}
+            <label className="flex items-center gap-1 text-xs">
+              <span className="text-ink-faint shrink-0">CCLI</span>
+              <input
+                type="text"
+                defaultValue={derivedMeta.ccli ?? ''}
+                key={`ccli-${song?.id}-${derivedMeta.ccli ?? ''}`}
+                placeholder="5281015"
+                onBlur={e => commitMetaField('ccli', e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                className="w-24 bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50 placeholder:text-ink-faint/40"
+              />
+            </label>
+            <a
+              href={`https://songselect.ccli.com/search/results?SearchText=${encodeURIComponent(derivedMeta.title ?? song?.title ?? '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Look up on SongSelect"
+              className="-ml-2 p-0.5 text-ink-faint hover:text-chord transition-colors"
+            >
+              <ExternalLink size={11} />
+            </a>
             {([
-              { label: 'CCLI',      directive: 'ccli',      value: derivedMeta.ccli      ?? '', width: 'w-24', type: 'text', placeholder: '5281015' },
               { label: 'Copyright', directive: 'copyright', value: derivedMeta.copyright ?? '', width: 'w-64', type: 'text', placeholder: '© Year Author' },
               { label: 'URL',       directive: 'url',       value: derivedMeta.url       ?? '', width: 'w-64', type: 'url',  placeholder: 'https://…' },
             ] as const).map(({ label, directive, value, width, type, placeholder }) => (
@@ -393,24 +512,35 @@ export default function EditorPage() {
 
       {/* Split pane */}
       <div className="flex flex-1 min-h-0 relative">
-        {/* Editor */}
-        <div className={`flex flex-col min-h-0 ${showPreview ? 'w-1/2' : 'w-full'}`}>
-          <ChordProEditor ref={editorRef} value={content} onChange={handleChange} />
-        </div>
-
-        {/* Preview */}
-        {showPreview && (
+        {isCTSong ? (
+          /* CT song: no ChordPro editor — lyrics are managed in ChurchTools */
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
+            <Cloud size={32} className="text-ink-faint" />
+            <p className="text-sm text-ink-muted">Song content is managed in ChurchTools.</p>
+            <p className="text-xs text-ink-faint">Edit the fields above to update metadata. Changes are sent to ChurchTools on save.</p>
+          </div>
+        ) : (
           <>
-            <div className="w-px bg-surface-3 shrink-0" />
-            <div className="flex-1 overflow-y-auto p-6">
-              <SongRenderer
-                content={content}
-                columns={1}
-                fontScale={0.95}
-                errors={lintErrors}
-                onJumpToLine={line => editorRef.current?.jumpToLine(line)}
-              />
+            {/* Editor */}
+            <div className={`flex flex-col min-h-0 ${showPreview ? 'w-1/2' : 'w-full'}`}>
+              <ChordProEditor ref={editorRef} value={content} onChange={handleChange} />
             </div>
+
+            {/* Preview */}
+            {showPreview && (
+              <>
+                <div className="w-px bg-surface-3 shrink-0" />
+                <div className="flex-1 overflow-y-auto p-6">
+                  <SongRenderer
+                    content={content}
+                    columns={1}
+                    fontScale={0.95}
+                    errors={lintErrors}
+                    onJumpToLine={line => editorRef.current?.jumpToLine(line)}
+                  />
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -459,5 +589,15 @@ export default function EditorPage() {
         )}
       </div>
     </div>
+
+    {showSyncDialog && song && (
+      <SyncCopiesDialog
+        song={song}
+        linkedSongs={linkedSongs ?? []}
+        books={allBooks ?? []}
+        onClose={() => setShowSyncDialog(false)}
+      />
+    )}
+    </>
   )
 }

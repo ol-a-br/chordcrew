@@ -4,14 +4,22 @@ import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users,
-  CheckSquare, Square, Trash2, FolderInput,
+  CheckSquare, Square, Trash2, FolderInput, Pencil, Check, X, Upload,
+  RefreshCw, Cloud, Hash,
 } from 'lucide-react'
-import { db, generateId, markPending, getTeamRole } from '@/db'
+import ccliMapping from '../../data/ccli_mapping.json'
+import { db, generateId, markPending, markDeleted, getTeamRole, linkSongs } from '@/db'
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { Button } from '@/components/shared/Button'
-import { buildSearchText } from '@/utils/chordpro'
+import { buildSearchText, extractMeta } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
-import type { Song } from '@/types'
+import { useChurchTools } from '@/churchtools/ChurchToolsContext'
+import { ctDeleteSong, ctUpdateSong, ctGetAllSongs, ctPutSong } from '@/churchtools/api'
+import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
+import { getLinkStatus, resolveLinkedSongs } from '@/utils/linkedSongs'
+import { LinkStatusBadge } from '@/components/songs/LinkStatusBadge'
+import { SyncCopiesDialog } from '@/components/songs/SyncCopiesDialog'
+import type { Song, Book } from '@/types'
 
 type SortKey = 'title' | 'artist' | 'updatedAt' | 'savedAt' | 'accessedAt'
 
@@ -42,6 +50,7 @@ export default function LibraryPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
+  const [syncDialogSong, setSyncDialogSong] = useState<Song | null>(null)
   const [activeBookId, setActiveBookId] = useState<string | 'all' | 'favorites'>('all')
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -51,15 +60,25 @@ export default function LibraryPage() {
   const [showNewBook, setShowNewBook] = useState(false)
   const newBookInputRef = useRef<HTMLInputElement>(null)
 
+  // Book rename/delete state
+  const [renamingBookId, setRenamingBookId] = useState<string | null>(null)
+  const [renameBookName, setRenameBookName] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
+
   // Bulk tag state
   const [showTagMenu, setShowTagMenu] = useState(false)
   const [bulkTagInput, setBulkTagInput] = useState('')
   const tagMenuRef = useRef<HTMLDivElement>(null)
 
+  const { isConfigured: ctConfigured, syncCtBook, ctSyncing, token: ctToken, baseUrl: ctBaseUrl, categories: ctCategories } = useChurchTools()
+  const [showCtUpload, setShowCtUpload] = useState(false)
+  const [ctUploadSongs, setCtUploadSongs] = useState<Song[]>([])
+
   // Bulk selection state
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showOrganizeMenu, setShowOrganizeMenu] = useState(false)
+  const [showCtCategoryMenu, setShowCtCategoryMenu] = useState(false)
   const [bulkToast, setBulkToast] = useState<string | null>(null)
   const bulkToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -67,8 +86,17 @@ export default function LibraryPage() {
   const allSongs = useLiveQuery(() => db.songs.toArray(), [])
   const teams    = useLiveQuery(() => db.teams.toArray(), [])
 
-  // Personal books only (no team books in the "Books" sidebar section)
-  const personalBooks = useMemo(() => (books ?? []).filter(b => !b.sharedTeamId), [books])
+  // Personal books only (no team books, no CT books in the "Books" sidebar section)
+  const personalBooks = useMemo(() => (books ?? []).filter(b => !b.sharedTeamId && b.sourceType !== 'churchtools'), [books])
+
+  // ChurchTools-backed books
+  const ctBooks = useMemo(() => (books ?? []).filter(b => b.sourceType === 'churchtools'), [books])
+
+  // Is the currently selected book a CT book?
+  const activeBookIsCT = useMemo(() => {
+    if (activeBookId === 'all' || activeBookId === 'favorites') return false
+    return (books ?? []).find(b => b.id === activeBookId)?.sourceType === 'churchtools'
+  }, [activeBookId, books])
 
   // Teams the current user belongs to
   const myTeams = useMemo(() => {
@@ -94,6 +122,22 @@ export default function LibraryPage() {
     ;(books ?? []).forEach(b => { if (b.sharedTeamId) map[b.id] = b.sharedTeamId })
     return map
   }, [books])
+
+  const bookMap = useMemo(() => {
+    const m: Record<string, Book> = {}
+    ;(books ?? []).forEach(b => { m[b.id] = b })
+    return m
+  }, [books])
+
+  const songMap = useMemo(() => new Map((allSongs ?? []).map(s => [s.id, s])), [allSongs])
+
+  const linkStatusMap = useMemo(() => {
+    const m = new Map<string, import('@/utils/linkedSongs').LinkStatus>()
+    for (const s of allSongs ?? []) {
+      m.set(s.id, getLinkStatus(s, songMap))
+    }
+    return m
+  }, [allSongs, songMap])
 
   // Role for the active context (team or personal)
   const activeTeamRole = useMemo(() => {
@@ -250,6 +294,7 @@ export default function LibraryPage() {
     setSelectMode(false)
     setSelectedIds(new Set())
     setShowOrganizeMenu(false)
+    setShowCtCategoryMenu(false)
   }
 
   const bulkDelete = async () => {
@@ -257,11 +302,21 @@ export default function LibraryPage() {
     if (!confirm(`Delete ${count} song${count !== 1 ? 's' : ''}? This cannot be undone.`)) return
     const songs = sortedSongs.filter(s => selectedIds.has(s.id))
     for (const song of songs) {
-      await db.songs.delete(song.id)
-      await db.syncStates.delete(`song:${song.id}`)
-      if (user) {
+      if (song.ctSongId != null) {
+        // CT song: delete via CT API, then remove locally (no Firestore tombstone)
+        if (ctBaseUrl && ctToken) {
+          ctDeleteSong(ctBaseUrl, ctToken, song.ctSongId).catch(() => {})
+        }
+        await db.songs.delete(song.id)
+      } else if (user) {
         const teamId = bookTeamMap[song.bookId]
+        const paths = [`users/${user.id}/songs/${song.id}`]
+        if (teamId) paths.push(`teams/${teamId}/songs/${song.id}`)
+        await markDeleted('song', song.id, paths)
         deleteSongFromCloud(song.id, user.id, teamId).catch(() => {})
+        await db.songs.delete(song.id)
+      } else {
+        await db.songs.delete(song.id)
       }
     }
     exitSelectMode()
@@ -298,9 +353,14 @@ export default function LibraryPage() {
       savedAt: now, updatedAt: now,
       accessedAt: undefined as number | undefined,
       searchText: buildSearchText(song.title, song.artist, song.tags, song.transcription.content),
+      linkedSongIds: [song.id],
     }))
     await db.songs.bulkAdd(newSongs)
-    for (const s of newSongs) await markPending('song', s.id)
+    for (let i = 0; i < songs.length; i++) {
+      await linkSongs(songs[i].id, newSongs[i].id)
+      await markPending('song', newSongs[i].id)
+      await markPending('song', songs[i].id)
+    }
     exitSelectMode()
     // Navigate to the target context
     if (targetType === 'team') handleTeamClick(targetId)
@@ -347,6 +407,128 @@ export default function LibraryPage() {
     showBulkToast(`Tagged ${songs.length} song${songs.length !== 1 ? 's' : ''} with "${normalized}"`)
   }
 
+  // ─── CT bulk ops ─────────────────────────────────────────────────────────────
+
+  const CCLI_MAP = ccliMapping as Record<string, string | null>
+
+  const bulkSetCtCategory = async (categoryId: number, categoryName: string) => {
+    const songs = sortedSongs.filter(s => selectedIds.has(s.id) && s.ctSongId != null)
+    setShowCtCategoryMenu(false)
+    setShowOrganizeMenu(false)
+
+    // Fetch all CT songs once to get the full objects needed for PUT
+    let ctSongMap: Map<number, import('@/churchtools/types').CTSong>
+    try {
+      const all = await ctGetAllSongs(ctBaseUrl, ctToken)
+      ctSongMap = new Map(all.map(s => [s.id, s]))
+    } catch {
+      exitSelectMode()
+      showBulkToast('Failed to load CT songs — check connection')
+      return
+    }
+
+    let updated = 0, skipped = 0
+    for (const song of songs) {
+      if (!song.ctSongId) { skipped++; continue }
+      const ctSong = ctSongMap.get(song.ctSongId)
+      if (!ctSong) { skipped++; continue }
+      try {
+        const result = await ctPutSong(ctBaseUrl, ctToken, ctSong, { categoryId })
+        result.category.id === categoryId ? updated++ : skipped++
+      } catch { skipped++ }
+    }
+
+    if (updated > 0) await syncCtBook()
+    exitSelectMode()
+    showBulkToast(
+      updated > 0
+        ? `Set category "${categoryName}" on ${updated} CT song${updated !== 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} skipped` : ''}`
+        : `Category change failed — check CT permissions`
+    )
+  }
+
+  const bulkPushCcliToCT = async () => {
+    const songs = sortedSongs.filter(s => selectedIds.has(s.id))
+    setShowOrganizeMenu(false)
+    let pushed = 0, skipped = 0
+    for (const song of songs) {
+      if (!song.ctSongId) { skipped++; continue }
+      const ccliId = CCLI_MAP[song.title]
+      if (!ccliId) { skipped++; continue }
+      try { await ctUpdateSong(ctBaseUrl, ctToken, song.ctSongId, { ccli: ccliId }); pushed++ } catch { skipped++ }
+    }
+    if (pushed > 0) await syncCtBook()
+    exitSelectMode()
+    showBulkToast(
+      pushed > 0
+        ? `Pushed CCLI to ${pushed} CT song${pushed !== 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} skipped` : ''}`
+        : `No CCLI matches found for selected songs`
+    )
+  }
+
+  const bulkFillFromLocalSongs = async () => {
+    const selectedCtSongs = sortedSongs.filter(s => selectedIds.has(s.id) && s.ctSongId != null)
+    setShowOrganizeMenu(false)
+
+    // Group all non-CT local songs by lowercase title (multiple books may have the same song)
+    const nonCtBookIds = new Set((books ?? []).filter(b => b.sourceType !== 'churchtools').map(b => b.id))
+    const teamBookIds  = new Set((books ?? []).filter(b => b.sharedTeamId && b.sourceType !== 'churchtools').map(b => b.id))
+    const localByTitle = new Map<string, Song[]>()
+    for (const s of (allSongs ?? [])) {
+      if (!nonCtBookIds.has(s.bookId)) continue
+      const key = s.title.toLowerCase()
+      const arr = localByTitle.get(key) ?? []
+      arr.push(s)
+      localByTitle.set(key, arr)
+    }
+    // When multiple books have the same song, pick the one with a {ccli:} directive first,
+    // then prefer team books over personal, then first available
+    const pickBest = (candidates: Song[]): Song =>
+      candidates.find(s => !!extractMeta(s.transcription.content).ccli) ??
+      candidates.find(s => teamBookIds.has(s.bookId)) ??
+      candidates[0]
+
+    let ctSongMap: Map<number, import('@/churchtools/types').CTSong>
+    try {
+      const all = await ctGetAllSongs(ctBaseUrl, ctToken)
+      ctSongMap = new Map(all.map(s => [s.id, s]))
+    } catch {
+      exitSelectMode()
+      showBulkToast('Failed to load CT songs — check connection')
+      return
+    }
+
+    let updated = 0, skipped = 0
+    for (const song of selectedCtSongs) {
+      if (!song.ctSongId) { skipped++; continue }
+      const ctSong = ctSongMap.get(song.ctSongId)
+      if (!ctSong) { skipped++; continue }
+
+      const ccliFromMap = CCLI_MAP[song.title]
+      const candidates = localByTitle.get(song.title.toLowerCase())
+      const local = candidates ? pickBest(candidates) : undefined
+      const meta = local ? extractMeta(local.transcription.content) : {}
+      const ccli = ccliFromMap || meta.ccli || (local ? CCLI_MAP[local.title] : undefined) || undefined
+
+      const overrides: { ccli?: string | null; author?: string | null; copyright?: string | null } = {}
+      if (ccli        && ccli        !== (ctSong.ccli      ?? '')) overrides.ccli      = ccli
+      if (local?.artist && local.artist !== (ctSong.author  ?? '')) overrides.author    = local.artist
+      if (meta.copyright && meta.copyright !== (ctSong.copyright ?? '')) overrides.copyright = meta.copyright
+
+      if (Object.keys(overrides).length === 0) { skipped++; continue }
+      // Use PUT (not PATCH) — PATCH returns a server error on some CT songs
+      try { await ctPutSong(ctBaseUrl, ctToken, ctSong, overrides); updated++ } catch { skipped++ }
+    }
+
+    if (updated > 0) await syncCtBook()
+    exitSelectMode()
+    showBulkToast(
+      updated > 0
+        ? `Updated ${updated} CT song${updated !== 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} skipped` : ''}`
+        : `No changes needed — ${skipped} songs had no local match or already matched`
+    )
+  }
+
   // ─── Create book ──────────────────────────────────────────────────────────────
 
   const createBook = async () => {
@@ -372,6 +554,47 @@ export default function LibraryPage() {
   const openNewBook = () => {
     setShowNewBook(true)
     setTimeout(() => newBookInputRef.current?.focus(), 50)
+  }
+
+  const startRenameBook = (book: { id: string; title: string }) => {
+    setRenamingBookId(book.id)
+    setRenameBookName(book.title)
+    setTimeout(() => renameInputRef.current?.focus(), 50)
+  }
+
+  const commitRenameBook = async () => {
+    const name = renameBookName.trim()
+    if (!name || !renamingBookId) { setRenamingBookId(null); return }
+    await db.books.update(renamingBookId, { title: name, updatedAt: Date.now() })
+    await markPending('book', renamingBookId)
+    setRenamingBookId(null)
+  }
+
+  const cancelRenameBook = () => {
+    setRenamingBookId(null)
+    setRenameBookName('')
+  }
+
+  const deleteBook = async (bookId: string, bookTitle: string) => {
+    const songCount = allSongs?.filter(s => s.bookId === bookId).length ?? 0
+    const msg = songCount > 0
+      ? `Delete book "${bookTitle}"? Its ${songCount} song${songCount !== 1 ? 's' : ''} will become unassigned.`
+      : `Delete book "${bookTitle}"?`
+    if (!confirm(msg)) return
+    // Reassign songs to no book (we can't leave dangling bookIds)
+    if (songCount > 0) {
+      const songs = allSongs?.filter(s => s.bookId === bookId) ?? []
+      const defaultBookId = personalBooks.find(b => b.id !== bookId)?.id
+      for (const song of songs) {
+        if (defaultBookId) {
+          await db.songs.update(song.id, { bookId: defaultBookId, updatedAt: Date.now() })
+          await markPending('song', song.id)
+        }
+      }
+    }
+    await db.books.delete(bookId)
+    await db.syncStates.delete(`book:${bookId}`)
+    if (activeBookId === bookId) handleNavClick('all')
   }
 
   // ─── Navigation handlers ──────────────────────────────────────────────────────
@@ -403,6 +626,7 @@ export default function LibraryPage() {
   }
 
   return (
+    <>
     <div className="flex h-full">
       {/* Left panel */}
       <aside className="hidden md:flex flex-col w-52 border-r border-surface-3 bg-surface-1 py-3 px-2 gap-0.5 shrink-0 overflow-y-auto">
@@ -421,7 +645,32 @@ export default function LibraryPage() {
             </button>
           </div>
           {personalBooks.map(book => (
-            <NavItem key={book.id} label={book.title} icon={<BookOpen size={15} />} active={activeBookId === book.id && !activeTeamId} onClick={() => handleNavClick(book.id)} count={allSongs?.filter(s => s.bookId === book.id).length} />
+            renamingBookId === book.id ? (
+              <div key={book.id} className="flex items-center gap-1 px-2 pb-1">
+                <input
+                  ref={renameInputRef}
+                  value={renameBookName}
+                  onChange={e => setRenameBookName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') commitRenameBook()
+                    if (e.key === 'Escape') cancelRenameBook()
+                  }}
+                  className="flex-1 bg-surface-2 border border-chord/40 rounded-md px-2 py-1 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-chord/60"
+                />
+                <button onClick={commitRenameBook} className="p-0.5 text-green-400 hover:text-green-300"><Check size={13} /></button>
+                <button onClick={cancelRenameBook} className="p-0.5 text-ink-faint hover:text-ink"><X size={13} /></button>
+              </div>
+            ) : (
+              <BookNavItem
+                key={book.id}
+                book={book}
+                active={activeBookId === book.id && !activeTeamId}
+                count={allSongs?.filter(s => s.bookId === book.id).length}
+                onClick={() => handleNavClick(book.id)}
+                onRename={() => startRenameBook(book)}
+                onDelete={() => deleteBook(book.id, book.title)}
+              />
+            )
           ))}
           {showNewBook && (
             <div className="px-2 pb-1">
@@ -440,6 +689,26 @@ export default function LibraryPage() {
             </div>
           )}
         </>
+
+        {ctBooks.length > 0 && (
+          <>
+            <div className="px-2 pt-3 pb-1 flex items-center gap-1">
+              <span className="text-[11px] text-ink-faint uppercase tracking-wider flex-1">ChurchTools</span>
+              {ctSyncing && <RefreshCw size={11} className="text-ink-faint animate-spin" />}
+            </div>
+            {ctBooks.map(book => (
+              <CtBookNavItem
+                key={book.id}
+                book={book}
+                active={activeBookId === book.id && !activeTeamId}
+                count={allSongs?.filter(s => s.bookId === book.id).length}
+                onClick={() => handleNavClick(book.id)}
+                onSync={syncCtBook}
+                syncing={ctSyncing}
+              />
+            ))}
+          </>
+        )}
 
         {myTeams.length > 0 && (
           <>
@@ -481,6 +750,56 @@ export default function LibraryPage() {
 
       {/* Right panel — song list */}
       <div className="flex-1 flex flex-col min-w-0">
+
+        {/* Mobile filter strip — visible only on small screens (sidebar is hidden) */}
+        {!selectMode && (
+          <div className="md:hidden flex gap-1.5 px-3 py-2 border-b border-surface-3 bg-surface-1 overflow-x-auto hide-scrollbar shrink-0">
+            <MobileChip
+              label={t('library.allSongs')}
+              active={activeBookId === 'all' && !activeTag && !activeTeamId && !activeKey}
+              onClick={() => { handleNavClick('all'); setActiveKey(null) }}
+            />
+            <MobileChip
+              label={t('library.favorites')}
+              active={activeBookId === 'favorites' && !activeTeamId}
+              onClick={() => handleNavClick('favorites')}
+            />
+            {personalBooks.map(book => (
+              <MobileChip
+                key={book.id}
+                label={book.title}
+                active={activeBookId === book.id && !activeTeamId}
+                onClick={() => handleNavClick(book.id)}
+              />
+            ))}
+            {myTeams.map(team => (
+              <MobileChip
+                key={team.id}
+                label={team.name}
+                active={activeTeamId === team.id}
+                onClick={() => handleTeamClick(team.id)}
+                isTeam
+              />
+            ))}
+            {allTags.map(tag => (
+              <MobileChip
+                key={tag}
+                label={`#${tag}`}
+                active={activeTag === tag}
+                onClick={() => handleTagClick(tag)}
+              />
+            ))}
+            {allKeys.map(key => (
+              <MobileChip
+                key={key}
+                label={key}
+                active={activeKey === key}
+                onClick={() => handleKeyClick(key)}
+              />
+            ))}
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-3 flex-wrap">
           {selectMode ? (
@@ -570,7 +889,7 @@ export default function LibraryPage() {
                       </button>
                       {showOrganizeMenu && (
                         <>
-                          <div className="fixed inset-0 z-10" onClick={() => setShowOrganizeMenu(false)} />
+                          <div className="fixed inset-0 z-10" onClick={() => { setShowOrganizeMenu(false); setShowCtCategoryMenu(false) }} />
                           <div className="absolute right-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl py-1 min-w-[200px]">
                             {organizeTargets.length > 0 ? (
                               <>
@@ -600,6 +919,69 @@ export default function LibraryPage() {
                               </>
                             ) : (
                               <p className="px-3 py-2 text-xs text-ink-faint">No other books or teams available</p>
+                            )}
+                            {/* CT-specific bulk ops — only when viewing a CT book */}
+                            {activeBookIsCT && ctConfigured && (
+                              <>
+                                <hr className="border-surface-3 my-1" />
+                                <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">ChurchTools</div>
+                                {/* Set category — inline expand */}
+                                <button
+                                  onClick={() => setShowCtCategoryMenu(v => !v)}
+                                  className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
+                                >
+                                  <FolderInput size={11} />
+                                  Set category…
+                                  <ChevronRight size={11} className={`ml-auto transition-transform ${showCtCategoryMenu ? 'rotate-90' : ''}`} />
+                                </button>
+                                {showCtCategoryMenu && ctCategories.length > 0 && (
+                                  <div className="border-t border-surface-3 pt-0.5 pb-0.5">
+                                    {ctCategories.map(cat => (
+                                      <button
+                                        key={cat.id}
+                                        onClick={() => bulkSetCtCategory(cat.id, cat.nameTranslated || cat.name)}
+                                        className="flex items-center w-full text-left pl-6 pr-3 py-1.5 text-xs text-ink-muted hover:bg-surface-3 hover:text-ink"
+                                      >
+                                        {cat.nameTranslated || cat.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* Push CCLI */}
+                                <button
+                                  onClick={bulkPushCcliToCT}
+                                  className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
+                                >
+                                  <Hash size={11} />
+                                  Push CCLI to ChurchTools
+                                </button>
+                                {/* Fill from local songs */}
+                                <button
+                                  onClick={bulkFillFromLocalSongs}
+                                  className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
+                                >
+                                  <RefreshCw size={11} />
+                                  Fill from local songs
+                                </button>
+                              </>
+                            )}
+                            {/* Upload to CT — only when NOT in a CT book */}
+                            {ctConfigured && !activeBookIsCT && (
+                              <>
+                                <hr className="border-surface-3 my-1" />
+                                <button
+                                  onClick={async () => {
+                                    const list = await db.songs.bulkGet([...selectedIds])
+                                    setCtUploadSongs(list.filter(Boolean) as Song[])
+                                    setShowOrganizeMenu(false)
+                                    setShowCtUpload(true)
+                                  }}
+                                  className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-chord hover:bg-surface-3"
+                                >
+                                  <Upload size={11} />
+                                  Upload to ChurchTools
+                                </button>
+                              </>
                             )}
                           </div>
                         </>
@@ -644,7 +1026,12 @@ export default function LibraryPage() {
                 </button>
               )}
 
-              {!isActiveReadOnly && (
+              {activeBookIsCT ? (
+                <Button variant="ghost" size="sm" onClick={syncCtBook} disabled={ctSyncing}>
+                  <RefreshCw size={14} className={ctSyncing ? 'animate-spin' : ''} />
+                  {ctSyncing ? 'Syncing…' : 'Sync CT'}
+                </Button>
+              ) : !isActiveReadOnly && (
                 <Button variant="primary" size="sm" onClick={createSong}>
                   <Plus size={15} />
                   {t('library.newSong')}
@@ -696,6 +1083,12 @@ export default function LibraryPage() {
                   <SongRow
                     key={song.id}
                     song={song}
+                    book={bookMap[song.bookId]}
+                    showMeta={query.trim().length > 0}
+                    linkStatus={linkStatusMap.get(song.id) ?? 'none'}
+                    songMap={songMap}
+                    bookMap={bookMap}
+                    onSyncClick={() => setSyncDialogSong(song)}
                     navigate={navigate}
                     readOnly={readOnly}
                     selectMode={selectMode}
@@ -718,13 +1111,37 @@ export default function LibraryPage() {
         </div>
       </div>
     </div>
+
+    {showCtUpload && ctUploadSongs.length > 0 && (
+      <SongUploadDialog
+        songs={ctUploadSongs}
+        onClose={() => { setShowCtUpload(false); setCtUploadSongs([]) }}
+      />
+    )}
+
+    {syncDialogSong && (
+      <SyncCopiesDialog
+        song={syncDialogSong}
+        linkedSongs={(syncDialogSong.linkedSongIds ?? []).flatMap(id => songMap.get(id) ? [songMap.get(id)!] : [])}
+        books={books ?? []}
+        onClose={() => setSyncDialogSong(null)}
+      />
+    )}
+    </>
   )
 }
 
 function SongRow({
-  song, navigate, readOnly, selectMode, selected, onToggleSelect
+  song, book, showMeta, linkStatus, songMap, bookMap, onSyncClick,
+  navigate, readOnly, selectMode, selected, onToggleSelect
 }: {
   song: Song
+  book?: Book
+  showMeta?: boolean
+  linkStatus?: import('@/utils/linkedSongs').LinkStatus
+  songMap?: Map<string, Song>
+  bookMap?: Record<string, Book>
+  onSyncClick?: () => void
   navigate: (path: string) => void
   readOnly?: boolean
   selectMode?: boolean
@@ -747,6 +1164,11 @@ function SongRow({
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm truncate">{song.title}</div>
         <div className="text-xs text-ink-muted truncate">{song.artist || '—'}</div>
+        {showMeta && book && (
+          <div className="text-xs text-amber-600 truncate">
+            {book.title} · {new Date(song.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
         {song.transcription.key && (
@@ -758,6 +1180,16 @@ function SongRow({
           <span className="text-xs text-ink-faint truncate max-w-[80px]">{song.tags[0]}</span>
         )}
         {song.isFavorite && <Star size={13} className="text-chord fill-chord" />}
+        {linkStatus && linkStatus !== 'none' && linkStatus !== 'in-sync' && !selectMode && (
+          <LinkStatusBadge
+            status={linkStatus}
+            bookNames={(song.linkedSongIds ?? [])
+              .flatMap(id => songMap?.get(id) ? [bookMap?.[songMap.get(id)!.bookId]?.title ?? ''] : [])
+              .filter(Boolean)}
+            onClick={onSyncClick}
+            size="sm"
+          />
+        )}
         {!readOnly && !selectMode && (
           <button
             className="text-ink-faint hover:text-ink opacity-0 group-hover:opacity-100 p-1"
@@ -769,6 +1201,24 @@ function SongRow({
         )}
       </div>
     </li>
+  )
+}
+
+function MobileChip({ label, active, onClick, isTeam }: {
+  label: string; active: boolean; onClick: () => void; isTeam?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+        active
+          ? isTeam ? 'bg-chord/20 text-chord border border-chord/40' : 'bg-chord/20 text-chord border border-chord/40'
+          : 'bg-surface-2 text-ink-muted border border-surface-3 hover:border-chord/30 hover:text-ink'
+      }`}
+    >
+      {isTeam && <span className="mr-1 opacity-60">⊕</span>}
+      {label}
+    </button>
   )
 }
 
@@ -786,6 +1236,87 @@ function NavItem({ label, icon, active, onClick, count }: {
       <span className="flex-1 truncate">{label}</span>
       {count !== undefined && <span className="text-xs text-ink-faint">{count}</span>}
     </button>
+  )
+}
+
+function BookNavItem({ book, active, count, onClick, onRename, onDelete }: {
+  book: { id: string; title: string }
+  active: boolean
+  count?: number
+  onClick: () => void
+  onRename: () => void
+  onDelete: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        onClick={onClick}
+        className={`flex items-center gap-2 px-2 py-2 rounded-lg text-sm w-full text-left transition-colors
+          ${active ? 'bg-chord/10 text-chord' : 'text-ink-muted hover:bg-surface-2 hover:text-ink'}`}
+      >
+        <BookOpen size={15} />
+        <span className="flex-1 truncate">{book.title}</span>
+        {!hovered && count !== undefined && <span className="text-xs text-ink-faint">{count}</span>}
+        {hovered && (
+          <span className="flex items-center gap-0.5">
+            <span
+              role="button"
+              onClick={e => { e.stopPropagation(); onRename() }}
+              className="p-0.5 rounded hover:text-ink-muted text-ink-faint"
+              title="Rename book"
+            >
+              <Pencil size={11} />
+            </span>
+            <span
+              role="button"
+              onClick={e => { e.stopPropagation(); onDelete() }}
+              className="p-0.5 rounded hover:text-red-400 text-ink-faint"
+              title="Delete book"
+            >
+              <Trash2 size={11} />
+            </span>
+          </span>
+        )}
+      </button>
+    </div>
+  )
+}
+
+function CtBookNavItem({ book, active, count, onClick, onSync, syncing }: {
+  book: { id: string; title: string }
+  active: boolean
+  count?: number
+  onClick: () => void
+  onSync: () => void
+  syncing: boolean
+}) {
+  return (
+    <div className="relative group/ct">
+      <button
+        onClick={onClick}
+        className={`flex items-center gap-2 px-2 py-2 rounded-lg text-sm w-full text-left transition-colors
+          ${active ? 'bg-chord/10 text-chord' : 'text-ink-muted hover:bg-surface-2 hover:text-ink'}`}
+      >
+        <Cloud size={15} />
+        <span className="flex-1 truncate">{book.title}</span>
+        {count !== undefined && (
+          <span className="text-xs text-ink-faint group-hover/ct:hidden">{count}</span>
+        )}
+        <span
+          role="button"
+          onClick={e => { e.stopPropagation(); onSync() }}
+          className={`hidden group-hover/ct:inline-flex p-0.5 rounded transition-colors ${syncing ? 'text-chord' : 'text-ink-faint hover:text-ink-muted'}`}
+          title="Sync from ChurchTools"
+        >
+          <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
+        </span>
+      </button>
+    </div>
   )
 }
 

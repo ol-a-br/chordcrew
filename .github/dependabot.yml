@@ -1,0 +1,74 @@
+version: 2
+
+updates:
+  # ── npm ─────────────────────────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+
+    # Group updates to reduce PR noise.
+    # One PR per group per week instead of one PR per package.
+    groups:
+      # Runtime deps — ship to users; treat security alerts as blockers
+      runtime-dependencies:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+
+      # Build / dev toolchain — local-only; lower urgency
+      dev-toolchain:
+        dependency-type: development
+        patterns:
+          - "vite*"
+          - "@vitejs/*"
+          - "typescript"
+          - "tailwindcss"
+          - "autoprefixer"
+          - "postcss"
+        update-types:
+          - minor
+          - patch
+
+      # Test tooling
+      testing:
+        dependency-type: development
+        patterns:
+          - "@playwright/*"
+          - "playwright"
+        update-types:
+          - minor
+          - patch
+
+    # Ignore major version bumps for packages that need manual migration
+    ignore:
+      - dependency-name: "firebase"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "chordsheetjs"
+        update-types: ["version-update:semver-major"]
+
+  # ── GitHub Actions ───────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

@@ -3,10 +3,23 @@ import path from 'path'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Wait for the app to load past the auth gate (local-mode guest user) */
+/** Wait for the app to load past the onboarding / auth gate */
 async function waitForApp(page: Page) {
   await page.goto('/')
-  // Local-mode auto-signs in as guest — should land on /library
+  // Fresh browser contexts show onboarding (no IDB state). Handle it if present.
+  const langBtn = page.locator('button').filter({ hasText: 'English' }).first()
+  const onboarding = await langBtn.waitFor({ state: 'visible', timeout: 5000 })
+    .then(() => true).catch(() => false)
+  if (onboarding) {
+    await langBtn.click()
+    await page.locator('button').filter({ hasText: /local mode/i }).first()
+      .waitFor({ state: 'visible', timeout: 5000 })
+    await page.locator('button').filter({ hasText: /local mode/i }).first().click()
+    await page.locator('button').filter({ hasText: /^Skip$/i }).first()
+      .waitFor({ state: 'visible', timeout: 5000 })
+    await page.locator('button').filter({ hasText: /^Skip$/i }).first().click()
+    await page.waitForURL(/\/library/, { timeout: 8000 })
+  }
   await expect(page).toHaveURL(/\/library/, { timeout: 8000 })
 }
 
@@ -405,10 +418,15 @@ test('viewer shows key with treble clef symbol', async ({ page }) => {
   }, [songId] as [string])
 
   await page.goto(`/view/${songId}`)
-  // Treble clef + key value
-  await expect(page.locator('text=𝄞 G')).toBeVisible({ timeout: 3000 })
-  // Quarter note + tempo value
-  await expect(page.locator('text=♩ 120')).toBeVisible({ timeout: 3000 })
+  // Key and tempo are injected as a .song-meta-line below the song title in the renderer.
+  // Format: "G · ♩\u202f120"  (no treble clef — that was removed from toolbar in favour of meta line)
+  await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
+  await page.waitForTimeout(300)  // let useEffect post-processing complete
+  const metaLine = page.locator('.song-meta-line')
+  await expect(metaLine).toBeVisible({ timeout: 3000 })
+  const metaText = await metaLine.textContent()
+  expect(metaText, 'meta line must contain the key').toContain('G')
+  expect(metaText, 'meta line must contain the tempo quarter-note symbol').toContain('♩')
 })
 
 test('chord text color is light yellow (not amber)', async ({ page }) => {
@@ -416,10 +434,23 @@ test('chord text color is light yellow (not amber)', async ({ page }) => {
   const songId = await createSong(page)
   await setSongContent(page, songId, '{title:Color Test}\n[Am]Hello\n')
   await page.goto(`/view/${songId}`)
+  await page.locator('.chordpro-output').waitFor({ state: 'visible', timeout: 10_000 })
 
-  const chordColor = await page.locator('.chordpro-output .chord').first().evaluate(
-    el => getComputedStyle(el).color
-  )
+  // In the ruby layout, chords are in <rt class="chord"> elements.
+  // WebKit does not return computed styles for <rt> elements via getComputedStyle,
+  // so we probe the CSS rule by measuring a temporary div with class "chord".
+  const chordColor = await page.evaluate(() => {
+    const output = document.querySelector('.chordpro-output')
+    if (!output) return ''
+    const probe = document.createElement('div')
+    probe.className = 'chord'
+    probe.style.position = 'absolute'
+    probe.style.visibility = 'hidden'
+    output.appendChild(probe)
+    const color = getComputedStyle(probe).color
+    probe.remove()
+    return color
+  })
   // #fde68a = rgb(253, 230, 138) — light yellow
   expect(chordColor).toBe('rgb(253, 230, 138)')
 })

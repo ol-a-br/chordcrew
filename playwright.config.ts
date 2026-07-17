@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
+  workers: 2,
   retries: 0,
   reporter: 'list',
   use: {
@@ -28,6 +29,55 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'android-tablet',
+      use: {
+        // Samsung Galaxy Tab S4 — 10.5" 2560×1600, ~2.25× DPR, Android 10
+        userAgent:
+          'Mozilla/5.0 (Linux; Android 10; SM-T835) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        viewport: { width: 712, height: 1138 },
+        deviceScaleFactor: 2.25,
+        isMobile: true,
+        hasTouch: true,
+        defaultBrowserType: 'chromium',
+      },
+    },
+    {
+      name: 'ipad',
+      use: {
+        // iPad Pro 11" — 834×1194 pt, 2× DPR, iPadOS / Safari (WebKit)
+        ...devices['iPad Pro 11'],
+      },
+    },
+    {
+      name: 'ipad-13-landscape',
+      use: {
+        // iPad Pro 12.9" / 13" landscape — 2732×2048px display at 2× → 1366×1024 CSS px
+        viewport: { width: 1366, height: 1024 },
+        deviceScaleFactor: 2,
+        isMobile: true,
+        hasTouch: true,
+        defaultBrowserType: 'chromium',
+        userAgent:
+          'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 ' +
+          '(KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+      },
+    },
+    {
+      // WebKit build — catches Safari-specific word-wrap bugs in CSS columns.
+      // The horizontal overflow tests (IPAD-9/10/11) are most meaningful here.
+      name: 'ipad-13-landscape-webkit',
+      use: {
+        viewport: { width: 1366, height: 1024 },
+        deviceScaleFactor: 2,
+        isMobile: true,
+        hasTouch: true,
+        defaultBrowserType: 'webkit',
+        userAgent:
+          'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 ' +
+          '(KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+      },
     },
   ],
 })

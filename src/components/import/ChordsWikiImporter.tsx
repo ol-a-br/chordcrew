@@ -55,6 +55,7 @@ export function ChordsWikiImporter() {
           updatedAt: Date.now(),
         }
         await db.books.put(book)
+        await markPending('book', bookId)
         res.books++
 
         for (const [cwSongId, cwSong] of Object.entries(cwBook.songs)) {
@@ -124,6 +125,7 @@ export function ChordsWikiImporter() {
             updatedAt:  Date.now(),
             transcription,
           })
+          await markPending('song', newId)
           res.songs++
         }
       }
@@ -137,6 +139,7 @@ export function ChordsWikiImporter() {
           updatedAt: Date.now(),
         }
         await db.setlists.put(setlist)
+        await markPending('setlist', setlistId)
 
         const items = Object.values(cwSl.items).sort((a, b) => a.order - b.order)
         for (const item of items) {

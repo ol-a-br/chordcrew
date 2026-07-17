@@ -112,6 +112,18 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, syncing, isOnline])
 
+  // Auto-sync once when user first signs in (lastSync === null means never synced).
+  // This pulls down any cloud data immediately after login without the user needing
+  // to press "Sync Now" manually.
+  const initialSyncFiredRef = useRef(false)
+  useEffect(() => {
+    if (!user || !firebaseConfigured || !isOnline) return
+    if (lastSync !== null) return          // already synced before
+    if (initialSyncFiredRef.current) return
+    initialSyncFiredRef.current = true
+    syncNow()
+  }, [user, lastSync, isOnline, syncNow])
+
   return (
     <SyncContext.Provider value={{ status, pendingCount, lastSync, error, syncNow }}>
       {children}

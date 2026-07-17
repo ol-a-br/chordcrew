@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  html { font-family: 'Outfit', sans-serif; }
+  html { font-family: 'Outfit', sans-serif; touch-action: manipulation; }
   body { @apply bg-surface-0 text-ink; }
 
   @keyframes fade-in {
@@ -39,10 +39,20 @@
   column-fill: auto;
 }
 
-/* Prevent sections splitting across columns */
+/* Prevent sections splitting across columns in normal (non-page-flip) layout.
+   In page-flip mode this is intentionally overridden below: at large font scales
+   a section (verse/chorus) can be taller than a single column, so we allow
+   paragraph breaks there rather than letting the browser violate the rule and
+   produce overlapping content. The .row rule below keeps chord+lyric pairs
+   together even when a paragraph is allowed to break. */
 .chordpro-output .paragraph {
   break-inside: avoid;
   margin-bottom: 1.25rem;
+}
+/* Page-flip: allow sections to break across CSS columns so that long paragraphs
+   at high font scales don't overflow or overlap into adjacent columns. */
+.chordpro-output.page-flip .paragraph {
+  break-inside: auto;
 }
 
 /* Section headers — directive syntax: h3.label */
@@ -101,28 +111,42 @@
   line-height: 1;
 }
 
-/* Each chord+lyric row — flex-start so all chord tops align at the same height.
-   break-inside:avoid prevents a CSS column break from splitting chord off its lyric. */
+/* Each chord+lyric row — block so ruby elements wrap naturally.
+   break-inside:avoid prevents a CSS column break from splitting a row.
+   overflow-wrap:break-word covers edge cases where a single lyric word is
+   longer than the CSS column width (forces a mid-word break rather than
+   overflow). */
 .chordpro-output .row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  min-height: 2.8em;
-  column-gap: 0.3em;
+  display: block;
   break-inside: avoid;
   page-break-inside: avoid; /* legacy */
+  overflow-wrap: break-word;
 }
 
-/* Each chord+lyric column pair.
-   pre-wrap preserves intentional spaces but allows wrapping at column edges.
-   max-width:100% prevents a single pair from overflowing the CSS column. */
-.chordpro-output .column {
+/* Native ruby elements carry one lyric run with its chord annotation above.
+   ruby-align:start left-aligns the chord to the start of the base text,
+   matching chord sheet convention (chord marks where it first sounds).
+   white-space:pre-wrap is required for WebKit/Safari to activate proper ruby
+   annotation layout (rt positioned above base text). Removing it causes Safari
+   to stop rendering rt elements as chord annotations (they disappear).
+   Word-wrap between adjacent ruby elements at CSS column boundaries is handled
+   by <wbr> elements injected by SongRenderer after each ruby — those are
+   outside the ruby's own white-space scope so pre-wrap does not suppress them. */
+.chordpro-output ruby {
+  ruby-align: start;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* Section-header rows still use flex so badge + label sit side-by-side */
+.chordpro-output .section-header-row {
+  display: flex;
+  align-items: baseline;
+}
+.chordpro-output .section-header-row .column {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  max-width: 100%;
 }
 
 /* Song title — chordsheetjs outputs <h1> (no class) for {title:}.
@@ -141,16 +165,32 @@
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 0.8em;
   @apply text-ink-muted;
-  margin: 0 0 0.6rem 0;
+  margin: 0 0 0.25rem 0;
   line-height: 1.4;
 }
 
-/* The chord itself — light yellow for dark stage backgrounds */
-.chordpro-output .chord {
+/* Song meta line (key · ♩ tempo) — injected by SongRenderer after h1/h2 */
+.chordpro-output .song-meta-line {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72em;
+  @apply text-ink-faint;
+  margin: 0 0 0.75rem 0;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+/* The chord itself — light yellow for dark stage backgrounds.
+   ruby rt carries the chord annotation in the new ruby layout. */
+.chordpro-output .chord,
+.chordpro-output ruby rt {
   @apply text-chord font-mono font-medium;
   font-size: 0.85em;
-  min-height: 1.2em;
   line-height: 1.2;
+  white-space: nowrap;
+}
+/* Keep min-height on legacy .chord (section-header-row still uses .chord divs) */
+.chordpro-output .chord {
+  min-height: 1.2em;
 }
 /* Chord quality modifier: "sus4" in Dsus4, "maj7" in Amaj7 — ~70% of the base
    renderer font (0.82em within .chord which is itself 0.85em of base = ~0.70em abs).
@@ -184,10 +224,9 @@
   line-height: 1.6;
 }
 
-/* Lyrics-only mode — hide all chords */
+/* Lyrics-only mode — hide all chords and ruby annotations */
 .chordpro-output.lyrics-only .chord { display: none; }
-.chordpro-output.lyrics-only .row { min-height: unset; }
-.chordpro-output.lyrics-only .column { flex-direction: row; }
+.chordpro-output.lyrics-only ruby rt { display: none; }
 
 /* Comment lines — also used for {repeat: Chorus} indicators */
 .chordpro-output .comment {
@@ -283,6 +322,7 @@
   .chordpro-output .comment { color: #555 !important; font-style: italic; }
   .chordpro-output h1 { color: black !important; }
   .chordpro-output h2 { color: #555 !important; }
+  .chordpro-output .song-meta-line { color: #666 !important; }
 
   /* Lyrics */
   .chordpro-output .lyrics { color: black !important; }

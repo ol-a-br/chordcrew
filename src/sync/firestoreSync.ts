@@ -26,13 +26,15 @@ import {
 } from 'firebase/firestore'
 import { firestore } from '@/firebase'
 import { db } from '@/db'
-import type { Book, Song, Setlist, SetlistItem, Team } from '@/types'
+import type { Book, Song, Setlist, SetlistItem, Team, SongNote } from '@/types'
 
 // ─── Upload ───────────────────────────────────────────────────────────────────
 
 async function uploadPending(userId: string): Promise<void> {
-  const pending = await db.syncStates.where('status').equals('pending').toArray()
+  const pending = await db.syncStates.where('status').anyOf('pending', 'deleted').toArray()
   if (pending.length === 0) return
+
+  const errors: Error[] = []
 
   // Find which teams this user belongs to (for team-scoped uploads)
   const allTeams = await db.teams.toArray()
@@ -45,41 +47,101 @@ async function uploadPending(userId: string): Promise<void> {
   for (const state of pending) {
     const { entityType, entityId } = state
     try {
+      // Handle deletion tombstones: delete from every listed Firestore path, write
+      // deletion records so other devices can learn about the deletion, then clean up.
+      if (state.status === 'deleted') {
+        const deletedAt = Date.now()
+        for (const path of state.deleteFromPaths ?? []) {
+          await deleteDoc(doc(firestore!, path)).catch(() => {})
+        }
+        // Write deletion log entries so other devices remove the song on their next sync.
+        // Personal log entry (readable by all devices of this user)
+        await setDoc(
+          doc(firestore!, 'users', userId, 'deletions', entityId),
+          { entityId, entityType, deletedAt },
+        ).catch(() => {})
+        // Team log entry (readable by all team members) — extract teamId from deleteFromPaths
+        const teamPath = (state.deleteFromPaths ?? []).find(p => p.startsWith('teams/'))
+        if (teamPath) {
+          const teamId = teamPath.split('/')[1]
+          await setDoc(
+            doc(firestore!, 'teams', teamId, 'deletions', entityId),
+            { entityId, entityType, deletedAt },
+          ).catch(() => {})
+        }
+        await db.syncStates.delete(state.id)
+        continue
+      }
+
       if (entityType === 'song') {
         const entity = await db.songs.get(entityId)
         if (entity) {
-          // Write to personal space; also to team space if song belongs to a team
-          await setDoc(doc(firestore!, 'users', userId, 'songs', entityId), stripUndefined(entity))
-          if (entity.bookId) {
-            const book = await db.books.get(entity.bookId)
-            if (book?.sharedTeamId && myTeamIds.has(book.sharedTeamId)) {
-              await setDoc(doc(firestore!, 'teams', book.sharedTeamId, 'songs', entityId), stripUndefined(entity))
+          const remoteRef = doc(firestore!, 'users', userId, 'songs', entityId)
+          const remoteSnap = await getDoc(remoteRef)
+          const remote = remoteSnap.exists() ? (remoteSnap.data() as Song) : null
+
+          if (remote && remote.updatedAt > entity.updatedAt) {
+            // Remote is newer — pull it down instead of overwriting it with stale local data.
+            // Preserve accessedAt (a device-local field that doesn't affect content).
+            await db.songs.put(stripUndefined({ ...remote, accessedAt: entity.accessedAt ?? remote.accessedAt }))
+          } else {
+            // Local is newer (or no remote exists) — upload
+            await setDoc(remoteRef, stripUndefined(entity))
+            if (entity.bookId) {
+              const book = await db.books.get(entity.bookId)
+              if (book?.sharedTeamId && myTeamIds.has(book.sharedTeamId)) {
+                await setDoc(doc(firestore!, 'teams', book.sharedTeamId, 'songs', entityId), stripUndefined(entity))
+              }
             }
           }
         }
       } else if (entityType === 'book') {
         const entity = await db.books.get(entityId)
         if (entity) {
-          await setDoc(doc(firestore!, 'users', userId, 'books', entityId), stripUndefined(entity))
-          if (entity.sharedTeamId && myTeamIds.has(entity.sharedTeamId)) {
-            await setDoc(doc(firestore!, 'teams', entity.sharedTeamId, 'books', entityId), stripUndefined(entity))
+          const remoteRef = doc(firestore!, 'users', userId, 'books', entityId)
+          const remoteSnap = await getDoc(remoteRef)
+          const remote = remoteSnap.exists() ? (remoteSnap.data() as Book) : null
+
+          if (remote && remote.updatedAt > entity.updatedAt) {
+            await db.books.put(remote)
+          } else {
+            await setDoc(remoteRef, stripUndefined(entity))
+            if (entity.sharedTeamId && myTeamIds.has(entity.sharedTeamId)) {
+              await setDoc(doc(firestore!, 'teams', entity.sharedTeamId, 'books', entityId), stripUndefined(entity))
+            }
           }
         }
       } else if (entityType === 'setlist') {
         const entity = await db.setlists.get(entityId)
         if (entity) {
-          const target = entity.sharedTeamId && myTeamIds.has(entity.sharedTeamId)
-            ? doc(firestore!, 'teams', entity.sharedTeamId, 'setlists', entityId)
+          const isTeam = !!(entity.sharedTeamId && myTeamIds.has(entity.sharedTeamId))
+          const remoteRef = isTeam
+            ? doc(firestore!, 'teams', entity.sharedTeamId!, 'setlists', entityId)
             : doc(firestore!, 'users', userId, 'setlists', entityId)
-          await setDoc(target, stripUndefined(entity))
-          // Also upload all items for this setlist
-          const items = await db.setlistItems.where('setlistId').equals(entityId).toArray()
-          const itemsBase = entity.sharedTeamId && myTeamIds.has(entity.sharedTeamId)
-            ? `teams/${entity.sharedTeamId}`
-            : `users/${userId}`
-          await Promise.all(items.map(item =>
-            setDoc(doc(firestore!, itemsBase, 'setlistItems', item.id), stripUndefined(item))
-          ))
+          const remoteSnap = await getDoc(remoteRef)
+          const remote = remoteSnap.exists() ? (remoteSnap.data() as Setlist) : null
+
+          if (remote && remote.updatedAt > entity.updatedAt) {
+            // Remote setlist is newer — download it; items will be refreshed in downloadPersonal
+            await db.setlists.put(stripUndefined({ ...remote, accessedAt: entity.accessedAt ?? remote.accessedAt }))
+          } else {
+            await setDoc(remoteRef, stripUndefined(entity))
+            const localItems = await db.setlistItems.where('setlistId').equals(entityId).toArray()
+            const localItemIds = new Set(localItems.map(i => i.id))
+            const itemsBase = isTeam ? `teams/${entity.sharedTeamId}` : `users/${userId}`
+            // Delete remote items that no longer exist locally (captures user deletions)
+            const remoteItemsSnap = await getDocs(
+              query(collection(firestore!, itemsBase, 'setlistItems'), where('setlistId', '==', entityId))
+            )
+            await Promise.all(
+              remoteItemsSnap.docs
+                .filter(d => !localItemIds.has(d.id))
+                .map(d => deleteDoc(d.ref))
+            )
+            await Promise.all(localItems.map(item =>
+              setDoc(doc(firestore!, itemsBase, 'setlistItems', item.id), stripUndefined(item))
+            ))
+          }
         }
       }
 
@@ -91,29 +153,77 @@ async function uploadPending(userId: string): Promise<void> {
       })
     } catch (err) {
       console.error(`Failed to sync ${entityType}:${entityId}`, err)
-      throw err
+      errors.push(err as Error)
     }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(
+      errors.length === 1
+        ? errors[0].message
+        : `${errors.length} entities failed to sync`
+    )
   }
 }
 
 // ─── Download ─────────────────────────────────────────────────────────────────
 
-async function downloadPersonal(userId: string): Promise<void> {
-  // Books
+const DELETION_LOG_TTL = 90 * 24 * 60 * 60 * 1000  // 90 days
+
+// Read a deletion log collection, apply removals locally, prune expired records.
+// A deletion is skipped if the local copy has a pending edit or was updated after
+// the deletion timestamp (concurrent edit on this device wins).
+async function applyDeletionLog(collectionPath: string): Promise<void> {
+  if (!firestore) return
+  const snaps = await getDocs(collection(firestore, collectionPath)).catch(() => null)
+  if (!snaps) return
+  for (const snap of snaps.docs) {
+    const { entityId, entityType, deletedAt } =
+      snap.data() as { entityId: string; entityType: string; deletedAt: number }
+    if (entityType === 'song') {
+      const syncState = await db.syncStates.get(`song:${entityId}`)
+      if (syncState?.status === 'pending') continue  // local unsaved edit wins
+      const local = await db.songs.get(entityId)
+      if (local && local.updatedAt > deletedAt) continue  // newer local version wins
+      await db.songs.delete(entityId).catch(() => {})
+      await db.syncStates.delete(`song:${entityId}`).catch(() => {})
+    }
+    if (Date.now() - deletedAt > DELETION_LOG_TTL) {
+      await deleteDoc(snap.ref).catch(() => {})
+    }
+  }
+}
+
+async function downloadPersonal(userId: string): Promise<Set<string>> {
+  // Books — return discovered team IDs so downloadTeams can sync them even on
+  // a fresh device where local Dexie has no teams yet.
+  //
+  // Books and setlists are always written from Firestore regardless of local
+  // updatedAt: they're small, upload always runs before download in syncNow,
+  // and the updatedAt guard caused stale local copies to survive indefinitely.
+  // The only exception: skip if a 'pending' syncState exists (local unsaved changes).
+  const discoveredTeamIds = new Set<string>()
   const remoteBooks = await getDocs(collection(firestore!, 'users', userId, 'books'))
   for (const snap of remoteBooks.docs) {
     const remote = snap.data() as Book
-    const local = await db.books.get(remote.id)
-    if (!local || remote.updatedAt > local.updatedAt) await db.books.put(remote)
+    const syncState = await db.syncStates.get(`book:${remote.id}`)
+    if (syncState?.status !== 'pending') {
+      await db.books.put(remote)
+    }
+    if (remote.sharedTeamId) discoveredTeamIds.add(remote.sharedTeamId)
   }
 
-  // Songs
+  // Songs — skip if pending (uploadPending handles it) or deleted (tombstone, don't re-add)
   const remoteSongs = await getDocs(collection(firestore!, 'users', userId, 'songs'))
   for (const snap of remoteSongs.docs) {
     const remote = snap.data() as Song
     const local = await db.songs.get(remote.id)
+    const syncState = await db.syncStates.get(`song:${remote.id}`)
+    if (syncState?.status === 'pending') continue
+    if (syncState?.status === 'deleted') continue  // locally deleted — don't re-add
     if (!local || remote.updatedAt > local.updatedAt) {
-      await db.songs.put(remote)
+      // Preserve device-local accessedAt when pulling remote content
+      await db.songs.put(stripUndefined({ ...remote, accessedAt: local?.accessedAt ?? remote.accessedAt }))
       await db.syncStates.put({
         id: `song:${remote.id}`, entityType: 'song', entityId: remote.id,
         localVersion: 1, syncedVersion: 1, status: 'clean', updatedAt: Date.now(),
@@ -121,13 +231,15 @@ async function downloadPersonal(userId: string): Promise<void> {
     }
   }
 
-  // Setlists
+  // Setlists — same always-download approach as books
+  const downloadedSetlistIds = new Set<string>()
   const remoteSetlists = await getDocs(collection(firestore!, 'users', userId, 'setlists'))
   for (const snap of remoteSetlists.docs) {
     const remote = snap.data() as Setlist
-    const local = await db.setlists.get(remote.id)
-    if (!local || remote.updatedAt > local.updatedAt) {
+    const syncState = await db.syncStates.get(`setlist:${remote.id}`)
+    if (syncState?.status !== 'pending') {
       await db.setlists.put(remote)
+      downloadedSetlistIds.add(remote.id)
       await db.syncStates.put({
         id: `setlist:${remote.id}`, entityType: 'setlist', entityId: remote.id,
         localVersion: 1, syncedVersion: 1, status: 'clean', updatedAt: Date.now(),
@@ -135,19 +247,52 @@ async function downloadPersonal(userId: string): Promise<void> {
     }
   }
 
-  // SetlistItems — no conflict tracking, always upsert remote
+  // SetlistItems — reconcile per downloaded setlist so remote deletions are honoured.
+  // Pending setlists are skipped: their items are authoritative locally and will be
+  // uploaded (with deletions) in the next uploadPending pass.
   const remoteItems = await getDocs(collection(firestore!, 'users', userId, 'setlistItems'))
+  const remoteItemsBySetlist = new Map<string, SetlistItem[]>()
   for (const snap of remoteItems.docs) {
-    await db.setlistItems.put(snap.data() as SetlistItem)
+    const item = snap.data() as SetlistItem
+    const bucket = remoteItemsBySetlist.get(item.setlistId) ?? []
+    bucket.push(item)
+    remoteItemsBySetlist.set(item.setlistId, bucket)
   }
+  for (const setlistId of downloadedSetlistIds) {
+    const remoteForSetlist = remoteItemsBySetlist.get(setlistId) ?? []
+    const remoteIds = new Set(remoteForSetlist.map(i => i.id))
+    const localItems = await db.setlistItems.where('setlistId').equals(setlistId).toArray()
+    // Remove local items that no longer exist in Firestore
+    const toDelete = localItems.filter(i => !remoteIds.has(i.id)).map(i => i.id)
+    if (toDelete.length > 0) await db.setlistItems.bulkDelete(toDelete)
+    // Upsert all remote items
+    if (remoteForSetlist.length > 0) await db.setlistItems.bulkPut(remoteForSetlist)
+  }
+
+  // Notes — always download; they are user-private and small
+  const remoteNotes = await getDocs(collection(firestore!, 'users', userId, 'notes'))
+  for (const snap of remoteNotes.docs) {
+    const remote = snap.data() as SongNote
+    const local = await db.songNotes.get(remote.id)
+    if (!local || remote.updatedAt > local.updatedAt) {
+      await db.songNotes.put(remote)
+    }
+  }
+
+  // Apply personal deletion log — propagate deletions made on other devices
+  await applyDeletionLog(`users/${userId}/deletions`)
+
+  return discoveredTeamIds
 }
 
-async function downloadTeams(userId: string, userEmail: string): Promise<void> {
-  // Get all local teams to know which team spaces to sync
+async function downloadTeams(userId: string, userEmail: string, discoveredTeamIds: Set<string>): Promise<void> {
+  // Merge local known teams + teams discovered from personal books during downloadPersonal.
+  // On a fresh device, localTeams is empty — discoveredTeamIds bridges that gap.
   const localTeams = await db.teams.toArray()
-  const myTeamIds = localTeams
+  const localTeamIds = localTeams
     .filter(t => t.ownerId === userId || t.members.some(m => m.userId === userId || m.email === userEmail))
     .map(t => t.id)
+  const myTeamIds = [...new Set([...localTeamIds, ...discoveredTeamIds])]
 
   // Also check Firestore for teams where this user is an accepted member
   // (they may have accepted an invite on another device)
@@ -166,36 +311,200 @@ async function downloadTeams(userId: string, userEmail: string): Promise<void> {
     for (const snap of teamSongs.docs) {
       const remote = snap.data() as Song
       const local = await db.songs.get(remote.id)
+      const syncState = await db.syncStates.get(`song:${remote.id}`)
+      if (syncState?.status === 'deleted') continue  // locally deleted — don't re-add
       if (!local || remote.updatedAt > local.updatedAt) await db.songs.put(remote)
     }
 
+    // Apply team deletion log — propagate song deletions to all team members
+    await applyDeletionLog(`teams/${teamId}/deletions`)
+
     // Team setlists + items
+    const downloadedTeamSetlistIds = new Set<string>()
     const teamSetlists = await getDocs(collection(firestore!, 'teams', teamId, 'setlists'))
     for (const snap of teamSetlists.docs) {
       const remote = snap.data() as Setlist
       const local = await db.setlists.get(remote.id)
-      if (!local || remote.updatedAt > local.updatedAt) await db.setlists.put(remote)
+      const syncState = await db.syncStates.get(`setlist:${remote.id}`)
+      if (syncState?.status !== 'pending' && (!local || remote.updatedAt > local.updatedAt)) {
+        await db.setlists.put(remote)
+        downloadedTeamSetlistIds.add(remote.id)
+      }
     }
     const teamItems = await getDocs(collection(firestore!, 'teams', teamId, 'setlistItems'))
+    const teamItemsBySetlist = new Map<string, SetlistItem[]>()
     for (const snap of teamItems.docs) {
-      await db.setlistItems.put(snap.data() as SetlistItem)
+      const item = snap.data() as SetlistItem
+      const bucket = teamItemsBySetlist.get(item.setlistId) ?? []
+      bucket.push(item)
+      teamItemsBySetlist.set(item.setlistId, bucket)
+    }
+    for (const sid of downloadedTeamSetlistIds) {
+      const remoteForSetlist = teamItemsBySetlist.get(sid) ?? []
+      const remoteIds = new Set(remoteForSetlist.map(i => i.id))
+      const localItems = await db.setlistItems.where('setlistId').equals(sid).toArray()
+      const toDelete = localItems.filter(i => !remoteIds.has(i.id)).map(i => i.id)
+      if (toDelete.length > 0) await db.setlistItems.bulkDelete(toDelete)
+      if (remoteForSetlist.length > 0) await db.setlistItems.bulkPut(remoteForSetlist)
     }
   }
+}
+
+/**
+ * Fetch note indicators for a specific team song (for the editor badge).
+ * Returns true if any team member has notes for this song.
+ */
+export async function fetchTeamNoteIndicator(teamId: string, songId: string): Promise<boolean> {
+  if (!firestore) return false
+  try {
+    const snap = await getDoc(doc(firestore, 'teams', teamId, 'noteIndicators', songId))
+    return snap.exists() && snap.data()?.hasNotes === true
+  } catch { return false }
+}
+
+// ─── Repair: upload orphaned local entities ────────────────────────────────────
+//
+// Entities created by the importer before markPending calls were added have no
+// SyncState entry → they were never uploaded to Firestore → invisible on other
+// devices.  This repair runs once (guarded by localStorage) and uploads any
+// book / song / setlist that lacks a SyncState.
+
+// v2: uses getDoc to verify actual Firestore presence instead of trusting syncState history.
+// This handles the case where v1 set its flag on a device before the source device had
+// uploaded, leaving Firestore empty for personal books/setlists.
+const REPAIR_FLAG = 'chordcrew-repair-v2'
+
+async function repairOrphaned(userId: string): Promise<void> {
+  if (localStorage.getItem(REPAIR_FLAG)) return   // already done on this device
+  if (!firestore) return
+
+  // Build myTeamIds from local teams + sharedTeamId refs in local books
+  const allBooks = await db.books.toArray()
+  const allTeams = await db.teams.toArray()
+  const myTeamIds = new Set([
+    ...allTeams
+      .filter(t => t.ownerId === userId || t.members.some(m => m.userId === userId))
+      .map(t => t.id),
+    ...allBooks.map(b => b.sharedTeamId).filter(Boolean) as string[],
+  ])
+
+  // ── Books: upload any book not present in Firestore ──
+  for (const book of allBooks) {
+    const snap = await getDoc(doc(firestore, 'users', userId, 'books', book.id))
+    if (snap.exists()) continue   // already in Firestore — nothing to do
+    await setDoc(doc(firestore, 'users', userId, 'books', book.id), stripUndefined(book))
+    if (book.sharedTeamId && myTeamIds.has(book.sharedTeamId)) {
+      await setDoc(doc(firestore, 'teams', book.sharedTeamId, 'books', book.id), stripUndefined(book))
+    }
+    await db.syncStates.put({
+      id: `book:${book.id}`, entityType: 'book', entityId: book.id,
+      localVersion: 1, syncedVersion: 1, status: 'clean', updatedAt: Date.now(),
+    })
+  }
+
+  // ── Songs: upload any song not present in Firestore ──
+  const allSongs = await db.songs.toArray()
+  const bookTeamMap = new Map(allBooks.filter(b => b.sharedTeamId).map(b => [b.id, b.sharedTeamId!]))
+  for (const song of allSongs) {
+    // Skip songs that have any syncState: they are already part of the sync system.
+    // A missing Firestore doc for a synced song means it was intentionally deleted
+    // from another device — re-uploading it would undo that deletion.
+    const existingSyncState = await db.syncStates.get(`song:${song.id}`)
+    if (existingSyncState) continue
+    const snap = await getDoc(doc(firestore, 'users', userId, 'songs', song.id))
+    if (snap.exists()) continue
+    await setDoc(doc(firestore, 'users', userId, 'songs', song.id), stripUndefined(song))
+    const teamId = bookTeamMap.get(song.bookId)
+    if (teamId && myTeamIds.has(teamId)) {
+      await setDoc(doc(firestore, 'teams', teamId, 'songs', song.id), stripUndefined(song))
+    }
+    await db.syncStates.put({
+      id: `song:${song.id}`, entityType: 'song', entityId: song.id,
+      localVersion: 1, syncedVersion: 1, status: 'clean', updatedAt: Date.now(),
+    })
+  }
+
+  // ── Setlists: upload any setlist not present in Firestore ──
+  const allSetlists = await db.setlists.toArray()
+  for (const setlist of allSetlists) {
+    const target = setlist.sharedTeamId && myTeamIds.has(setlist.sharedTeamId)
+      ? doc(firestore, 'teams', setlist.sharedTeamId, 'setlists', setlist.id)
+      : doc(firestore, 'users', userId, 'setlists', setlist.id)
+    const snap = await getDoc(target)
+    if (snap.exists()) continue
+    await setDoc(target, stripUndefined(setlist))
+    const items = await db.setlistItems.where('setlistId').equals(setlist.id).toArray()
+    const itemsBase = setlist.sharedTeamId && myTeamIds.has(setlist.sharedTeamId)
+      ? `teams/${setlist.sharedTeamId}`
+      : `users/${userId}`
+    await Promise.all(items.map(item =>
+      setDoc(doc(firestore!, itemsBase, 'setlistItems', item.id), stripUndefined(item))
+    ))
+    await db.syncStates.put({
+      id: `setlist:${setlist.id}`, entityType: 'setlist', entityId: setlist.id,
+      localVersion: 1, syncedVersion: 1, status: 'clean', updatedAt: Date.now(),
+    })
+  }
+
+  localStorage.setItem(REPAIR_FLAG, '1')
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function syncNow(userId: string, userEmail: string): Promise<void> {
   if (!firestore) throw new Error('Firestore not configured')
+  await repairOrphaned(userId)
   await uploadPending(userId)
-  await downloadPersonal(userId)
-  await downloadTeams(userId, userEmail)
+  const discoveredTeamIds = await downloadPersonal(userId)
+  await downloadTeams(userId, userEmail, discoveredTeamIds)
 }
 
 /** Write a team document to Firestore (called after creating/updating a team). */
 export async function syncTeam(team: Team): Promise<void> {
   if (!firestore) return
   await setDoc(doc(firestore, 'teams', team.id), stripUndefined(team))
+}
+
+/**
+ * Upload a single song note to Firestore (personal path) and optionally
+ * write/remove a team note indicator so worship leaders know notes exist.
+ */
+export async function syncNote(
+  note: SongNote,
+  userId: string,
+  teamId?: string
+): Promise<void> {
+  if (!firestore) return
+  await setDoc(doc(firestore, 'users', userId, 'notes', note.id), stripUndefined(note))
+  if (teamId) {
+    // The indicator just marks that *someone* has a note; content never leaves personal space
+    await setDoc(
+      doc(firestore, 'teams', teamId, 'noteIndicators', note.songId),
+      { songId: note.songId, hasNotes: true, updatedAt: Date.now() }
+    )
+  }
+}
+
+/**
+ * Delete a note from Firestore. If no other team member has a note for this song,
+ * also removes the team indicator (best-effort).
+ */
+export async function deleteNoteFromCloud(
+  noteId: string,
+  songId: string,
+  userId: string,
+  teamId?: string
+): Promise<void> {
+  if (!firestore) return
+  try {
+    await deleteDoc(doc(firestore, 'users', userId, 'notes', noteId))
+    if (teamId) {
+      // Remove indicator only if no other notes for this song exist in the team space.
+      // We can't enumerate others' private notes, so we just delete it — if another
+      // member still has a note, their next sync will re-create the indicator.
+      await deleteDoc(doc(firestore, 'teams', teamId, 'noteIndicators', songId))
+    }
+  } catch { /* best-effort */ }
 }
 
 // ─── Delete helpers (best-effort, non-blocking) ────────────────────────────────

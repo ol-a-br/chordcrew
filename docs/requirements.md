@@ -101,6 +101,7 @@
 | RENDER-13 | Section badge rendered as graphical bordered box; repeated sections show superscript count (B²). | done |
 | RENDER-14 | Spaces between adjacent chords in chord-only lines preserved in rendered output. | done |
 | RENDER-15 | Non-chord text in chord position (e.g. "(To Bridge)", "(last Time)") rendered as italic, muted prose — not yellow chord style. | done |
+| RENDER-16 | Mid-word chord columns (chord placed inside a word, e.g. `Kni[Am]en`) are grouped in a `display:inline-flex; flex-wrap:nowrap` DOM wrapper so the word cannot be split across lines by the row's flex-wrap. | done |
 
 ---
 
@@ -120,6 +121,9 @@
 | PERF-10 | Quick-jump slide-out tray for non-sequential song navigation. | done |
 | PERF-11 | Pinch-to-zoom in performance mode. | planned |
 | PERF-12 | Multi-column mode: horizontal column-by-column page flip, scrollbar hidden. | done |
+| PERF-13 | Edit (pencil) button in the performance mode controls overlay — navigates to `/editor/{id}` without leaving the setlist context in history. | done |
+| PERF-14 | Keyboard / Bluetooth-pedal navigation (ArrowLeft / ArrowRight) advances columns silently — does not reveal or reset the auto-hide timer for the controls overlay. | done |
+| PERF-15 | Adjacent songs in a setlist are pre-rendered into the module-level cache within 100 ms of the current song displaying, using `setTimeout(0)` for immediate scheduling. | done |
 
 ---
 
@@ -253,4 +257,134 @@
 
 ---
 
-*Last updated: 2026-04-06*
+## REQ-NOTES — Personal Song Notes
+
+Team members can take private notes on any song. Notes are visible only to the author, synced to the cloud, and displayed automatically during setlist performance so the member can recall context as each song begins.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| NOTES-01 | Personal notes stored per user (userId + songId); other users cannot read them. | done |
+| NOTES-02 | Notes panel can be shown/hidden in Viewer and Performance mode via a toggle button. | done |
+| NOTES-03 | In Performance mode (setlist), notes auto-display on song transition for a configurable duration (default 2 s), positioned on the right so the left part of the song remains visible. | done |
+| NOTES-04 | Navigating to next/previous song (pedal, tap, or arrow key) hides notes immediately. | done |
+| NOTES-05 | Notes synced to personal Firestore path `/users/{uid}/notes/{id}` and included in manual sync. | done |
+| NOTES-06 | In the Editor, a subtle indicator badge shows when any team member has notes for the song (without revealing content) — helps worship leaders avoid accidental data loss. | done |
+| NOTES-07 | Note indicator stored at `/teams/{teamId}/noteIndicators/{songId}` in Firestore; updated on save/delete. | done |
+| NOTES-08 | Note duration configurable in Settings (Performance section) — slider 1–10 s, default 2 s. | done |
+
+---
+
+## REQ-CT — ChurchTools Integration
+
+ChordCrew can push songs and setlists to a ChurchTools instance. The ChurchTools URL is user-configurable. Authentication uses ChurchTools username/password to obtain a session token stored locally. All write operations require explicit user confirmation before executing.
+
+### REQ-CT-SETTINGS — Configuration
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| CT-S01 | ChurchTools base URL configurable in Settings (e.g. `https://mychurch.church.tools`). | planned |
+| CT-S02 | Connect / disconnect: user enters ChurchTools username + password; app exchanges for a session token via `POST /api/login`; token stored in settings. | planned |
+| CT-S03 | Connection status shown in Settings: connected (person name + church) / disconnected / error. | planned |
+| CT-S04 | Default song category (ChurchTools `categoryId`) selectable from a dropdown populated via `GET /api/event/masterdata`. | planned |
+
+### REQ-CT-SONGS — Song Upload
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| CT-SO01 | Single-song upload from Song Viewer toolbar: button "Upload to ChurchTools". | planned |
+| CT-SO02 | Batch upload from Library → Organize: select multiple songs and "Upload to ChurchTools". | planned |
+| CT-SO03 | Before any write, show a confirmation dialog listing songs to create vs. songs already existing in ChurchTools (matched by name, case-insensitive). | planned |
+| CT-SO04 | New songs created via `POST /api/songs` (fields: `name`, `author`, `categoryId`, `ccli`, `copyright`). | planned |
+| CT-SO05 | After song creation, a default arrangement is created via `POST /api/songs/{id}/arrangements` with `key`, `tempo`, `beat` (time signature), `duration` from the ChordCrew song metadata. | planned |
+| CT-SO06 | Songs already present in ChurchTools are skipped (not overwritten); shown as "Already exists" in the result summary. | planned |
+| CT-SO07 | Upload result summary shown after batch: N created, M skipped (already existed), K failed. | planned |
+
+### REQ-CT-EVENTS — Setlist → Event Upload
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| CT-E01 | "Upload to ChurchTools event" action on a setlist; available from `SetlistDetailPage`. | planned |
+| CT-E02 | App fetches events on the setlist's planned date (`GET /api/events?from=DATE&to=NEXT_DAY`); user picks the matching event from a list. | planned |
+| CT-E03 | Confirmation dialog shows: event name, list of songs to add (new vs already on agenda). | planned |
+| CT-E04 | For each setlist song: ensure song exists in ChurchTools (create if missing); then add to the event's agenda via `POST /api/events/{eventId}/agenda/items`. | planned |
+| CT-E05 | Songs already on the event's agenda are skipped. | planned |
+| CT-E06 | Divider items in the setlist are not uploaded (ChurchTools agenda items are song-only). | planned |
+
+---
+
+## REQ-LINKED — Linked Song Copies
+
+When a personal song is copied into a team book the two instances immediately begin to diverge independently. This feature tracks the relationship, detects drift, and lets the user reconcile them manually.
+
+### Resolved design decisions
+
+| # | Decision | Resolution |
+|---|----------|------------|
+| D1 | **Sync direction** | **Automatic: newer `updatedAt` wins.** The sync dialog reports which copy is newer and which will be overwritten ("Book A · updated 3 days ago → overwrites → Book B · updated 2 weeks ago"). User confirms or cancels. Before overwriting, `upsertSongVersions` is called on the target so the displaced content lands in its 3-snapshot version history and can be restored from the Editor. |
+| D2 | **Sync scope** | **Full sync** — all song fields (content, key, tempo, capo, title, artist, tags) are written on sync. |
+| D3 | **Key differences as divergence** | **Skip key for detection only.** `transcription.key` differences do not trigger the divergence badge. The divergence check compares `transcription.content` (normalised whitespace) plus title/artist/tags/tempo/capo. Key is still written on a confirmed sync (full sync, D2). |
+| D4 | **N-way copies** | **Many links allowed.** `linkedSongIds: string[]` on each song. Sync is always pairwise; when multiple copies exist the dialog asks the user to pick which pair to reconcile first. |
+| D5 | **Indicator placement** | **Library, Editor, and Viewer** (not Performance/presentation mode). |
+| D6 | **Unlinking** | **No unlink action.** If the user wants independent copies they can duplicate the song instead. Removes LINKED-CUR04 from scope. |
+| D7 | **Retroactive linking** | **Both options**: (a) Jaccard-based suggestions (reuse existing duplicate detection) with user confirmation, and (b) free-text search-and-select for songs that fall below the similarity threshold. |
+
+### REQ-LINKED-DATA — Data model
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-D01 | `Song` gains an optional `linkedSongIds?: string[]` field — the IDs of all other copies of this song across books. | planned |
+| LINKED-D02 | Dexie schema bumped to version 5; `songs` table adds `*linkedSongIds` multi-entry index so copies can be found by querying any linked ID. | planned |
+| LINKED-D03 | A link is always bidirectional: when song A lists song B in its `linkedSongIds`, song B must also list song A. Write helpers in `db/index.ts` enforce this atomically (`linkSongs(idA, idB)` / `unlinkSongs(idA, idB)`). | planned |
+| LINKED-D04 | `linkedSongIds` is included in the Firestore sync payload so links survive across devices and team members. | planned |
+
+### REQ-LINKED-COPY — Copy-to-team creates a link
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-C01 | The "Copy to team & add to setlist" action in `SetlistDetailPage` sets `linkedSongIds` on both the original personal song and the new team copy at creation time. | planned |
+| LINKED-C02 | Any future copy path (e.g. bulk copy via Library Organize) must also establish the link at creation time. | planned |
+
+### REQ-LINKED-DETECT — Divergence detection
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-DET01 | Two linked songs are considered **diverged** when any of the following differ (after normalising whitespace): `transcription.content`, `title`, `artist`, `tags`, `transcription.tempo`, `transcription.capo`. `transcription.key` is **excluded** from divergence detection (key differences are intentional). | planned |
+| LINKED-DET02 | Divergence is computed client-side on the fly from Dexie data; no background job or server round-trip. | planned |
+| LINKED-DET03 | A song with no linked counterpart in local Dexie (the linked ID is missing — deleted or not yet synced) is shown with a "link broken" indicator rather than a divergence badge. | planned |
+
+### REQ-LINKED-IND — Unobtrusive indicator
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-IND01 | A small icon badge appears on the song row in **Library** when any linked copy has diverged. Badge is amber-coloured (`GitCompare` or similar icon); tooltip names the diverged copy's book. | planned |
+| LINKED-IND02 | The same badge appears in the **Editor** toolbar. Clicking it opens the sync dialog directly. | planned |
+| LINKED-IND03 | The same badge appears in the **Viewer** toolbar. Clicking it opens the sync dialog. Badge is absent in Performance/presentation mode. | planned |
+| LINKED-IND04 | The badge is suppressed if the user has no linked copies or all linked copies are identical. | planned |
+| LINKED-IND05 | A "link broken" variant (grey, chain-broken icon) appears when a linked ID no longer resolves to a song in local Dexie. | planned |
+
+### REQ-LINKED-SYNC — Manual sync dialog
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-S01 | Clicking the divergence badge opens a modal "Sync Copies" dialog. | planned |
+| LINKED-S02 | When there are multiple linked copies, the user first picks which pair to reconcile (dropdown or list); then continues to the diff view for that pair. | planned |
+| LINKED-S03 | The dialog shows a stacked diff: fields that differ are highlighted (amber); identical fields are collapsed. Each side shows the book name and last-modified date. | planned |
+| LINKED-S04 | Direction is determined automatically: the copy with the higher `updatedAt` is labelled "newer" and will overwrite the other. The dialog states this clearly: *"[Book A] · updated 3 days ago → will overwrite → [Book B] · updated 2 weeks ago."* | planned |
+| LINKED-S05 | Before writing, `upsertSongVersions` is called on the song being overwritten so its current content is snapshotted into version history (max 3 rolling). This allows the user to restore the overwritten version from the Editor. | planned |
+| LINKED-S06 | On confirm, the target song is fully overwritten (all fields per D2), `updatedAt` is refreshed, and `markPending` is called so the change syncs to Firestore on the next manual sync. | planned |
+| LINKED-S07 | After sync both copies are identical; the divergence badge disappears immediately (reactive via `useLiveQuery`). | planned |
+
+### REQ-LINKED-CUR — Curation: Linked Copies tab
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| LINKED-CUR01 | A new "Linked Copies" tab is added to `CurationPage` alongside Duplicates / Parse Errors / Export. | planned |
+| LINKED-CUR02 | The tab lists all linked song pairs/groups, grouped by link cluster. Each entry shows: song titles, book names, last-modified dates, and a divergence status badge (in-sync / diverged / link broken). | planned |
+| LINKED-CUR03 | A "Sync" button on each diverged group opens the same sync dialog as LINKED-S01. | planned |
+| LINKED-CUR04 | *(removed — no unlink action, D6)* | — |
+| LINKED-CUR05 | A "Connect songs" action allows the user to retroactively link two songs. **Option A**: Jaccard-based suggestions (songs in different books with title similarity ≥ 0.75) are listed with a "Link" button per candidate pair. **Option B**: free-text search-and-select for songs below the threshold. Both options create the bidirectional link. | planned |
+| LINKED-CUR06 | Songs surfaced by the existing Jaccard duplicate finder that live in **different books** are flagged as "possible linked copy?" with a one-click "Link" button. Same-book duplicates retain the existing "delete" flow. | planned |
+
+---
+
+*Last updated: 2026-05-25 — REQ-LINKED decisions D1–D7 resolved*

@@ -14,6 +14,7 @@ export interface Book {
   author: string
   ownerId: string
   sharedTeamId?: string
+  sourceType?: 'churchtools'  // CT-backed songbook; songs are pulled from ChurchTools
   readOnly: boolean
   shareable: boolean
   createdAt: number   // Unix ms
@@ -44,6 +45,9 @@ export interface Song {
   savedAt: number
   updatedAt: number
   accessedAt?: number       // last time the song was opened in viewer (for "recently accessed" sort)
+  ctSongId?: number         // ChurchTools song ID (set only for CT-backed songs)
+  ctArrangementId?: number  // ChurchTools arrangement ID (default arrangement of ctSongId)
+  linkedSongIds?: string[]  // IDs of linked copies in other books (bidirectional)
   transcription: Transcription
 }
 
@@ -116,6 +120,7 @@ export interface TeamInvite {
   email: string
   role: 'contributor' | 'reader'
   invitedAt: number
+  token?: string   // random token for link-based invites (no email match required)
 }
 
 export interface Team {
@@ -131,7 +136,15 @@ export interface Team {
   updatedAt: number
 }
 
-export type SyncStatus = 'clean' | 'pending' | 'conflict'
+export interface SongNote {
+  id: string          // "{userId}:{songId}"
+  songId: string
+  userId: string
+  content: string
+  updatedAt: number
+}
+
+export type SyncStatus = 'clean' | 'pending' | 'conflict' | 'deleted'
 
 export interface SyncState {
   id: string                // "{entityType}:{entityId}"
@@ -141,6 +154,7 @@ export interface SyncState {
   syncedVersion: number
   status: SyncStatus
   updatedAt: number
+  deleteFromPaths?: string[]  // Firestore paths to delete when status === 'deleted'
 }
 
 // ─── UI / app state types ─────────────────────────────────────────────────────
@@ -153,6 +167,12 @@ export interface AppSettings {
   pedalKeyPrev: string        // keydown event.key, default "ArrowLeft"
   fontScale: number           // multiplier, default 1.0
   continuousScroll: boolean   // false = page-flip (default), true = continuous scroll
+  onboardingDone: boolean     // true after user completes or skips onboarding
+  metronomeMode: 'light' | 'sound' | 'both'  // visual flash only, audio only, or both
+  noteAutoShowMs: number  // ms to auto-show notes on song transition in performance mode
+  churchToolsUrl: string
+  churchToolsToken: string
+  churchToolsCategoryId: number  // CT song category id; 0 = first/default category
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -163,6 +183,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pedalKeyPrev: 'ArrowLeft',
   fontScale: 1.0,
   continuousScroll: false,
+  onboardingDone: false,
+  metronomeMode: 'light',
+  noteAutoShowMs: 2000,
+  churchToolsUrl: '',
+  churchToolsToken: '',
+  churchToolsCategoryId: 0,
 }
 
 // ─── chords.wiki import types ─────────────────────────────────────────────────

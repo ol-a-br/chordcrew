@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import type {
   Book, Song, SongVersion, Annotation,
-  Setlist, SetlistItem, Team, SyncState, AppSettings,
+  Setlist, SetlistItem, Team, SyncState, AppSettings, SongNote,
 } from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 
@@ -17,6 +17,7 @@ export class ChordCrewDB extends Dexie {
   teams!: Table<Team>
   syncStates!: Table<SyncState>
   settings!: Table<AppSettings & { id: string }>
+  songNotes!: Table<SongNote>
 
   constructor() {
     super('ChordCrewDB')
@@ -37,6 +38,21 @@ export class ChordCrewDB extends Dexie {
     this.version(2).stores({
       teams: 'id, ownerId, updatedAt',
     })
+
+    // Version 3: personal song notes (private per user)
+    this.version(3).stores({
+      songNotes: 'id, songId, userId, updatedAt',
+    })
+
+    // Version 4: ctSongId index for ChurchTools-backed songs
+    this.version(4).stores({
+      songs: 'id, bookId, title, artist, isFavorite, updatedAt, *tags, ctSongId',
+    })
+
+    // Version 5: linkedSongIds multi-entry index for cross-book copy tracking
+    this.version(5).stores({
+      songs: 'id, bookId, title, artist, isFavorite, updatedAt, *tags, ctSongId, *linkedSongIds',
+    })
   }
 }
 
@@ -54,7 +70,8 @@ db.on('ready', async () => {
 
 export async function getSettings(): Promise<AppSettings> {
   const row = await db.settings.get('app')
-  return row ?? DEFAULT_SETTINGS
+  // Merge with DEFAULT_SETTINGS so any field added after initial install gets its default
+  return row ? { ...DEFAULT_SETTINGS, ...row } : DEFAULT_SETTINGS
 }
 
 export async function saveSettings(patch: Partial<AppSettings>): Promise<void> {
@@ -120,6 +137,7 @@ export async function markPending(
 ): Promise<void> {
   const id = `${entityType}:${entityId}`
   const existing = await db.syncStates.get(id)
+  if (existing?.status === 'deleted') return  // don't resurrect a deletion tombstone
   await db.syncStates.put({
     id,
     entityType,
@@ -127,6 +145,23 @@ export async function markPending(
     localVersion: (existing?.localVersion ?? 0) + 1,
     syncedVersion: existing?.syncedVersion ?? 0,
     status: 'pending',
+    updatedAt: Date.now(),
+  })
+}
+
+export async function markDeleted(
+  entityType: SyncState['entityType'],
+  entityId: string,
+  deleteFromPaths: string[],
+): Promise<void> {
+  await db.syncStates.put({
+    id: `${entityType}:${entityId}`,
+    entityType,
+    entityId,
+    localVersion: 0,
+    syncedVersion: 0,
+    status: 'deleted',
+    deleteFromPaths,
     updatedAt: Date.now(),
   })
 }
@@ -151,6 +186,61 @@ export function getTeamRole(team: Team, userId: string, userEmail: string): Team
 
 export function generateId(): string {
   return crypto.randomUUID()
+}
+
+// ─── Song note helpers ────────────────────────────────────────────────────────
+
+export async function getSongNote(songId: string, userId: string): Promise<SongNote | undefined> {
+  return db.songNotes.get(`${userId}:${songId}`)
+}
+
+export async function saveSongNote(songId: string, userId: string, content: string): Promise<void> {
+  const id = `${userId}:${songId}`
+  await db.songNotes.put({ id, songId, userId, content, updatedAt: Date.now() })
+}
+
+export async function deleteSongNote(songId: string, userId: string): Promise<void> {
+  await db.songNotes.delete(`${userId}:${songId}`)
+}
+
+// ─── Linked song copy helpers ─────────────────────────────────────────────────
+
+/**
+ * Establish a bidirectional link between two songs.
+ * Safe to call multiple times — adding an already-present ID is a no-op.
+ */
+export async function linkSongs(idA: string, idB: string): Promise<void> {
+  await db.transaction('rw', db.songs, async () => {
+    const [a, b] = await Promise.all([db.songs.get(idA), db.songs.get(idB)])
+    if (!a || !b) return
+    const aLinks = new Set(a.linkedSongIds ?? [])
+    const bLinks = new Set(b.linkedSongIds ?? [])
+    if (!aLinks.has(idB)) {
+      aLinks.add(idB)
+      await db.songs.update(idA, { linkedSongIds: [...aLinks] })
+    }
+    if (!bLinks.has(idA)) {
+      bLinks.add(idA)
+      await db.songs.update(idB, { linkedSongIds: [...bLinks] })
+    }
+  })
+}
+
+/**
+ * Remove the bidirectional link between two songs.
+ */
+export async function unlinkSongs(idA: string, idB: string): Promise<void> {
+  await db.transaction('rw', db.songs, async () => {
+    const [a, b] = await Promise.all([db.songs.get(idA), db.songs.get(idB)])
+    if (a) {
+      const links = (a.linkedSongIds ?? []).filter(id => id !== idB)
+      await db.songs.update(idA, { linkedSongIds: links.length ? links : undefined })
+    }
+    if (b) {
+      const links = (b.linkedSongIds ?? []).filter(id => id !== idA)
+      await db.songs.update(idB, { linkedSongIds: links.length ? links : undefined })
+    }
+  })
 }
 
 // ─── Re-export Team types used by helpers ────────────────────────────────────
