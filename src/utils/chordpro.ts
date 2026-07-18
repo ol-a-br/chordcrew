@@ -1,4 +1,4 @@
-import ChordSheetJS, { Chord } from 'chordsheetjs'
+import ChordSheetJS, { Chord, Key } from 'chordsheetjs'
 
 const { ChordProParser, HtmlDivFormatter, TextFormatter } = ChordSheetJS
 
@@ -81,12 +81,10 @@ export function renderToHtml(content: string, transposeOffset = 0): string {
 
   if (transposeOffset !== 0) {
     const originalKey = content.match(/\{key\s*:\s*([^}]+)\}/i)?.[1]?.trim() ?? ''
-    const modifier = originalKey ? targetAccidental(originalKey, transposeOffset) : null
-    song = song.transpose(transposeOffset)
-    // Always run mapItems to:
-    // (a) apply flat/sharp preference when a key is present
-    // (b) fix optional chords like (Gm) that song.transpose() skips because
-    //     Chord.parse('(Gm)') returns null — we strip/restore the parens manually
+    // Transpose every chord via transposeChordName (key-aware normalize — see
+    // its definition for why chordsheetjs's own Chord.useModifier() is not used
+    // directly). mapItems also fixes optional chords like (Gm) that
+    // song.transpose() used to skip because Chord.parse('(Gm)') returns null.
     song = song.mapItems((item) => {
       const pair = item as { chords?: string; set?: (o: Record<string, unknown>) => unknown }
       if (pair.chords && pair.set) {
@@ -95,14 +93,8 @@ export function renderToHtml(content: string, transposeOffset = 0): string {
         const name = isOptional ? c.slice(1, -1) : c
         const chord = Chord.parse(name)
         if (!chord) return item
-        if (isOptional) {
-          // song.transpose() skipped this chord — transpose it now via semitone lookup
-          const transposed = transposeChordName(name, transposeOffset, originalKey)
-          return pair.set({ chords: `(${transposed})` }) as typeof item
-        }
-        if (modifier) {
-          return pair.set({ chords: chord.useModifier(modifier).toString() }) as typeof item
-        }
+        const transposed = transposeChordName(name, transposeOffset, originalKey)
+        return pair.set({ chords: isOptional ? `(${transposed})` : transposed }) as typeof item
       }
       return item
     })
@@ -124,7 +116,21 @@ export function renderToHtml(content: string, transposeOffset = 0): string {
 export function renderToText(content: string, transposeOffset = 0): string {
   let song = parseChordPro(content)
   if (transposeOffset !== 0) {
-    song = song.transpose(transposeOffset)
+    const originalKey = content.match(/\{key\s*:\s*([^}]+)\}/i)?.[1]?.trim() ?? ''
+    // Same transposeChordName-based transpose as renderToHtml.
+    song = song.mapItems((item) => {
+      const pair = item as { chords?: string; set?: (o: Record<string, unknown>) => unknown }
+      if (pair.chords && pair.set) {
+        const c = pair.chords as string
+        const isOptional = c.startsWith('(') && c.endsWith(')')
+        const name = isOptional ? c.slice(1, -1) : c
+        const chord = Chord.parse(name)
+        if (!chord) return item
+        const transposed = transposeChordName(name, transposeOffset, originalKey)
+        return pair.set({ chords: isOptional ? `(${transposed})` : transposed }) as typeof item
+      }
+      return item
+    })
   }
   song = song.setCapo(null)
   return new TextFormatter({ normalizeChords: false }).format(song)
@@ -368,37 +374,16 @@ export function isValidKey(key: string): boolean {
 }
 
 // ─── Enharmonic preference by target key ─────────────────────────────────────
-// Determines whether the target key uses sharps or flats, so transposed chords
-// are spelled correctly (e.g. C#m in D, not Dbm).
-
-const NOTE_SEMITONE: Record<string, number> = {
-  'B#': 0, C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3,
-  E: 4, 'E#': 5, Fb: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8,
-  Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11, Cb: 11,
-}
-
-const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-const FLAT_NAMES  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
-
-function transposeNoteName(note: string, semitones: number, useFlats: boolean): string {
-  const base = NOTE_SEMITONE[note]
-  if (base === undefined) return note
-  const target = ((base + semitones) % 12 + 12) % 12
-  return useFlats ? FLAT_NAMES[target] : SHARP_NAMES[target]
-}
-// Tonic semitones that prefer flats, by major/minor key
-const FLAT_MAJOR = new Set([5, 10, 3, 8, 1, 6, 11])  // F Bb Eb Ab Db Gb Cb
-const FLAT_MINOR = new Set([2, 7, 0, 5, 10, 3, 8])    // Dm Gm Cm Fm Bbm Ebm Abm
-
-function targetAccidental(originalKey: string, delta: number): '#' | 'b' {
-  const rootMatch = originalKey.match(/^([A-G][b#]?)/)
-  if (!rootMatch) return '#'
-  const semitone = NOTE_SEMITONE[rootMatch[1]]
-  if (semitone === undefined) return '#'
-  const target = ((semitone + delta) % 12 + 12) % 12
-  const isMinor = /^[A-G][b#]?m(?!aj)/.test(originalKey)
-  return (isMinor ? FLAT_MINOR : FLAT_MAJOR).has(target) ? 'b' : '#'
-}
+// Both helpers below delegate the actual note-spelling decision to chordsheetjs's
+// own Key/Chord model (`.normalize(targetKey)`), which picks each note's letter
+// name from the target key's real diatonic scale (so e.g. transposing "C" down
+// a whole step in G major correctly yields "Cbmaj7" for a IV chord in Gb major,
+// while a plain natural target stays natural). We previously hand-rolled this
+// with a flat/sharp lookup table plus chordsheetjs's Chord.useModifier(), but
+// useModifier() forces *every* note (including already-natural ones) into an
+// accidental spelling of its neighbour — e.g. transposing "D" down 2 semitones
+// in A major produced "B#" instead of "C", and "Gsus2" produced "E#sus2" instead
+// of "Fsus2". Calling `.normalize()` with the real target Key avoids that bug.
 
 // ─── Transpose a key name by N semitones ──────────────────────────────────────
 // Only for simple key names (e.g. "G", "Am", "F#"). For full chord names with
@@ -407,20 +392,23 @@ function targetAccidental(originalKey: string, delta: number): '#' | 'b' {
 export function transposeKey(key: string, semitones: number): string {
   if (!key || semitones === 0) return key
   try {
-    const m = key.match(/^([A-G][b#]?)(m(?:aj)?)?\s*$/)
+    const m = key.trim().match(/^([A-G][b#]?)(m(?:aj)?)?\s*$/)
     if (!m) return key
     const [, root, quality = ''] = m
-    const modifier = targetAccidental(key, semitones)
-    return transposeNoteName(root, semitones, modifier === 'b') + quality
+    const isMinor = quality === 'm'
+    const keyObj = Key.wrap(isMinor ? `${root}m` : root)
+    if (!keyObj) return key
+    const transposed = keyObj.transpose(semitones).toString()
+    return quality === 'maj' ? transposed + 'maj' : transposed
   } catch {
     return key
   }
 }
 
 // ─── Transpose any chord name (including quality suffixes) ───────────────────
-// Uses a semitone lookup table — bypasses chordsheetjs Chord.transpose() which
-// produces enharmonically wrong spellings for some intervals (e.g. G→-7 gives B#
-// instead of C). originalKey is used to pick the correct flat/sharp spelling.
+// originalKey (the song's declared {key}) is used to pick correct enharmonic
+// spelling via chordsheetjs's key-aware normalize(); without it we fall back to
+// chordsheetjs's raw transpose() spelling, which is still correct for naturals.
 
 export function transposeChordName(
   chordName: string,
@@ -429,15 +417,12 @@ export function transposeChordName(
 ): string {
   if (!chordName || semitones === 0) return chordName
   try {
-    const modifier = originalKey ? targetAccidental(originalKey, semitones) : '#'
-    const useFlats = modifier === 'b'
-    // Parse: Root([A-G][b#]?) + Quality(anything) + optional /Bass([A-G][b#]?)
-    const m = chordName.match(/^([A-G][b#]?)(.*?)(?:\/([A-G][b#]?))?$/)
-    if (!m) return chordName
-    const [, root, quality, bass] = m
-    const newRoot = transposeNoteName(root, semitones, useFlats)
-    const newBass = bass ? transposeNoteName(bass, semitones, useFlats) : null
-    return newRoot + quality + (newBass ? '/' + newBass : '')
+    const chord = Chord.parse(chordName)
+    if (!chord) return chordName
+    let transposed = chord.transpose(semitones)
+    const targetKey = originalKey ? (Key.wrap(originalKey)?.transpose(semitones) ?? null) : null
+    if (targetKey) transposed = transposed.normalize(targetKey, { normalizeSuffix: false })
+    return transposed.toString()
   } catch {
     return chordName
   }

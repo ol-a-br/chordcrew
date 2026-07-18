@@ -74,6 +74,25 @@ describe('renderToHtml with a {capo} directive', () => {
   })
 })
 
+// ─── renderToHtml — transposing onto a natural note must not produce its ─────
+// sharp enharmonic (chordsheetjs's Chord.transpose()/useModifier() bug: e.g.
+// transposing D down 2 semitones produced "B#" instead of "C").
+
+describe('renderToHtml transposing into natural-note targets', () => {
+  const CONTENT = `{title: T}\n{key: A}\n[A5]a [D]b [F#m]c [E]d [Gsus2]e [D]f\n`
+
+  it('spells naturals as naturals, not as sharp enharmonics of the note below', () => {
+    const html = renderToHtml(CONTENT, -2) // A major -> G major
+    expect(html).toContain('>G5<')
+    expect(html).toContain('>C<')
+    expect(html).toContain('>Em<')
+    expect(html).toContain('>D<')
+    expect(html).toContain('>Fsus2<')
+    expect(html).not.toContain('B#')
+    expect(html).not.toContain('E#sus2')
+  })
+})
+
 // ─── renderToText — same guarantees for the plain-text/print export path ─────
 
 describe('renderToText with a {capo} directive', () => {
