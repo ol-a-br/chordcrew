@@ -50,10 +50,12 @@ export default function PerformancePage() {
   const [metronome, setMetronome]     = useState(false)
   const [beat, setBeat]               = useState(false)
   const [metronomeMode, setMetronomeMode] = useState<'light' | 'sound' | 'both'>('light')
+  const [metronomeLarge, setMetronomeLarge] = useState(false)
   const [showNotes, setShowNotes]     = useState(false)
   const [noteAutoShowMs, setNoteAutoShowMs] = useState(2000)
   const [songHtmlReady, setSongHtmlReady] = useState(false)
   const [swipeHint, setSwipeHint] = useState<{ dir: 'prev' | 'next'; targetPos: number } | null>(null)
+  const [atSongEnd, setAtSongEnd] = useState(false)
 
   const { user } = useAuth()
 
@@ -120,6 +122,7 @@ export default function PerformancePage() {
       setColumns(s.defaultColumnCount)
       setMetronomeMode(s.metronomeMode)
       setNoteAutoShowMs(s.noteAutoShowMs ?? 2000)
+      setMetronomeLarge(s.metronomeLarge ?? false)
     })
   }, [])
 
@@ -289,7 +292,24 @@ export default function PerformancePage() {
   useEffect(() => {
     const el = contentRef.current
     if (el) { el.scrollLeft = 0; el.scrollTop = 0 }
+    setAtSongEnd(false)
   }, [id])
+
+  // ── Track whether we're at the last column/page of the song ──────────────
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+    const check = () => {
+      if (columns > 1) {
+        setAtSongEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 10)
+      } else {
+        setAtSongEnd(el.scrollTop + el.clientHeight >= el.scrollHeight - 4)
+      }
+    }
+    check()
+    el.addEventListener('scroll', check, { passive: true })
+    return () => el.removeEventListener('scroll', check)
+  }, [id, columns, songHtmlReady])
 
   // ── Async render: let spinner paint before blocking ChordSheetJS parse ───────
   // Cache hit → songHtmlReady = true immediately (no spinner).
@@ -676,13 +696,17 @@ export default function PerformancePage() {
         <div className="absolute bottom-6 right-3 z-40 flex flex-col items-center gap-1.5 pointer-events-none">
           {/* Beat indicator dot — shown for light/both modes */}
           {metronomeMode !== 'sound' && (
-            <span className={`w-2.5 h-2.5 rounded-full transition-colors duration-75 ${
+            <span className={`rounded-full transition-colors duration-75 ${
+              metronomeLarge ? 'w-5 h-5' : 'w-2.5 h-2.5'
+            } ${
               metronome && beat ? 'bg-chord' : metronome ? 'bg-chord/30' : 'bg-ink-faint/20'
             }`} />
           )}
           {/* Toggle button — always visible; active = chord colour, inactive = muted */}
           <button
-            className={`pointer-events-auto p-2 rounded-full text-lg leading-none select-none transition-colors ${
+            className={`pointer-events-auto rounded-full leading-none select-none transition-colors ${
+              metronomeLarge ? 'p-4 text-4xl' : 'p-2 text-lg'
+            } ${
               metronome
                 ? 'text-chord bg-chord/10'
                 : 'text-ink-muted bg-surface-2/60'
@@ -695,6 +719,14 @@ export default function PerformancePage() {
           </button>
         </div>
       )}
+
+      {/* End-of-song marker — amber bar on right edge when last column is visible */}
+      <div
+        className={`fixed right-0 top-0 bottom-0 w-1.5 z-30 pointer-events-none transition-opacity duration-300 ${
+          atSongEnd && nextSongId ? 'opacity-100' : 'opacity-0'
+        }`}
+        style={{ background: 'linear-gradient(to left, rgba(245,158,11,0.85), rgba(245,158,11,0))' }}
+      />
 
       {/* Tap zones: left half = prev, right half = next.
           Two guards against accidental double-trigger after a swipe:

@@ -148,6 +148,20 @@ export default function SettingsPage() {
               ))}
             </div>
           </Row>
+          <Row label="Large metronome button">
+            <button
+              role="switch"
+              aria-checked={settings.metronomeLarge ?? false}
+              onClick={() => update({ metronomeLarge: !(settings.metronomeLarge ?? false) })}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                (settings.metronomeLarge ?? false) ? 'bg-chord' : 'bg-surface-3'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                (settings.metronomeLarge ?? false) ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </Row>
           <Row label="Notes auto-hide">
             <div className="flex items-center gap-2">
               <input

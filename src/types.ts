@@ -169,6 +169,7 @@ export interface AppSettings {
   continuousScroll: boolean   // false = page-flip (default), true = continuous scroll
   onboardingDone: boolean     // true after user completes or skips onboarding
   metronomeMode: 'light' | 'sound' | 'both'  // visual flash only, audio only, or both
+  metronomeLarge: boolean                     // large metronome button + beat dot in performance mode
   noteAutoShowMs: number  // ms to auto-show notes on song transition in performance mode
   churchToolsUrl: string
   churchToolsToken: string
@@ -185,6 +186,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   continuousScroll: false,
   onboardingDone: false,
   metronomeMode: 'light',
+  metronomeLarge: false,
   noteAutoShowMs: 2000,
   churchToolsUrl: '',
   churchToolsToken: '',
