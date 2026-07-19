@@ -69,6 +69,15 @@ export async function syncCtSongs(
 
   const localSongs = await db.songs.where('bookId').equals(book.id).toArray()
 
+  // Re-home any CT songs that ended up with a stale bookId (e.g. CT book was
+  // deleted + recreated with a new ID after a data wipe).
+  const allCtSongs = await db.songs.where('ctSongId').above(0).toArray()
+  const staleOrphans = allCtSongs.filter(s => s.bookId !== book.id)
+  for (const s of staleOrphans) {
+    await db.songs.update(s.id, { bookId: book.id })
+    localSongs.push({ ...s, bookId: book.id })
+  }
+
   const ctById = new Map<number, CTSong>(ctSongs.map(s => [s.id, s]))
   const localByCtId = new Map(
     localSongs.filter(s => s.ctSongId != null).map(s => [s.ctSongId!, s])

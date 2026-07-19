@@ -1164,9 +1164,9 @@ function SongRow({
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm truncate">{song.title}</div>
         <div className="text-xs text-ink-muted truncate">{song.artist || '—'}</div>
-        {showMeta && book && (
+        {showMeta && (
           <div className="text-xs text-amber-600 truncate">
-            {book.title} · {new Date(song.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+            {book?.title ?? (song.ctSongId != null ? 'ChurchTools' : 'Unknown book')} · {new Date(song.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
           </div>
         )}
       </div>
@@ -1184,8 +1184,12 @@ function SongRow({
           <LinkStatusBadge
             status={linkStatus}
             bookNames={(song.linkedSongIds ?? [])
-              .flatMap(id => songMap?.get(id) ? [bookMap?.[songMap.get(id)!.bookId]?.title ?? ''] : [])
-              .filter(Boolean)}
+              .flatMap(id => {
+                const linked = songMap?.get(id)
+                if (!linked) return []
+                const name = bookMap?.[linked.bookId]?.title ?? (linked.ctSongId != null ? 'ChurchTools' : 'Unknown book')
+                return [name]
+              })}
             onClick={onSyncClick}
             size="sm"
           />

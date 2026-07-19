@@ -577,7 +577,7 @@ export default function CurationPage() {
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{a.title}</div>
                       <div className="text-xs text-amber-600 truncate">
-                        {bookMap.get(a.bookId)} → {bookMap.get(b.bookId)}
+                        {bookMap.get(a.bookId) ?? (a.ctSongId != null ? 'ChurchTools' : 'Unknown book')} → {bookMap.get(b.bookId) ?? (b.ctSongId != null ? 'ChurchTools' : 'Unknown book')}
                       </div>
                     </div>
                     <button
@@ -617,7 +617,7 @@ export default function CurationPage() {
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium truncate">{song.title}</div>
                             <div className="text-xs text-amber-600 truncate">
-                              {bookMap.get(song.bookId)}
+                              {bookMap.get(song.bookId) ?? (song.ctSongId != null ? 'ChurchTools' : 'Unknown book')}
                               {' · '}
                               {new Date(song.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                             </div>
@@ -673,7 +673,7 @@ export default function CurationPage() {
                   {connectStep === 2 && connectSongA && (
                     <div className="text-xs text-ink-muted bg-surface-2 rounded-lg px-3 py-2">
                       <span className="font-medium text-ink">{connectSongA.title}</span>
-                      {' '}in {bookMap.get(connectSongA.bookId)}
+                      {' '}in {bookMap.get(connectSongA.bookId) ?? (connectSongA.ctSongId != null ? 'ChurchTools' : 'Unknown book')}
                       <button
                         onClick={() => { setConnectStep(1); setConnectSongA(null); setConnectQuery('') }}
                         className="ml-2 text-ink-faint hover:text-ink"
@@ -702,7 +702,7 @@ export default function CurationPage() {
                       >
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium truncate">{song.title}</div>
-                          <div className="text-xs text-amber-600 truncate">{bookMap.get(song.bookId)}</div>
+                          <div className="text-xs text-amber-600 truncate">{bookMap.get(song.bookId) ?? (song.ctSongId != null ? 'ChurchTools' : 'Unknown book')}</div>
                         </div>
                       </li>
                     ))}
