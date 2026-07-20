@@ -296,8 +296,11 @@ export function SongRenderer({
         const nextLyrics = nextLyricsEl.textContent ?? ''
         const prevChordEl = cols[i].querySelector('.chord')
         const prevChordEmpty = !prevChordEl || prevChordEl.textContent?.trim() === ''
-        const isMidWord = prevChordEmpty   // only repair chordsheetjs auto-splits (empty-chord cols)
-          && prevLyrics.length > 0
+        // Triggered purely by the text boundary (no space between the two lyric
+        // fragments) — a real chord on the previous column (e.g. the line's
+        // opening chord) doesn't make the split any less mid-word. Only the
+        // lyric text moves; each column keeps its own chord.
+        const isMidWord = prevLyrics.length > 0
           && !prevLyrics.endsWith(' ')
           && !nextLyrics.startsWith(' ')
           && nextLyrics.length > 0
