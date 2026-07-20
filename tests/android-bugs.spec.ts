@@ -217,8 +217,11 @@ test.describe('Android bug regressions', () => {
     const classBefore = await btn.getAttribute('class') ?? ''
     expect(classBefore).not.toContain('text-chord bg-chord')
 
-    // Tap the button
-    await btn.tap()
+    // Tap the button. Use click() rather than tap(): tap() requires a
+    // touch-enabled context (fails on the desktop `chromium` project), and
+    // this assertion is about hit-testing/z-index, not touch semantics —
+    // click() exercises the same onClick handler and actionability checks.
+    await btn.click()
     await page.waitForTimeout(200)
 
     // After tap, button should reflect active (chord colour) state
@@ -240,8 +243,9 @@ test.describe('Android bug regressions', () => {
     const transposeBtns = page.locator('.bg-surface-2\\/80 button')
     await expect(transposeBtns.first()).toBeVisible({ timeout: 3000 })
 
-    // Tap ChevronUp (second transpose button = up)
-    await transposeBtns.nth(1).tap()
+    // Tap ChevronUp (second transpose button = up). click() not tap() —
+    // see AND-1c comment above.
+    await transposeBtns.nth(1).click()
     await page.waitForTimeout(300)
 
     // Read the updated transposeOffset from IndexedDB
@@ -272,9 +276,9 @@ test.describe('Android bug regressions', () => {
 
     const transposeBtns = page.locator('.bg-surface-2\\/80 button')
     await expect(transposeBtns.first()).toBeVisible({ timeout: 3000 })
-    await transposeBtns.nth(1).tap()   // +1
+    await transposeBtns.nth(1).click()   // +1
     await page.waitForTimeout(150)
-    await transposeBtns.nth(1).tap()   // +2
+    await transposeBtns.nth(1).click()   // +2
     await page.waitForTimeout(300)
 
     // Step 2: navigate away (to setlists page)
