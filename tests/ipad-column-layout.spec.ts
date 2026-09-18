@@ -16,7 +16,8 @@
  * Run:  npx playwright test tests/ipad-column-layout.spec.ts
  */
 
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from './fixtures'
+import type { Page } from '@playwright/test'
 import { randomUUID } from 'crypto'
 
 // ── Device profile ────────────────────────────────────────────────────────────

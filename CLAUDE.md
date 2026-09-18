@@ -16,6 +16,10 @@ npm run deploy    # build + firebase deploy (needs firebase-tools + login)
 npm test          # Playwright E2E tests
 npm run test:ui   # Playwright interactive UI
 npm run test:auth # Redirect sign-in E2E against the Firebase Auth emulator (tests/auth/, no Java needed)
+npm run android:emulator  # boot the Android tablet AVD (scripts/android-emulator.sh create|start|stop|status)
+npm run android:prep      # once per AVD: Chrome first-run + flag so Playwright can drive it (scripts/android-chrome-prep.mjs)
+npm run test:android      # main E2E suite in real Chrome on that emulator via adb (tests/fixtures.ts)
+                          # ANDROID=1 npm run test:auth runs the redirect sign-in test on it too
 ```
 
 ## Key documents

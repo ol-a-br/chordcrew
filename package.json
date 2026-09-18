@@ -11,6 +11,9 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:auth": "playwright test -c playwright.auth.config.ts",
+    "test:android": "playwright test -c playwright.android.config.ts",
+    "android:emulator": "scripts/android-emulator.sh start",
+    "android:prep": "node scripts/android-chrome-prep.mjs",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest"
   },

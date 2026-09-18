@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '../fixtures'
+import type { Page } from '@playwright/test'
 
 /**
  * Regression test for "Google sign-in brings me back to the language screen".
@@ -17,7 +18,13 @@ const TUTORIAL_SLIDE1 = 'Your song library'
 async function chooseAccountInEmulatorWidget(page: Page) {
   // We really left the app: the emulator's fake Google account chooser
   await expect(page).toHaveURL(/127\.0\.0\.1:9099\/emulator\/auth\/handler/)
-  await page.locator('#add-account-button').click()
+  await page.waitForLoadState('load')
+  // On a slow device the first tap can land before the widget's script has
+  // attached its handlers — retry until the add-account form is open.
+  await expect(async () => {
+    await page.locator('#add-account-button').click()
+    await expect(page.locator('#autogen-button')).toBeVisible({ timeout: 3_000 })
+  }).toPass({ timeout: 30_000 })
   await page.locator('#autogen-button').click()
   await page.locator('#sign-in').click()
 }
@@ -38,7 +45,8 @@ test('fresh device: onboarding resumes at the tutorial after Google redirect sig
   await expect(page).toHaveURL(/127\.0\.0\.1:5175/)
 
   // Step 3 — tutorial. Before the fix this showed the language chooser again.
-  await expect(page.getByText(TUTORIAL_SLIDE1)).toBeVisible({ timeout: 15_000 })
+  // post-redirect: full app reload + Firebase auth init (slow on an emulator)
+  await expect(page.getByText(TUTORIAL_SLIDE1)).toBeVisible({ timeout: 60_000 })
   await expect(page.getByText(LANGUAGE_PROMPT)).toHaveCount(0)
   await expect(page.getByText(SIGN_IN_TITLE)).toHaveCount(0)
 

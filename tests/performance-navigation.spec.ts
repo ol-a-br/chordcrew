@@ -13,7 +13,8 @@
  * Run: npx playwright test --project=android-tablet tests/performance-navigation.spec.ts
  */
 
-import { test, expect, type Page, type CDPSession } from '@playwright/test'
+import { test, expect } from './fixtures'
+import type { Page, CDPSession } from '@playwright/test'
 import { randomUUID } from 'crypto'
 
 // ── ChordPro helpers ──────────────────────────────────────────────────────────

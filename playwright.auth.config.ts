@@ -16,12 +16,23 @@ import { defineConfig, devices } from '@playwright/test'
 const APP = 'http://127.0.0.1:5175'
 const AUTH_EMULATOR = 'http://127.0.0.1:9099'
 
+// ANDROID=1 npm run test:auth → real Chrome on the Android emulator/device
+// (tests/fixtures.ts); both host ports are adb-reversed onto the device.
+const onDevice = Boolean(process.env.ANDROID)
+if (onDevice) {
+  process.env.PW_ANDROID_DEVICE = '1'
+  process.env.PW_ANDROID_PORTS = '5175,9099'
+}
+
 export default defineConfig({
   testDir: './tests/auth',
   fullyParallel: false,
   workers: 1,
   retries: 0,
   reporter: 'list',
+  // the emulator is slow: Chrome launch + Firebase init easily exceed the defaults
+  timeout: onDevice ? 90_000 : 30_000,
+  expect: { timeout: onDevice ? 15_000 : 5_000 },
   use: {
     baseURL: APP,
     trace: 'retain-on-failure',
@@ -52,7 +63,7 @@ export default defineConfig({
       },
     },
   ],
-  projects: [
+  projects: onDevice ? [{ name: 'android-device' }] : [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
