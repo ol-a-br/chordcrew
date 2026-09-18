@@ -39,16 +39,19 @@ export default function OnboardingPage() {
   // was already persisted before the redirect and the user is now signed in,
   // so resume at the tutorial instead of restarting at the language step —
   // otherwise a successful sign-in looks like a failure ("back to language
-  // selection") and the user is stuck in a loop.
-  const [step, setStep] = useState<Step>(user ? 'tutorial' : 'language')
+  // selection") and the user is stuck in a loop. Only applies when Firebase is
+  // configured: in local mode the guest user always exists and onboarding must
+  // still start at the language step.
+  const signedIn = configured && !!user
+  const [step, setStep] = useState<Step>(signedIn ? 'tutorial' : 'language')
   const [slideIndex, setSlideIndex] = useState(0)
   const [signingIn, setSigningIn] = useState(false)
   const [signInError, setSignInError] = useState('')
 
   // Also covers auth state arriving while the login step is showing
   useEffect(() => {
-    if (user && step === 'login') setStep('tutorial')
-  }, [user, step])
+    if (signedIn && step === 'login') setStep('tutorial')
+  }, [signedIn, step])
 
   const selectLanguage = async (lang: 'en' | 'de') => {
     await i18n.changeLanguage(lang)
