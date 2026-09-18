@@ -15,6 +15,7 @@ npm run preview   # preview production build
 npm run deploy    # build + firebase deploy (needs firebase-tools + login)
 npm test          # Playwright E2E tests
 npm run test:ui   # Playwright interactive UI
+npm run test:auth # Redirect sign-in E2E against the Firebase Auth emulator (tests/auth/, no Java needed)
 ```
 
 ## Key documents
