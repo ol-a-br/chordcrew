@@ -147,6 +147,21 @@ export function SongRenderer({
       anchor.prepend(createBadge(letter, count))
     }
 
+    // chordsheetjs splits a single {start_of_verse:}/{end_of_verse} section into
+    // multiple sibling .paragraph elements wherever the source has a blank line
+    // (e.g. between chorus stanzas), but only the first paragraph carries the
+    // h3.label. Without this, the chorus bar (.chorus-section) stops at the
+    // first blank line instead of covering the whole section.
+    function markChorusContinuations(labelPara: HTMLElement): void {
+      let sib = labelPara.nextElementSibling
+      while (sib?.classList.contains('paragraph') && !sib.querySelector('h3.label')) {
+        sib.querySelectorAll<HTMLElement>(':scope > .row').forEach(row => {
+          row.classList.add('chorus-section')
+        })
+        sib = sib.nextElementSibling
+      }
+    }
+
     // ── Process each paragraph in document order ──────────────────────────────
     container.querySelectorAll<HTMLElement>('.paragraph').forEach(para => {
 
@@ -174,6 +189,7 @@ export function SongRenderer({
                   sib = sib.nextElementSibling
                 }
               }
+              if (labelPara) markChorusContinuations(labelPara)
             }
           }
         })
@@ -211,6 +227,7 @@ export function SongRenderer({
 
       if (isChorusLabel(chordText)) {
         para.classList.add('chorus-section')
+        markChorusContinuations(para)
       }
     })
 
