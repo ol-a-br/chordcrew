@@ -150,15 +150,28 @@ export function SongRenderer({
     // chordsheetjs splits a single {start_of_verse:}/{end_of_verse} section into
     // multiple sibling .paragraph elements wherever the source has a blank line
     // (e.g. between chorus stanzas), but only the first paragraph carries the
-    // h3.label. Without this, the chorus bar (.chorus-section) stops at the
-    // first blank line instead of covering the whole section.
-    function markChorusContinuations(labelPara: HTMLElement): void {
-      let sib = labelPara.nextElementSibling
-      while (sib?.classList.contains('paragraph') && !sib.querySelector('h3.label')) {
-        sib.querySelectorAll<HTMLElement>(':scope > .row').forEach(row => {
-          row.classList.add('chorus-section')
-        })
-        sib = sib.nextElementSibling
+    // h3.label — and a comment/repeat directive placed right after {end_of_part}
+    // (no blank line before it) merges straight into the last content paragraph.
+    // So the chorus bar can't simply stop at a paragraph boundary: it has to walk
+    // row-by-row across paragraphs and stop at the first row that starts a new
+    // section (h3.label) or isn't sung content (.comment — repeat markers,
+    // performance notes), which is the real end of the section.
+    function nextRow(row: HTMLElement): HTMLElement | null {
+      const sib = row.nextElementSibling
+      if (sib?.classList.contains('row')) return sib as HTMLElement
+      const para = row.closest<HTMLElement>('.paragraph')
+      const nextPara = para?.nextElementSibling
+      if (nextPara?.classList.contains('paragraph')) {
+        return nextPara.querySelector<HTMLElement>(':scope > .row')
+      }
+      return null
+    }
+
+    function markChorusRows(fromRow: HTMLElement): void {
+      let row: HTMLElement | null = nextRow(fromRow)
+      while (row && !row.querySelector('h3.label') && !row.querySelector('.comment')) {
+        row.classList.add('chorus-section')
+        row = nextRow(row)
       }
     }
 
@@ -182,14 +195,8 @@ export function SongRenderer({
               const labelRow = labelEl.closest<HTMLElement>('.row')
               if (labelRow) {
                 labelRow.classList.add('chorus-section')
-                let sib = labelRow.nextElementSibling
-                while (sib?.classList.contains('row')) {
-                  if (sib.querySelector('h3.label')) break
-                  sib.classList.add('chorus-section')
-                  sib = sib.nextElementSibling
-                }
+                markChorusRows(labelRow)
               }
-              if (labelPara) markChorusContinuations(labelPara)
             }
           }
         })
@@ -227,7 +234,11 @@ export function SongRenderer({
 
       if (isChorusLabel(chordText)) {
         para.classList.add('chorus-section')
-        markChorusContinuations(para)
+        // Whole first paragraph is already covered by the class above; only
+        // extend row-by-row from here into any continuation paragraphs.
+        const rows = para.querySelectorAll<HTMLElement>(':scope > .row')
+        const lastRow = rows[rows.length - 1]
+        if (lastRow) markChorusRows(lastRow)
       }
     })
 
