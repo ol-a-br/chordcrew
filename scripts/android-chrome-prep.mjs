@@ -69,11 +69,11 @@ async function dismissFirstRun() {
 async function enableCommandLineFlag() {
   adb('forward', `tcp:${CDP_PORT}`, 'localabstract:chrome_devtools_remote')
   let browser
-  for (let i = 0; i < 15 && !browser; i++) {
+  for (let i = 0; i < 20 && !browser; i++) {
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${CDP_PORT}`).catch(() => null)
-    if (!browser) await sleep(1000)
+    if (!browser) await sleep(1500)
   }
-  if (!browser) { console.error('Chrome DevTools socket not reachable'); process.exit(1) }
+  if (!browser) { console.error('Chrome DevTools socket not reachable — first-run dismissal probably failed'); process.exit(1) }
   const context = browser.contexts()[0] ?? (await browser.newContext())
   const page = await context.newPage()
   await page.goto(`chrome://flags/#${FLAG}`)
@@ -105,7 +105,19 @@ async function verifyPlaywrightLaunch() {
   console.log(`✓ Playwright can drive Chrome on ${device.model()}: ${ua.match(/Chrome\/[\d.]+/)?.[0]}`)
 }
 
+// Hard ceiling: a hung Chrome/adb call must fail loudly, never hang for hours
+// unattended (this bit us once — a partial failure left Chrome's first-run
+// screen up, and the next launchBrowser() call waited forever on a socket
+// that was never going to appear).
+const OVERALL_TIMEOUT_MS = 5 * 60_000
+const timeout = setTimeout(() => {
+  console.error(`prep did not finish within ${OVERALL_TIMEOUT_MS / 1000}s — aborting`)
+  process.exit(1)
+}, OVERALL_TIMEOUT_MS)
+timeout.unref?.()
+
 await dismissFirstRun()
 await enableCommandLineFlag()
 await verifyPlaywrightLaunch()
+clearTimeout(timeout)
 console.log('Ready: npm run test:android')

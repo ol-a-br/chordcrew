@@ -41,6 +41,9 @@ cmd_create() {
   CFG="$HOME/.android/avd/$AVD.avd/config.ini"
   sed -i '' '/^hw.ramSize=/d;/^hw.keyboard=/d;/^disk.dataPartition.size=/d' "$CFG"
   printf 'hw.ramSize=2048\nhw.keyboard=yes\ndisk.dataPartition.size=4G\n' >> "$CFG"
+  # Play images burn CPU on sensors/camera/GPS emulation — none of it is needed for browser tests
+  sed -i '' '/^hw\.accelerometer=/d;/^hw\.gyroscope=/d;/^hw\.sensors\./d;/^hw\.gps=/d;/^hw\.audioInput=/d;/^hw\.camera\./d' "$CFG"
+  printf 'hw.accelerometer=no\nhw.gyroscope=no\nhw.sensors.proximity=no\nhw.sensors.light=no\nhw.sensors.pressure=no\nhw.sensors.humidity=no\nhw.sensors.magnetic_field=no\nhw.sensors.orientation=no\nhw.sensors.temperature=no\nhw.gps=no\nhw.audioInput=no\nhw.camera.back=none\nhw.camera.front=none\n' >> "$CFG"
   echo "✓ AVD ready — now: scripts/android-emulator.sh start && npm run android:prep"
 }
 
@@ -49,13 +52,17 @@ cmd_start() {
   if ! emulator -list-avds 2>/dev/null | grep -qx "$AVD"; then
     echo "AVD $AVD not found — run: scripts/android-emulator.sh create"; exit 1
   fi
-  args=(-avd "$AVD" -no-audio -no-boot-anim -no-snapshot-save)
-  [ "${1:-}" = "--window" ] || args+=(-no-window -gpu swiftshader_indirect)
+  # swiftshader_indirect is CPU-heavy but stable; `-gpu host` in headless mode made
+  # Chrome die repeatedly on macOS (app died / privileged_process0 has died in logcat).
+  args=(-avd "$AVD" -no-audio -no-boot-anim -no-snapshot-save -gpu "${EMU_GPU:-swiftshader_indirect}")
+  [ "${1:-}" = "--window" ] || args+=(-no-window)
   echo "→ booting $AVD (${1:---headless})"
   nohup emulator "${args[@]}" > /tmp/chordcrew-emulator.log 2>&1 &
   adb wait-for-device
   for _ in $(seq 1 100); do booted && break; sleep 3; done
   if booted; then
+    # Animations only cost CPU and make taps land on moving targets
+    for k in window_animation_scale transition_animation_scale animator_duration_scale; do adb shell settings put global $k 0; done
     echo "✓ booted: Android $(adb shell getprop ro.build.version.release | tr -d '\r'), Chrome $(adb shell dumpsys package com.android.chrome | grep -m1 versionName | sed 's/.*=//' | tr -d '\r')"
   else
     echo "✗ emulator did not boot — see /tmp/chordcrew-emulator.log"; exit 1

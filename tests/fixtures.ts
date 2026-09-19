@@ -19,13 +19,20 @@
  * in PW_ANDROID_PORTS are `adb reverse`d so 127.0.0.1:<port> on the device
  * reaches the dev server / auth emulator on the host.
  */
-import { test as base, expect } from '@playwright/test'
+import { test as base, expect, type Page } from '@playwright/test'
 import { _android as android, type AndroidDevice } from 'playwright'
 import { execFileSync } from 'child_process'
 import os from 'os'
 import path from 'path'
 
 const CHROME = 'com.android.chrome'
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timed out after ${ms}ms: ${label}`)), ms)),
+  ])
+}
 
 function adb(): string {
   const sdk =
@@ -46,6 +53,10 @@ const androidTest = base.extend<object, { androidDevice: AndroidDevice }>({
       }
       const device = devices[0]
       const serial = device.serial()
+      // dumpsys/getprop below prove adb is actually responsive before we let a
+      // test proceed into launchBrowser(), which has no timeout of its own and
+      // will hang indefinitely if Chrome's first-run screen was never dismissed
+      // (see scripts/android-chrome-prep.mjs) or the emulator is wedged.
       for (const port of (process.env.PW_ANDROID_PORTS ?? '').split(',').filter(Boolean)) {
         execFileSync(adb(), ['-s', serial, 'reverse', `tcp:${port}`, `tcp:${port}`])
       }
@@ -59,7 +70,15 @@ const androidTest = base.extend<object, { androidDevice: AndroidDevice }>({
   ],
 
   context: async ({ androidDevice, baseURL }, use) => {
-    const context = await androidDevice.launchBrowser({ baseURL })
+    const context = await withTimeout(
+      androidDevice.launchBrowser({ baseURL }),
+      60_000,
+      'androidDevice.launchBrowser() — Chrome may be showing its first-run screen; ' +
+        're-run: node scripts/android-chrome-prep.mjs',
+    )
+    // Chrome restores its previous tabs on every launch. Without closing them
+    // they accumulate one per test and Chrome eventually crawls or dies.
+    for (const extra of context.pages().slice(1)) await extra.close().catch(() => {})
     await use(context)
     await context.close()
   },
@@ -74,6 +93,7 @@ const androidTest = base.extend<object, { androidDevice: AndroidDevice }>({
     }
     await cdp.detach()
     await use(page)
+    await page.close().catch(() => {})
   },
 })
 
@@ -83,3 +103,11 @@ export const test: typeof base = process.env.PW_ANDROID_DEVICE
   ? (androidTest as unknown as typeof base)
   : base
 export { expect }
+
+/**
+ * Viewport in CSS px. On a real device there is no emulated viewport
+ * (page.viewportSize() is null), so fall back to the window's inner size.
+ */
+export async function viewport(page: Page): Promise<{ width: number; height: number }> {
+  return page.viewportSize() ?? page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }))
+}
