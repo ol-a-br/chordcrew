@@ -22,6 +22,8 @@ npm run test:android      # main E2E suite in real Chrome on that emulator via a
                           # ANDROID=1 npm run test:auth runs the redirect sign-in test on it too
 ```
 
+See the README's [Testing](README.md#testing) section for prerequisites and one-time Android emulator setup.
+
 ## Key documents
 
 - `docs/requirements.md` — requirements spec with implementation status (REQ-IDs)
