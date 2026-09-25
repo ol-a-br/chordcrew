@@ -72,7 +72,7 @@ export default defineConfig({
     alias: { '@': '/src' }
   },
   test: {
-    environment: 'node',
+    environment: 'jsdom',
     include: ['src/**/*.test.ts'],
   },
 })

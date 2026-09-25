@@ -49,8 +49,9 @@ ChordCrew is a **client-side Progressive Web App** with no server component.
 Because the app has no custom backend, the highest-impact vulnerability classes are:
 
 - **Client-side XSS** — particularly via ChordPro content rendered with
-  `dangerouslySetInnerHTML` (mitigated: content is user-supplied and never
-  stored cross-user; SongRenderer output passes through chordsheetjs, not raw HTML)
+  `dangerouslySetInnerHTML`. Song content is untrusted (share links, team songs,
+  imports) and chordsheetjs does not escape it, so `renderToHtml()` passes all
+  output through a DOMPurify allow-list (`sanitizeSongHtml()` in `src/utils/chordpro.ts`)
 - **Firestore rules misconfiguration** — data exposure between users or teams
 - **Dependency supply-chain** — malicious packages in the npm graph
 
