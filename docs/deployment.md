@@ -86,6 +86,37 @@ Useful once there are multiple contributors who can merge PRs.
 
 ---
 
+## App Check
+
+[Firebase App Check](https://firebase.google.com/docs/app-check) makes Firestore and the Cloud Functions accept requests only from the real ChordCrew web app — not from scripts that reuse the (public) Firebase config. The browser proves itself with an invisible reCAPTCHA Enterprise check; no user interaction.
+
+The code is in place (`src/firebase/index.ts`, `functions/src/appCheck.ts`) and inactive until a site key is configured. Roll it out in two phases so nothing breaks:
+
+### Phase 1 — Monitor
+
+1. **Create a reCAPTCHA Enterprise key** — Google Cloud Console, project `chordcrew-50c55` → *Security → reCAPTCHA* → enable the API if asked → *Create key*:
+   - Platform: **Website**; domains: `chordcrew.app`, `www.chordcrew.app`, `chordcrew-50c55.web.app`, `chordcrew-50c55.firebaseapp.com`
+   - Leave "Use checkbox challenge" **off** (score-based)
+2. **Register the app** — Firebase Console → *App Check* → *Apps* → the web app → *reCAPTCHA Enterprise* → paste the **site key** → Save.
+3. **Configure the build** — add `VITE_APPCHECK_SITE_KEY=<site key>` to `.env.local` (and the `VITE_APPCHECK_SITE_KEY` repo secret once CI deploys). The site key is public; it is not a secret.
+4. `npm run deploy`, then open the app and run a sync once.
+5. **Watch the metrics** — Firebase Console → *App Check* → *APIs*: Cloud Firestore and Cloud Functions show *verified* vs. *unverified* requests. Give it a few days of normal use.
+
+Nothing is blocked in this phase, except requests carrying an **invalid** App Check token.
+
+### Phase 2 — Enforce
+
+When (almost) all requests show as verified:
+
+1. **Firestore** — Firebase Console → *App Check* → *APIs* → *Cloud Firestore* → **Enforce**.
+2. **Cloud Functions** — set `ENFORCE_APP_CHECK=true` in `functions/.env`, commit, `npm run deploy`.
+
+Rollback: un-enforce Firestore in the console / set `ENFORCE_APP_CHECK=false` and redeploy.
+
+### Local development
+
+reCAPTCHA can't attest `localhost`. With a site key in `.env.local`, `npm run dev` prints an **App Check debug token** in the browser console on first load. Register it under *App Check → Apps → ⋮ → Manage debug tokens* and put it in `.env.local` as `VITE_APPCHECK_DEBUG_TOKEN` so it stays stable. Never register debug tokens you didn't create yourself — each one bypasses App Check. Without a site key, local dev and all tests run without App Check, as before.
+
 ## Security checklist
 
 | Task | Status | Notes |
@@ -98,6 +129,7 @@ Useful once there are multiple contributors who can merge PRs.
 | Dependabot alerts reviewed | ✅ done | Removed unused `jspdf`/`html2canvas`; 0 critical remaining |
 | Dependabot version updates configured | ✅ done | `.github/dependabot.yml` — grouped weekly PRs |
 | SECURITY.md added | ✅ done | GitHub-standard security policy |
+| App Check (reCAPTCHA Enterprise) | ⬜ in progress | Code ready; console setup + monitor → enforce, see [App Check](#app-check) |
 | Firestore rules deployed from the repo | ✅ done | `npm run deploy` includes `firestore`; rules tested with `npm run test:firebase` |
 | GitHub Environment approval gate | ⬜ optional | Add when collaborators join |
 

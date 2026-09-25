@@ -16,6 +16,7 @@
 
 import * as functions from 'firebase-functions/v1'
 import * as admin from 'firebase-admin'
+import { ENFORCE_APP_CHECK } from './appCheck'
 
 type Role = 'owner' | 'contributor' | 'reader'
 
@@ -41,7 +42,7 @@ const { HttpsError } = functions.https
 
 const callable = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 30, maxInstances: 10 })
+  .runWith({ timeoutSeconds: 30, maxInstances: 10, enforceAppCheck: ENFORCE_APP_CHECK })
   .https
 
 /** Mirror of withAccessFields() in src/utils/teamAccess.ts — keep both in sync. */

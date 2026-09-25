@@ -1,6 +1,7 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth'
 import { getFirestore, type Firestore } from 'firebase/firestore'
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, type AppCheck } from 'firebase/app-check'
 
 // authDomain must be same-origin with the page being served, or browsers that
 // partition third-party storage (all of iOS/WebKit, Firefox with Total Cookie
@@ -38,9 +39,11 @@ export const firebaseConfigured = Boolean(firebaseConfig.apiKey)
 let app: FirebaseApp | null = null
 let auth: Auth | null = null
 let db: Firestore | null = null
+let appCheck: AppCheck | null = null
 
 if (firebaseConfigured) {
   app = initializeApp(firebaseConfig)
+  appCheck = initAppCheck(app)
   auth = getAuth(app)
   db = getFirestore(app)
   // Dev/test only: point Auth at the local Firebase Auth emulator so the real
@@ -53,4 +56,27 @@ if (firebaseConfigured) {
   }
 }
 
-export { app, auth, db as firestore }
+// App Check proves that Firestore and Cloud Function requests come from this
+// app rather than from a script reusing the public Firebase config. Enabled
+// only when a reCAPTCHA Enterprise site key is configured; enforcement is
+// switched on separately (Firebase console for Firestore, ENFORCE_APP_CHECK in
+// functions/.env for the Cloud Functions) — see docs/deployment.md.
+function initAppCheck(firebaseApp: FirebaseApp): AppCheck | null {
+  const siteKey = import.meta.env.VITE_APPCHECK_SITE_KEY as string | undefined
+  if (!siteKey) return null
+  // Local dev: reCAPTCHA can't attest localhost, so the SDK prints a debug
+  // token to the console once; register it under App Check → Manage debug
+  // tokens (or set VITE_APPCHECK_DEBUG_TOKEN to a registered one).
+  if (import.meta.env.DEV) {
+    (self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN?: string | boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN =
+      (import.meta.env.VITE_APPCHECK_DEBUG_TOKEN as string | undefined) || true
+  }
+  return initializeAppCheck(firebaseApp, {
+    provider: new ReCaptchaEnterpriseProvider(siteKey),
+    // Offline-first + manual sync: fetch tokens only when a Firebase request
+    // actually needs one, never in the background (e.g. during performance mode).
+    isTokenAutoRefreshEnabled: false,
+  })
+}
+
+export { app, auth, appCheck, db as firestore }

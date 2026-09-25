@@ -30,6 +30,12 @@ describe('ctProxy', () => {
     expect((await request('/whoami', { 'X-Firebase-ID-Token': 'forged.token.value' })).status).toBe(401)
   })
 
+  it('rejects a forged App Check token even before enforcement is on', async () => {
+    const res = await request('/whoami', { 'X-Firebase-ID-Token': idToken, 'X-Firebase-AppCheck': 'forged.appcheck.token' })
+    expect(res.status).toBe(401)
+    expect(await res.text()).toMatch(/App verification failed/)
+  })
+
   it('sends no CORS allow-origin, so other websites cannot use it', async () => {
     const res = await fetch(PROXY + '/whoami', {
       method: 'OPTIONS',

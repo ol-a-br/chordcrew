@@ -1,4 +1,5 @@
-import { auth } from '@/firebase'
+import { getToken } from 'firebase/app-check'
+import { auth, appCheck } from '@/firebase'
 import type { CTSong, CTArrangement, CTEvent, CTCategory, CTAgenda } from './types'
 
 // Keys the ChurchTools API accepts on arrangements
@@ -19,11 +20,14 @@ function endpoint(_baseUrl: string, path: string): string {
 async function headers(baseUrl: string, token: string): Promise<HeadersInit> {
   const idToken = await auth?.currentUser?.getIdToken()
   if (!idToken) throw new Error('Sign in to ChordCrew to use ChurchTools.')
+  // Plain fetch() doesn't attach App Check like the Firebase SDKs do.
+  const appCheckToken = appCheck ? (await getToken(appCheck).catch(() => null))?.token : undefined
   return {
     'Content-Type': 'application/json',
     'Authorization': `Login ${token}`,
     'X-CT-Base-URL': baseUrl,
     'X-Firebase-ID-Token': idToken,
+    ...(appCheckToken ? { 'X-Firebase-AppCheck': appCheckToken } : {}),
   }
 }
 
