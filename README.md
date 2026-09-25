@@ -125,6 +125,21 @@ entirely on Node (no Java required):
 npm run test:auth
 ```
 
+### Security rules & Cloud Functions (Firebase emulators)
+
+`firestore.rules` and the Cloud Functions that enforce access (team invites,
+ChurchTools proxy) are tested against the Firebase emulators — who may read or
+write personal data, teams, share links and feedback, and that the functions
+reject forged tokens, wrong invites and foreign targets:
+
+```bash
+npm run test:firebase
+```
+
+**Prerequisites:** `firebase-tools` (same as for deploying) and **Java 11+**
+for the Firestore emulator. Run this after every change to `firestore.rules`
+or `functions/src/` — `npm run deploy` ships the rules from this repo.
+
 ### Android device E2E (real Chrome, not an emulated user agent)
 
 The profiles in `npm test` emulate a phone/tablet viewport on the *desktop*

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && firebase deploy --only hosting,functions",
+    "deploy": "npm run build && firebase deploy --only hosting,functions,firestore",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:auth": "playwright test -c playwright.auth.config.ts",
@@ -15,7 +15,8 @@
     "android:emulator": "scripts/android-emulator.sh start",
     "android:prep": "node scripts/android-chrome-prep.mjs",
     "test:unit": "vitest run",
-    "test:unit:watch": "vitest"
+    "test:unit:watch": "vitest",
+    "test:firebase": "npm --prefix functions run build && firebase emulators:exec --only firestore,auth,functions --project demo-chordcrew \"vitest run --config vitest.firebase.config.ts\""
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",
@@ -41,6 +42,7 @@
     "serialize-javascript": "^7.0.5"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@playwright/test": "^1.59.1",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",

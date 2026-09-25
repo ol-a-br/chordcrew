@@ -10,6 +10,8 @@ npm run deploy   # build + firebase deploy → chordcrew.app
 
 Requires `firebase-tools` installed and an active `firebase login` session. Uses your personal Firebase account — no secrets or CI involved.
 
+`npm run deploy` ships **hosting, Cloud Functions and Firestore** (`firestore.rules` + `firestore.indexes.json`, incl. the TTL policy on `shares.expiresAt`). The files in the repo are the single source of truth for what protects production data — never edit rules in the Firebase console; change `firestore.rules`, run `npm run test:firebase`, then deploy.
+
 ### GitHub Actions
 
 `.github/workflows/deploy.yml` exists but is **disabled** (trigger: `workflow_dispatch` only). It will not run on any push or merge until re-enabled. This is intentional while working solo.
@@ -96,6 +98,7 @@ Useful once there are multiple contributors who can merge PRs.
 | Dependabot alerts reviewed | ✅ done | Removed unused `jspdf`/`html2canvas`; 0 critical remaining |
 | Dependabot version updates configured | ✅ done | `.github/dependabot.yml` — grouped weekly PRs |
 | SECURITY.md added | ✅ done | GitHub-standard security policy |
+| Firestore rules deployed from the repo | ✅ done | `npm run deploy` includes `firestore`; rules tested with `npm run test:firebase` |
 | GitHub Environment approval gate | ⬜ optional | Add when collaborators join |
 
 ---
