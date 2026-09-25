@@ -16,7 +16,7 @@ process.env.PW_ANDROID_PORTS = String(PORT)
 
 export default defineConfig({
   testDir: './tests',
-  testIgnore: ['**/auth/**', '**/ipad-*', '**/*.diag.spec.ts'],
+  testIgnore: ['**/auth/**', '**/firebase/**', '**/ipad-*', '**/*.diag.spec.ts'],
   fullyParallel: false,
   workers: 1,
   retries: 0,

@@ -17,6 +17,7 @@ npm run test:unit # Vitest unit tests (src/**/*.test.ts — pure-function logic 
 npm test          # Playwright E2E tests
 npm run test:ui   # Playwright interactive UI
 npm run test:auth # Redirect sign-in E2E against the Firebase Auth emulator (tests/auth/, no Java needed)
+npm run test:firebase # Firestore rules + Cloud Functions security tests on the emulators (tests/firebase/, needs Java)
 npm run android:emulator  # boot the Android tablet AVD (scripts/android-emulator.sh create|start|stop|status)
 npm run android:prep      # once per AVD: Chrome first-run + flag so Playwright can drive it (scripts/android-chrome-prep.mjs)
 npm run test:android      # main E2E suite in real Chrome on that emulator via adb (tests/fixtures.ts)
@@ -67,6 +68,7 @@ Use targeted `Edit` calls on specific code sections rather than full-file `Write
 - Dark mode is **always on** (`class="dark"` on `<html>`). Do not add a light mode toggle.
 - Design tokens are fixed — do not change the surface/ink/chord colour palette or the Outfit + JetBrains Mono fonts.
 - MIT licence — do not add dependencies with incompatible licences.
+- Firestore rules are code — change `firestore.rules` (never the Firebase console), cover the change in `tests/firebase/`, and run `npm run test:firebase`. Any new collection needs an explicit rule; everything unlisted is denied.
 
 ## Design tokens (Tailwind)
 
