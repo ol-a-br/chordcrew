@@ -1,4 +1,9 @@
 import * as functions from 'firebase-functions/v1'
+import * as admin from 'firebase-admin'
+
+admin.initializeApp()
+
+export { previewInvite, acceptInvite, declineInvite, listMyInvites } from './teams'
 
 // Only proxy requests to official ChurchTools SaaS hostnames.
 const CT_HOSTNAME_SUFFIX = '.church.tools'

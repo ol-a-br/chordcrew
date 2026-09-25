@@ -2,22 +2,23 @@
  * TeamJoinPage — handles invite links of the form /join/:teamId?token=ABC
  *
  * Flow:
- * 1. Load team from Firestore (public enough to read if you have the link)
+ * 1. Ask the previewInvite Cloud Function for the team name/owner. Holding a
+ *    valid token is enough — the Firestore rules don't let non-members read
+ *    the team document itself.
  * 2. If user is not signed in → show sign-in prompt
- * 3. Validate the token against team.invites[].token
- * 4. Accept: add user to team.members[], remove the invite, sync
- * 5. Navigate to /library
+ * 3. Accept: the acceptInvite function verifies the token (or the user's
+ *    verified email) server-side and adds the user to the team
+ * 4. Store the returned team locally and navigate to /library
  */
 
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { Music2, Users, Check, AlertCircle } from 'lucide-react'
-import { firestore, firebaseConfigured } from '@/firebase'
+import { firebaseConfigured } from '@/firebase'
 import { useAuth } from '@/auth/AuthContext'
 import { db } from '@/db'
 import { Button } from '@/components/shared/Button'
-import type { Team, TeamMember } from '@/types'
+import { previewInvite, acceptInvite, type InvitePreview } from '@/sync/teamInvites'
 
 type Status = 'loading' | 'needs-login' | 'ready' | 'joining' | 'joined' | 'invalid' | 'already-member' | 'no-firebase'
 
@@ -29,11 +30,11 @@ export default function TeamJoinPage() {
   const { user, signInWithGoogle } = useAuth()
 
   const [status, setStatus] = useState<Status>('loading')
-  const [team, setTeam] = useState<Team | null>(null)
+  const [team, setTeam] = useState<InvitePreview | null>(null)
   const [signingIn, setSigningIn] = useState(false)
 
   useEffect(() => {
-    if (!firebaseConfigured || !firestore || !teamId) {
+    if (!firebaseConfigured || !teamId) {
       setStatus('no-firebase')
       return
     }
@@ -42,29 +43,14 @@ export default function TeamJoinPage() {
   }, [teamId, user])
 
   const loadTeam = async () => {
-    if (!firestore || !teamId) return
+    if (!teamId) return
     setStatus('loading')
+    if (!user && !token) { setStatus('needs-login'); return }
     try {
-      const snap = await getDoc(doc(firestore, 'teams', teamId))
-      if (!snap.exists()) { setStatus('invalid'); return }
-      const remote = snap.data() as Team
-      setTeam(remote)
-
+      const preview = await previewInvite(teamId, token)
+      setTeam(preview)
       if (!user) { setStatus('needs-login'); return }
-
-      // Check already a member
-      const isMember = remote.ownerId === user.id ||
-        remote.members.some(m => m.userId === user.id || m.email === user.email)
-      if (isMember) { setStatus('already-member'); return }
-
-      // Validate token or email-based invite
-      const invite = token
-        ? remote.invites.find(i => i.token === token)
-        : remote.invites.find(i => i.email === user.email)
-
-      if (!invite) { setStatus('invalid'); return }
-
-      setStatus('ready')
+      setStatus(preview.alreadyMember ? 'already-member' : 'ready')
     } catch {
       setStatus('invalid')
     }
@@ -83,38 +69,15 @@ export default function TeamJoinPage() {
   }
 
   const handleJoin = async () => {
-    if (!user || !team || !firestore) return
+    if (!user || !teamId) return
     setStatus('joining')
-
-    const invite = token
-      ? team.invites.find(i => i.token === token)
-      : team.invites.find(i => i.email === user.email)
-
-    if (!invite) { setStatus('invalid'); return }
-
-    const newMember: TeamMember = {
-      userId: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      role: invite.role,
-    }
-
-    const updated: Team = {
-      ...team,
-      members: [...team.members, newMember],
-      invites: team.invites.filter(i => i.token !== token && i.email !== user.email),
-      updatedAt: Date.now(),
-    }
-
     try {
-      // Write to Firestore
-      await setDoc(doc(firestore, 'teams', team.id), updated)
-      // Persist locally
-      await db.teams.put(updated)
+      const joined = await acceptInvite(teamId, token)
+      await db.teams.put(joined)
       setStatus('joined')
       setTimeout(() => navigate('/library'), 2000)
     } catch {
-      setStatus('ready') // allow retry
+      setStatus('invalid')
     }
   }
 
@@ -157,7 +120,7 @@ export default function TeamJoinPage() {
         {status === 'already-member' && team && (
           <div className="bg-surface-1 rounded-xl p-5 text-center space-y-3">
             <Check size={24} className="text-green-400 mx-auto" />
-            <p className="text-sm font-medium">You're already in <span className="text-chord">{team.name}</span>.</p>
+            <p className="text-sm font-medium">You're already in <span className="text-chord">{team.teamName}</span>.</p>
             <Button variant="primary" size="sm" onClick={() => navigate('/library')}>Open Library</Button>
           </div>
         )}
@@ -170,14 +133,14 @@ export default function TeamJoinPage() {
               </div>
               <div>
                 <p className="text-xs text-ink-faint">You're invited to join</p>
-                <p className="font-semibold">{team.name}</p>
+                <p className="font-semibold">{team.teamName}</p>
                 {team.description && <p className="text-xs text-ink-muted">{team.description}</p>}
               </div>
             </div>
 
             <div className="text-xs text-ink-muted space-y-1">
               <p>Invited by <span className="text-ink">{team.ownerDisplayName}</span></p>
-              <p>{team.members.length + 1} member{team.members.length !== 0 ? 's' : ''}</p>
+              <p>{team.memberCount} member{team.memberCount !== 1 ? 's' : ''}</p>
             </div>
 
             {status === 'needs-login' && (

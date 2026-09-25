@@ -8,14 +8,61 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Team data — team members only (checked via membership array)
-    match /teams/{teamId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+    // ── Teams ────────────────────────────────────────────────────────────────
+    // Access is decided by fields derived from ownerId/members/invites by
+    // withAccessFields() (src/utils/teamAccess.ts, functions/src/teams.ts):
+    //   memberIds — uids allowed to read the team (array, so "my teams" can be queried)
+    //   roles     — uid → 'owner' | 'contributor' | 'reader', for write checks
+    // Only the owner writes the team document from the client. Accepting and
+    // declining invites run in Cloud Functions (Admin SDK, bypasses rules)
+    // after the invite is verified server-side.
+    // Teams created before these fields existed stay reachable by their owner
+    // (ownerId) until the owner's next sync backfills them.
+    function signedIn() {
+      return request.auth != null;
     }
-    match /teams/{teamId}/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+    function teamRole(teamId) {
+      let team = get(/databases/$(database)/documents/teams/$(teamId)).data;
+      return team.ownerId == request.auth.uid
+        ? 'owner'
+        : team.get('roles', {}).get(request.auth.uid, '');
+    }
+    function isTeamMember(teamId) {
+      return signedIn() && teamRole(teamId) != '';
+    }
+    function canEditTeam(teamId) {
+      return signedIn() && teamRole(teamId) in ['owner', 'contributor'];
+    }
+
+    match /teams/{teamId} {
+      allow read: if signedIn()
+                  && (resource.data.ownerId == request.auth.uid
+                      || request.auth.uid in resource.data.get('memberIds', []));
+      // A new team starts with only its creator as owner.
+      allow create: if signedIn()
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.memberIds == [request.auth.uid]
+                    && request.resource.data.roles.keys().hasOnly([request.auth.uid])
+                    && request.resource.data.roles[request.auth.uid] == 'owner'
+                    && request.resource.data.members.size() == 0;
+      // Owner manages name, members, roles and invites; ownership can't move.
+      allow update: if signedIn()
+                    && resource.data.ownerId == request.auth.uid
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.roles[request.auth.uid] == 'owner'
+                    && request.auth.uid in request.resource.data.memberIds;
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // Team songs, books, setlists, setlistItems, deletions: members read,
+    // owners and contributors write.
+    match /teams/{teamId}/{collectionId}/{docId} {
+      allow read: if isTeamMember(teamId);
+      allow write: if canEditTeam(teamId);
+    }
+    // Readers may still flag that they keep personal notes on a team song.
+    match /teams/{teamId}/noteIndicators/{songId} {
+      allow write: if isTeamMember(teamId);
     }
 
     // Public read-only share links — anyone can read. Only the user who first

@@ -1,7 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ctProxy = void 0;
+exports.ctProxy = exports.listMyInvites = exports.declineInvite = exports.acceptInvite = exports.previewInvite = void 0;
 const functions = require("firebase-functions/v1");
+const admin = require("firebase-admin");
+admin.initializeApp();
+var teams_1 = require("./teams");
+Object.defineProperty(exports, "previewInvite", { enumerable: true, get: function () { return teams_1.previewInvite; } });
+Object.defineProperty(exports, "acceptInvite", { enumerable: true, get: function () { return teams_1.acceptInvite; } });
+Object.defineProperty(exports, "declineInvite", { enumerable: true, get: function () { return teams_1.declineInvite; } });
+Object.defineProperty(exports, "listMyInvites", { enumerable: true, get: function () { return teams_1.listMyInvites; } });
 // Only proxy requests to official ChurchTools SaaS hostnames.
 const CT_HOSTNAME_SUFFIX = '.church.tools';
 const CORS_HEADERS = {
