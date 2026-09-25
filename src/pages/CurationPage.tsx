@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, Copy, Download, Search, Trash2, GitCompare, Link2, Link2Off, Check } from 'lucide-react'
+import { AlertTriangle, Copy, Download, Trash2, GitCompare, Link2, Link2Off, Check } from 'lucide-react'
 import { db, markDeleted, linkSongs } from '@/db'
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { lintChordPro } from '@/utils/chordpro'
+import { fuzzyMatch } from '@/utils/fuzzySearch'
 import { isSongDiverged, getLinkStatus } from '@/utils/linkedSongs'
 import { SyncCopiesDialog } from '@/components/songs/SyncCopiesDialog'
+import { SearchInput } from '@/components/shared/SearchInput'
 import { useAuth } from '@/auth/AuthContext'
 import type { Song, Book } from '@/types'
 
@@ -225,14 +227,13 @@ export default function CurationPage() {
 
   const connectResults = useMemo(() => {
     if (!connectQuery.trim()) return []
-    const q = connectQuery.toLowerCase()
     return (songs ?? [])
       .filter(s => {
         if (connectStep === 2 && connectSongA) {
           if (s.id === connectSongA.id) return false
           if (connectSongA.linkedSongIds?.includes(s.id)) return false
         }
-        return s.title.toLowerCase().includes(q) || (s.artist ?? '').toLowerCase().includes(q)
+        return fuzzyMatch(`${s.title} ${s.artist ?? ''}`, connectQuery)
       })
       .slice(0, 12)
   }, [songs, connectQuery, connectStep, connectSongA])
@@ -338,8 +339,7 @@ export default function CurationPage() {
 
   const filteredErrors = useMemo(() => {
     if (!errorFilter) return songErrors
-    const q = errorFilter.toLowerCase()
-    return songErrors.filter(({ song }) => song.title.toLowerCase().includes(q))
+    return songErrors.filter(({ song }) => fuzzyMatch(song.title, errorFilter))
   }, [songErrors, errorFilter])
 
   // ── Export ────────────────────────────────────────────────────────────────
@@ -507,15 +507,12 @@ export default function CurationPage() {
             <div className="text-ink-muted text-sm py-8 text-center">No parse errors found in your library.</div>
           ) : (
             <>
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-                <input
-                  value={errorFilter}
-                  onChange={e => setErrorFilter(e.target.value)}
-                  placeholder="Filter by song title…"
-                  className="w-full bg-surface-2 rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-1 focus:ring-chord/50"
-                />
-              </div>
+              <SearchInput
+                value={errorFilter}
+                onChange={setErrorFilter}
+                placeholder="Filter by song title…"
+                iconSize={14}
+              />
               {filteredErrors.map(({ song, errors }) => (
                 <div key={song.id} className="bg-surface-1 border border-red-900/40 rounded-xl overflow-hidden">
                   <div className="flex items-center gap-2 px-4 py-2 bg-red-900/20 border-b border-red-900/30">
@@ -682,16 +679,13 @@ export default function CurationPage() {
                       </button>
                     </div>
                   )}
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-                    <input
-                      autoFocus
-                      value={connectQuery}
-                      onChange={e => setConnectQuery(e.target.value)}
-                      placeholder="Search by title or artist…"
-                      className="w-full bg-surface-2 rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-1 focus:ring-chord/50"
-                    />
-                  </div>
+                  <SearchInput
+                    autoFocus
+                    value={connectQuery}
+                    onChange={setConnectQuery}
+                    placeholder="Search by title or artist…"
+                    iconSize={14}
+                  />
                   <ul className="max-h-56 overflow-y-auto space-y-0.5">
                     {connectResults.map(song => (
                       <li

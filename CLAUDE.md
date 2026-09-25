@@ -13,6 +13,7 @@ npm run dev       # dev server → localhost:5173
 npm run build     # TypeScript check + Vite build
 npm run preview   # preview production build
 npm run deploy    # build + firebase deploy (needs firebase-tools + login)
+npm run test:unit # Vitest unit tests (src/**/*.test.ts — pure-function logic like fuzzySearch, chordpro, linkedSongs)
 npm test          # Playwright E2E tests
 npm run test:ui   # Playwright interactive UI
 npm run test:auth # Redirect sign-in E2E against the Firebase Auth emulator (tests/auth/, no Java needed)
@@ -110,7 +111,7 @@ src/
   utils/chordpro.ts               # parse, renderToHtml, extractMeta, buildSearchText
   sync/
     firestoreSync.ts              # uploadPending, downloadPersonal, downloadTeams, syncNow
-    SyncContext.tsx               # SyncProvider — status, pendingCount, lastSync, syncNow
+    SyncContext.tsx                # SyncProvider — status, pendingCount, lastSync, syncNow
   components/
     auth/LoginPage.tsx
     layout/AppShell.tsx           # Sidebar nav + mobile top bar + SyncBadge + TeamInviteNotification
