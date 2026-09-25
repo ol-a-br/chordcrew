@@ -3,16 +3,18 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   ArrowLeft, Play, Music, Pencil, Check,
-  GripVertical, Trash2, Plus, Search, Copy,
+  GripVertical, Trash2, Plus, Copy,
   ChevronUp, ChevronDown, Printer, Link2, AlertTriangle, FileDown, Upload,
 } from 'lucide-react'
 import { db, generateId, markPending, linkSongs } from '@/db'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/shared/Button'
+import { SearchInput } from '@/components/shared/SearchInput'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import { EventPickerDialog } from '@/components/churchtools/EventPickerDialog'
 import { encodeSetlistShare, buildShareUrl, buildSetlistShareUrl, copyShareUrl, publishSetlistShare } from '@/utils/share'
 import { transposeKey, extractMeta, isValidKey } from '@/utils/chordpro'
+import { fuzzyMatch } from '@/utils/fuzzySearch'
 import type { SetlistItem, Song, Book } from '@/types'
 
 export default function SetlistDetailPage() {
@@ -116,8 +118,8 @@ export default function SetlistDetailPage() {
     if (filterBookId) all = all.filter(s => s.bookId === filterBookId)
     if (filterTags.length > 0) all = all.filter(s => filterTags.every(t => (s.tags ?? []).some(st => st.toLowerCase().trim() === t)))
 
-    const q = searchQuery.trim().toLowerCase()
-    if (q) all = all.filter(s => s.title.toLowerCase().includes(q) || (s.artist ?? '').toLowerCase().includes(q))
+    const q = searchQuery.trim()
+    if (q) all = all.filter(s => fuzzyMatch(`${s.title} ${s.artist ?? ''}`, q))
 
     const hasFilter = q || filterBookId || filterTags.length > 0 || showPersonalSongs
     return hasFilter ? all : all.sort((a, b) => (b.accessedAt ?? 0) - (a.accessedAt ?? 0)).slice(0, 12)
@@ -712,17 +714,13 @@ export default function SetlistDetailPage() {
             <p className="text-xs font-medium text-ink-muted uppercase tracking-wider">Add Song</p>
 
             {/* Search */}
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-              <input
-                ref={searchInputRef}
-                type="search"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search songs…"
-                className="w-full bg-surface-2 border border-surface-3 focus:border-chord/60 rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none"
-              />
-            </div>
+            <SearchInput
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search songs…"
+              inputClassName="w-full bg-surface-2 border border-surface-3 focus:border-chord/60 rounded-lg pl-9 pr-8 py-2 text-sm text-ink placeholder:text-ink-faint outline-none"
+            />
 
             {/* Filters row */}
             {(availableBooksForFilter.length > 1 || (allTagsForFilter ?? []).length > 0) && (

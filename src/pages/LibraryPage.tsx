@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
-  Plus, Search, Star, BookOpen, ChevronRight, Music, Tag, Users,
+  Plus, Star, BookOpen, ChevronRight, Music, Tag, Users,
   CheckSquare, Square, Trash2, FolderInput, Pencil, Check, X, Upload,
   RefreshCw, Cloud, Hash,
 } from 'lucide-react'
@@ -12,6 +12,8 @@ import { db, generateId, markPending, markDeleted, getTeamRole, linkSongs } from
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
 import { Button } from '@/components/shared/Button'
 import { buildSearchText, extractMeta } from '@/utils/chordpro'
+import { fuzzyMatch, fuzzyRank, compareFuzzyRank } from '@/utils/fuzzySearch'
+import { SearchInput } from '@/components/shared/SearchInput'
 import { useAuth } from '@/auth/AuthContext'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import { ctDeleteSong, ctUpdateSong, ctGetAllSongs, ctPutSong } from '@/churchtools/api'
@@ -183,22 +185,31 @@ export default function LibraryPage() {
     if (activeTag) songs = songs.filter(s => s.tags.some(t => t.toLowerCase() === activeTag))
     if (activeKey) songs = songs.filter(s => s.transcription.key === activeKey)
     if (query.trim()) {
-      const q = query.toLowerCase()
-      songs = songs.filter(s => s.searchText.includes(q))
+      songs = songs.filter(s => fuzzyMatch(s.searchText, query))
     }
     return songs
   }, [allSongs, activeBookId, activeTeamId, activeTag, activeKey, query, bookTeamMap])
 
   const sortedSongs = useMemo(() => {
     const s = [...filteredSongs]
-    switch (sortBy) {
-      case 'artist':     return s.sort((a, b) => (a.artist || '').localeCompare(b.artist || ''))
-      case 'updatedAt':  return s.sort((a, b) => b.updatedAt - a.updatedAt)
-      case 'savedAt':    return s.sort((a, b) => b.savedAt - a.savedAt)
-      case 'accessedAt': return s.sort((a, b) => ((b.accessedAt ?? 0) - (a.accessedAt ?? 0)))
-      default:           return s.sort((a, b) => a.title.localeCompare(b.title))
+    const bySortKey = (a: Song, b: Song) => {
+      switch (sortBy) {
+        case 'artist':     return (a.artist || '').localeCompare(b.artist || '')
+        case 'updatedAt':  return b.updatedAt - a.updatedAt
+        case 'savedAt':    return b.savedAt - a.savedAt
+        case 'accessedAt': return (b.accessedAt ?? 0) - (a.accessedAt ?? 0)
+        default:           return a.title.localeCompare(b.title)
+      }
     }
-  }, [filteredSongs, sortBy])
+
+    const q = query.trim()
+    if (!q) return s.sort(bySortKey)
+
+    // Relevance first: title matches, then other metadata (artist/tags), then
+    // matches that only turned up in the lyrics text.
+    const rankOf = (song: Song) => fuzzyRank([song.title, `${song.artist} ${song.tags.join(' ')}`, song.searchText], q)
+    return s.sort((a, b) => compareFuzzyRank(rankOf(a), rankOf(b)) || bySortKey(a, b))
+  }, [filteredSongs, sortBy, query])
 
   // Organize dropdown targets: personal books + contributor teams, minus current context
   const organizeTargets = useMemo(() => {
@@ -994,16 +1005,12 @@ export default function LibraryPage() {
             </>
           ) : (
             <>
-              <div className="relative flex-1 min-w-[120px]">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-                <input
-                  type="text"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  placeholder={t('library.searchPlaceholder')}
-                  className="w-full bg-surface-2 rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-1 focus:ring-chord/50"
-                />
-              </div>
+              <SearchInput
+                className="flex-1 min-w-[120px]"
+                value={query}
+                onChange={setQuery}
+                placeholder={t('library.searchPlaceholder')}
+              />
 
               <select
                 value={sortBy}

@@ -99,6 +99,74 @@ Add these secrets to your GitHub repo (Settings → Secrets → Actions):
 
 Every push to `main` triggers a live deploy. PRs get a preview channel URL.
 
+## Testing
+
+ChordCrew has three Playwright E2E layers, plus a unit-test layer for pure logic:
+
+```bash
+npm run test:unit   # Vitest — pure logic (chordpro utils, etc.)
+npm test            # Playwright — full app suite in desktop/emulated browsers
+npm run test:ui     # same suite, interactive UI mode
+```
+
+`npm test` runs entirely offline (no Firebase needed) across several browser
+profiles defined in `playwright.config.ts` — desktop Chrome, an emulated
+Android tablet, and emulated/real-engine iPad profiles (Chromium and WebKit) —
+so most rendering and interaction bugs are caught without any device setup.
+
+### Sign-in redirect E2E (Firebase Auth emulator)
+
+Google sign-in uses `signInWithRedirect`, which leaves the page and comes
+back — a flow ordinary mocking doesn't exercise. This suite drives the real
+redirect round-trip against the Firebase Auth emulator's fake account picker,
+entirely on Node (no Java required):
+
+```bash
+npm run test:auth
+```
+
+### Android device E2E (real Chrome, not an emulated user agent)
+
+The profiles in `npm test` emulate a phone/tablet viewport on the *desktop*
+browser engine. For bugs that only show up in actual Chrome for Android
+(e.g. real touch/fling behaviour, or the redirect sign-in bug fixed in this
+repo — see `git log --grep=onboarding`), there's a separate suite that
+drives a real Android emulator over `adb` using Playwright's Android support.
+
+**Prerequisites:** [Android Studio](https://developer.android.com/studio)
+installed (for its SDK and bundled JDK — no separate Java install needed).
+
+**One-time setup**, from the project root:
+
+```bash
+scripts/android-emulator.sh create   # downloads cmdline-tools + a Google Play
+                                      # system image (~1.5 GB) and creates the
+                                      # "chordcrew_tablet" AVD
+scripts/android-emulator.sh start    # boots it headless
+npm run android:prep                 # dismisses Chrome's first-run screens and
+                                      # flips the chrome://flags entry Playwright
+                                      # needs to drive production Chrome
+```
+
+**How to run it**, any time after that:
+
+```bash
+npm run android:emulator   # boot the AVD if it isn't already running
+npm run test:android       # main suite in real Chrome on the device
+ANDROID=1 npm run test:auth   # the redirect sign-in test, on the device
+```
+
+`scripts/android-emulator.sh stop` shuts the emulator down again — worth
+doing when you're done, since a booted AVD keeps using CPU and several GB of
+RAM in the background. `scripts/android-emulator.sh status` checks whether
+it's currently up.
+
+Notes: the AVD is created once and reused; `npm run android:prep` only needs
+re-running if you recreate the AVD. Comments in `scripts/android-emulator.sh`,
+`scripts/android-chrome-prep.mjs`, and `tests/fixtures.ts` cover the emulator
+quirks this setup works around (Chrome's first-run flow, tab accumulation
+across test runs, sensor/GPU CPU load).
+
 ## Bluetooth Pedal (PageFlip Cicada V7)
 
 1. Power on the Cicada and pair it to your device via Bluetooth settings

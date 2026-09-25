@@ -7,7 +7,8 @@
  * Run: npx playwright test --project=android-tablet tests/android-tablet.diag.spec.ts
  */
 
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from './fixtures'
+import type { Page } from '@playwright/test'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const SLOW_NAV_MS      = 300   // SPA route transition budget

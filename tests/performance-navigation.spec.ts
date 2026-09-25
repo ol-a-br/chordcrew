@@ -13,7 +13,8 @@
  * Run: npx playwright test --project=android-tablet tests/performance-navigation.spec.ts
  */
 
-import { test, expect, type Page, type CDPSession } from '@playwright/test'
+import { test, expect } from './fixtures'
+import type { Page, CDPSession } from '@playwright/test'
 import { randomUUID } from 'crypto'
 
 // ── ChordPro helpers ──────────────────────────────────────────────────────────
@@ -203,16 +204,24 @@ async function swipe(cdp: CDPSession, direction: 'forward' | 'backward') {
   const endX   = direction === 'forward' ? 130 : 580
   const ts     = Date.now() / 1000
 
+  // A real finger emits touchmove events between start and end. Teleporting
+  // straight from touchStart to touchEnd makes real Chrome for Android treat
+  // the jump as a fling and natively pan the column container to its end
+  // before the app's touchend handler runs — which then advances to the next
+  // song instead of the next column.
+  const STEPS = 6
+  const point = (x: number) => ({ x, y, id: 0, radiusX: 10, radiusY: 10, rotationAngle: 0, force: 1 })
   await cdp.send('Input.dispatchTouchEvent', {
-    type: 'touchStart',
-    touchPoints: [{ x: startX, y, id: 0, radiusX: 10, radiusY: 10, rotationAngle: 0, force: 1 }],
-    modifiers: 0, timestamp: ts,
+    type: 'touchStart', touchPoints: [point(startX)], modifiers: 0, timestamp: ts,
   })
-  await new Promise(r => setTimeout(r, 30))
+  for (let i = 1; i <= STEPS; i++) {
+    await new Promise(r => setTimeout(r, 15))
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove', touchPoints: [point(startX + (endX - startX) * i / STEPS)], modifiers: 0, timestamp: ts + 0.015 * i,
+    })
+  }
   await cdp.send('Input.dispatchTouchEvent', {
-    type: 'touchEnd',
-    touchPoints: [{ x: endX, y, id: 0, radiusX: 10, radiusY: 10, rotationAngle: 0, force: 1 }],
-    modifiers: 0, timestamp: ts + 0.1,
+    type: 'touchEnd', touchPoints: [point(endX)], modifiers: 0, timestamp: ts + 0.015 * (STEPS + 1),
   })
 }
 
@@ -376,7 +385,14 @@ test.describe('Performance mode setlist navigation', () => {
     // ~30ms after the swipe, and we've only waited 600ms total. Clicking an arbitrary
     // coordinate to "reveal" controls would risk hitting the new Pencil edit button.
     // Instead, locate the X (close) button directly inside the controls overlay.
-    const cancelBtn = page.locator('div.absolute.top-0.inset-x-0.z-10 button').first()
+    // On a slow device we can already be past the 3 s auto-hide by now, and a
+    // hidden overlay is pointer-events-none — the click would fall through.
+    // A mouse move re-shows the controls (onPointerMove) without hitting a tap zone.
+    const overlay = page.locator('div.absolute.top-0.inset-x-0.z-10').first()
+    await page.mouse.move(300, 300)
+    await page.mouse.move(320, 310)
+    await expect(overlay).toHaveClass(/opacity-100/, { timeout: 3000 })
+    const cancelBtn = overlay.locator('button').first()
     await cancelBtn.waitFor({ state: 'visible', timeout: 3000 })
     // force: true bypasses Playwright's elementFromPoint hit-test check; the overflow-x-auto
     // song content div occupies the same coordinates but the CSS z-10 overlay renders on top

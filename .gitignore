@@ -7,3 +7,6 @@ data
 .DS_Store
 .firebase
 .firebaserc.local
+
+# Firebase emulator logs
+*-debug.log

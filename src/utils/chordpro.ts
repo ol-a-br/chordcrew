@@ -39,6 +39,14 @@ export function preprocessChordPro(content: string): string {
     if (/\{(?:end_of_tab|eot|end_of_grid|eog)\b/i.test(line)) { inLiteral = false; return line }
     if (inLiteral) return line
     if (line.trimStart().startsWith('{')) return line
+    // A chord immediately followed by 2+ spaces (e.g. "[F]   Ich") signals a
+    // deliberate pause before the lyric starts. chordsheetjs drops ANY plain
+    // whitespace directly after a chord bracket entirely (the column ends up
+    // with empty lyrics and the gap vanishes), so swap it for a single
+    // non-breaking space first — chordsheetjs's word-boundary splitter doesn't
+    // treat U+00A0 as a break point, so it survives as visible spacing before
+    // the word instead of being eaten.
+    line = line.replace(/(\])  +(?=\S)/g, '$1 ')
     return line.replace(/  +/g, ' ')
   })
   content = normalizedLines.join('\n')

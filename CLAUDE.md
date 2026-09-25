@@ -13,9 +13,17 @@ npm run dev       # dev server → localhost:5173
 npm run build     # TypeScript check + Vite build
 npm run preview   # preview production build
 npm run deploy    # build + firebase deploy (needs firebase-tools + login)
+npm run test:unit # Vitest unit tests (src/**/*.test.ts — pure-function logic like fuzzySearch, chordpro, linkedSongs)
 npm test          # Playwright E2E tests
 npm run test:ui   # Playwright interactive UI
+npm run test:auth # Redirect sign-in E2E against the Firebase Auth emulator (tests/auth/, no Java needed)
+npm run android:emulator  # boot the Android tablet AVD (scripts/android-emulator.sh create|start|stop|status)
+npm run android:prep      # once per AVD: Chrome first-run + flag so Playwright can drive it (scripts/android-chrome-prep.mjs)
+npm run test:android      # main E2E suite in real Chrome on that emulator via adb (tests/fixtures.ts)
+                          # ANDROID=1 npm run test:auth runs the redirect sign-in test on it too
 ```
+
+See the README's [Testing](README.md#testing) section for prerequisites and one-time Android emulator setup.
 
 ## Key documents
 
@@ -60,21 +68,6 @@ Use targeted `Edit` calls on specific code sections rather than full-file `Write
 - Design tokens are fixed — do not change the surface/ink/chord colour palette or the Outfit + JetBrains Mono fonts.
 - MIT licence — do not add dependencies with incompatible licences.
 
-## Tech stack
-
-| Layer | Library |
-|-------|---------|
-| Framework | React 18 + TypeScript + Vite |
-| Styling | Tailwind CSS v3 (custom tokens in `tailwind.config.js`) |
-| ChordPro | chordsheetjs |
-| Local DB | Dexie.js (IndexedDB) |
-| Editor | CodeMirror 6 |
-| Auth | Firebase Auth (Google Sign-In) |
-| Cloud DB | Firestore (manual sync, Phase 3) |
-| Hosting | Firebase Hosting |
-| PWA | vite-plugin-pwa + Workbox |
-| i18n | react-i18next (EN + DE) |
-
 ## Design tokens (Tailwind)
 
 ```js
@@ -103,7 +96,7 @@ src/
   utils/chordpro.ts               # parse, renderToHtml, extractMeta, buildSearchText
   sync/
     firestoreSync.ts              # uploadPending, downloadPersonal, downloadTeams, syncNow
-    SyncContext.tsx               # SyncProvider — status, pendingCount, lastSync, syncNow
+    SyncContext.tsx                # SyncProvider — status, pendingCount, lastSync, syncNow
   components/
     auth/LoginPage.tsx
     layout/AppShell.tsx           # Sidebar nav + mobile top bar + SyncBadge + TeamInviteNotification
@@ -175,13 +168,7 @@ Do not add `env(safe-area-inset-top)` to the root `<div>` — it would double-co
 
 ## Sync architecture
 
-`SyncContext` exposes `{ status, pendingCount, lastSync, error, syncNow }`.
-
-- `status`: `'unconfigured' | 'clean' | 'pending' | 'syncing' | 'error'`
-- Every Dexie write calls `markPending(entityType, id)` which inserts/updates a `SyncState` row
-- `syncNow()`: `uploadPending()` → `downloadPersonal()` → `downloadTeams()`
-- `stripUndefined()` in `firestoreSync.ts` strips `undefined` fields before Firestore writes (Firestore rejects them)
-- Team songs are uploaded to both `/users/{uid}/songs/{id}` and `/teams/{teamId}/songs/{id}` when the song's book has `sharedTeamId`
+See `src/sync/CLAUDE.md` for implementation details (SyncContext shape, stripUndefined, team dual-write).
 
 ## Teams architecture
 

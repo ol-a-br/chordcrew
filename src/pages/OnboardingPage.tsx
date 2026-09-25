@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Music2, Globe, LogIn, BookOpen, ListMusic, Zap, ChevronRight, Check, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/auth/AuthContext'
@@ -34,10 +34,24 @@ const TUTORIAL_SLIDES = [
 export default function OnboardingPage() {
   const { t } = useTranslation()
   const { signInWithGoogle, user, configured } = useAuth()
-  const [step, setStep] = useState<Step>('language')
+  // signInWithGoogle uses signInWithRedirect: the page navigates away to Google
+  // and comes back, which remounts this component with fresh state. Language
+  // was already persisted before the redirect and the user is now signed in,
+  // so resume at the tutorial instead of restarting at the language step —
+  // otherwise a successful sign-in looks like a failure ("back to language
+  // selection") and the user is stuck in a loop. Only applies when Firebase is
+  // configured: in local mode the guest user always exists and onboarding must
+  // still start at the language step.
+  const signedIn = configured && !!user
+  const [step, setStep] = useState<Step>(signedIn ? 'tutorial' : 'language')
   const [slideIndex, setSlideIndex] = useState(0)
   const [signingIn, setSigningIn] = useState(false)
   const [signInError, setSignInError] = useState('')
+
+  // Also covers auth state arriving while the login step is showing
+  useEffect(() => {
+    if (signedIn && step === 'login') setStep('tutorial')
+  }, [signedIn, step])
 
   const selectLanguage = async (lang: 'en' | 'de') => {
     await i18n.changeLanguage(lang)

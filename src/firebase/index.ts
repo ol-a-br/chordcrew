@@ -1,5 +1,5 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app'
-import { getAuth, type Auth } from 'firebase/auth'
+import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth'
 import { getFirestore, type Firestore } from 'firebase/firestore'
 
 // authDomain must be same-origin with the page being served, or browsers that
@@ -43,6 +43,14 @@ if (firebaseConfigured) {
   app = initializeApp(firebaseConfig)
   auth = getAuth(app)
   db = getFirestore(app)
+  // Dev/test only: point Auth at the local Firebase Auth emulator so the real
+  // signInWithRedirect round-trip can be exercised without a Google account
+  // (see playwright.auth.config.ts / `npm run test:auth`). Never active in a
+  // production bundle.
+  const authEmulatorHost = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST as string | undefined
+  if (import.meta.env.DEV && authEmulatorHost) {
+    connectAuthEmulator(auth, authEmulatorHost, { disableWarnings: true })
+  }
 }
 
 export { app, auth, db as firestore }

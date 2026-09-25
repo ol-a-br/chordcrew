@@ -2,6 +2,8 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
+  // tests/auth/* need the Firebase Auth emulator — run via `npm run test:auth`
+  testIgnore: '**/auth/**',
   fullyParallel: false,
   workers: 2,
   retries: 0,
