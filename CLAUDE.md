@@ -186,7 +186,8 @@ Do not add `env(safe-area-inset-top)` to the root `<div>` — it would double-co
 ## Teams architecture
 
 - `TeamMemberRole`: `'owner' | 'contributor' | 'reader'`
-- Team invite flow: owner adds email → stored in `team.invites[]` → pushed to Firestore → `TeamInviteNotification` on invitee's AppShell queries all `/teams` docs on mount → accept writes user to `members[]` and removes from `invites[]`
+- **Access control is enforced by Firestore rules**, not only in the UI. They rely on fields derived by `withAccessFields()` (`src/utils/teamAccess.ts`, mirrored in `functions/src/teams.ts`): `memberIds` (who may read), `roles` (uid → role, who may write team content), `inviteEmails`. Every team-document write must go through `syncTeam()`, which applies it. Only the owner may write the team document; owners/contributors write team songs/setlists; readers only read (plus `noteIndicators`).
+- Team invite flow: owner adds an email or creates a link token → stored in `team.invites[]` → `TeamInviteNotification` calls the `listMyInvites` Cloud Function; `/join/:teamId?token=` calls `previewInvite`. Accept/decline go through the `acceptInvite` / `declineInvite` functions (`src/sync/teamInvites.ts`), which verify the token or the caller's verified email server-side and update `members[]`/`invites[]`. Clients never add themselves to a team directly.
 - `TeamDetailPage` uses `onSnapshot` to keep local Dexie in sync with Firestore in real-time (so owner sees accepted invites without manual sync)
 - `LibraryPage` shows team spaces in the sidebar; `createSong` auto-creates a team book on first use
 

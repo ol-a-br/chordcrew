@@ -26,6 +26,7 @@ import {
 } from 'firebase/firestore'
 import { firestore } from '@/firebase'
 import { db } from '@/db'
+import { withAccessFields, canEditTeamContent } from '@/utils/teamAccess'
 import type { Book, Song, Setlist, SetlistItem, Team, SongNote } from '@/types'
 
 // ─── Upload ───────────────────────────────────────────────────────────────────
@@ -36,13 +37,13 @@ async function uploadPending(userId: string): Promise<void> {
 
   const errors: Error[] = []
 
-  // Find which teams this user belongs to (for team-scoped uploads)
+  // Find which teams this user belongs to (for team-scoped uploads). Firestore
+  // rules only let owners and contributors write team content, so readers'
+  // local copies of team songs/setlists are never pushed to the team space.
   const allTeams = await db.teams.toArray()
-  const myTeamIds = new Set(
-    allTeams
-      .filter(t => t.ownerId === userId || t.members.some(m => m.userId === userId))
-      .map(t => t.id)
-  )
+  const myTeams = allTeams.filter(t => t.ownerId === userId || t.members.some(m => m.userId === userId))
+  const myTeamIds = new Set(myTeams.map(t => t.id))
+  const writableTeamIds = new Set(myTeams.filter(t => canEditTeamContent(t, userId)).map(t => t.id))
 
   for (const state of pending) {
     const { entityType, entityId } = state
@@ -89,7 +90,7 @@ async function uploadPending(userId: string): Promise<void> {
             await setDoc(remoteRef, stripUndefined(entity))
             if (entity.bookId) {
               const book = await db.books.get(entity.bookId)
-              if (book?.sharedTeamId && myTeamIds.has(book.sharedTeamId)) {
+              if (book?.sharedTeamId && writableTeamIds.has(book.sharedTeamId)) {
                 await setDoc(doc(firestore!, 'teams', book.sharedTeamId, 'songs', entityId), stripUndefined(entity))
               }
             }
@@ -106,14 +107,16 @@ async function uploadPending(userId: string): Promise<void> {
             await db.books.put(remote)
           } else {
             await setDoc(remoteRef, stripUndefined(entity))
-            if (entity.sharedTeamId && myTeamIds.has(entity.sharedTeamId)) {
+            if (entity.sharedTeamId && writableTeamIds.has(entity.sharedTeamId)) {
               await setDoc(doc(firestore!, 'teams', entity.sharedTeamId, 'books', entityId), stripUndefined(entity))
             }
           }
         }
       } else if (entityType === 'setlist') {
         const entity = await db.setlists.get(entityId)
-        if (entity) {
+        const readOnlyTeamSetlist = !!(entity?.sharedTeamId && myTeamIds.has(entity.sharedTeamId)
+          && !writableTeamIds.has(entity.sharedTeamId))
+        if (entity && !readOnlyTeamSetlist) {
           const isTeam = !!(entity.sharedTeamId && myTeamIds.has(entity.sharedTeamId))
           const remoteRef = isTeam
             ? doc(firestore!, 'teams', entity.sharedTeamId!, 'setlists', entityId)
@@ -292,61 +295,81 @@ async function downloadTeams(userId: string, userEmail: string, discoveredTeamId
   const localTeamIds = localTeams
     .filter(t => t.ownerId === userId || t.members.some(m => m.userId === userId || m.email === userEmail))
     .map(t => t.id)
-  const myTeamIds = [...new Set([...localTeamIds, ...discoveredTeamIds])]
+  // Teams this user was added to on another device (e.g. accepted an invite
+  // there). Firestore rules only return teams whose memberIds contain the uid.
+  const memberTeamIds = await getDocs(
+    query(collection(firestore!, 'teams'), where('memberIds', 'array-contains', userId))
+  ).then(snap => snap.docs.map(d => d.id)).catch(() => [] as string[])
 
-  // Also check Firestore for teams where this user is an accepted member
-  // (they may have accepted an invite on another device)
+  const myTeamIds = [...new Set([...localTeamIds, ...discoveredTeamIds, ...memberTeamIds])]
+
   for (const teamId of myTeamIds) {
-    const teamSnap = await getDoc(doc(firestore!, 'teams', teamId))
-    if (!teamSnap.exists()) continue
+    // A team the user was removed from (or that no longer exists) is denied by
+    // the rules — skip it rather than failing the whole sync.
+    try {
+      await downloadTeam(teamId, userId)
+    } catch (err) {
+      console.warn(`Skipping team ${teamId}:`, err)
+    }
+  }
+}
 
-    const remoteTeam = teamSnap.data() as Team
-    const localTeam = await db.teams.get(remoteTeam.id)
-    if (!localTeam || remoteTeam.updatedAt > localTeam.updatedAt) {
-      await db.teams.put(remoteTeam)
-    }
+async function downloadTeam(teamId: string, userId: string): Promise<void> {
+  const teamSnap = await getDoc(doc(firestore!, 'teams', teamId))
+  if (!teamSnap.exists()) return
 
-    // Team songs
-    const teamSongs = await getDocs(collection(firestore!, 'teams', teamId, 'songs'))
-    for (const snap of teamSongs.docs) {
-      const remote = snap.data() as Song
-      const local = await db.songs.get(remote.id)
-      const syncState = await db.syncStates.get(`song:${remote.id}`)
-      if (syncState?.status === 'deleted') continue  // locally deleted — don't re-add
-      if (!local || remote.updatedAt > local.updatedAt) await db.songs.put(remote)
-    }
+  let remoteTeam = teamSnap.data() as Team
+  // Migration: teams created before the access-control fields existed are
+  // readable only by their owner until the owner's next sync writes them.
+  if (!remoteTeam.memberIds && remoteTeam.ownerId === userId) {
+    remoteTeam = withAccessFields(remoteTeam)
+    await setDoc(doc(firestore!, 'teams', teamId), stripUndefined(remoteTeam))
+  }
+  const localTeam = await db.teams.get(remoteTeam.id)
+  if (!localTeam || remoteTeam.updatedAt > localTeam.updatedAt || !localTeam.memberIds) {
+    await db.teams.put(remoteTeam)
+  }
 
-    // Apply team deletion log — propagate song deletions to all team members
-    await applyDeletionLog(`teams/${teamId}/deletions`)
+  // Team songs
+  const teamSongs = await getDocs(collection(firestore!, 'teams', teamId, 'songs'))
+  for (const snap of teamSongs.docs) {
+    const remote = snap.data() as Song
+    const local = await db.songs.get(remote.id)
+    const syncState = await db.syncStates.get(`song:${remote.id}`)
+    if (syncState?.status === 'deleted') continue  // locally deleted — don't re-add
+    if (!local || remote.updatedAt > local.updatedAt) await db.songs.put(remote)
+  }
 
-    // Team setlists + items
-    const downloadedTeamSetlistIds = new Set<string>()
-    const teamSetlists = await getDocs(collection(firestore!, 'teams', teamId, 'setlists'))
-    for (const snap of teamSetlists.docs) {
-      const remote = snap.data() as Setlist
-      const local = await db.setlists.get(remote.id)
-      const syncState = await db.syncStates.get(`setlist:${remote.id}`)
-      if (syncState?.status !== 'pending' && (!local || remote.updatedAt > local.updatedAt)) {
-        await db.setlists.put(remote)
-        downloadedTeamSetlistIds.add(remote.id)
-      }
+  // Apply team deletion log — propagate song deletions to all team members
+  await applyDeletionLog(`teams/${teamId}/deletions`)
+
+  // Team setlists + items
+  const downloadedTeamSetlistIds = new Set<string>()
+  const teamSetlists = await getDocs(collection(firestore!, 'teams', teamId, 'setlists'))
+  for (const snap of teamSetlists.docs) {
+    const remote = snap.data() as Setlist
+    const local = await db.setlists.get(remote.id)
+    const syncState = await db.syncStates.get(`setlist:${remote.id}`)
+    if (syncState?.status !== 'pending' && (!local || remote.updatedAt > local.updatedAt)) {
+      await db.setlists.put(remote)
+      downloadedTeamSetlistIds.add(remote.id)
     }
-    const teamItems = await getDocs(collection(firestore!, 'teams', teamId, 'setlistItems'))
-    const teamItemsBySetlist = new Map<string, SetlistItem[]>()
-    for (const snap of teamItems.docs) {
-      const item = snap.data() as SetlistItem
-      const bucket = teamItemsBySetlist.get(item.setlistId) ?? []
-      bucket.push(item)
-      teamItemsBySetlist.set(item.setlistId, bucket)
-    }
-    for (const sid of downloadedTeamSetlistIds) {
-      const remoteForSetlist = teamItemsBySetlist.get(sid) ?? []
-      const remoteIds = new Set(remoteForSetlist.map(i => i.id))
-      const localItems = await db.setlistItems.where('setlistId').equals(sid).toArray()
-      const toDelete = localItems.filter(i => !remoteIds.has(i.id)).map(i => i.id)
-      if (toDelete.length > 0) await db.setlistItems.bulkDelete(toDelete)
-      if (remoteForSetlist.length > 0) await db.setlistItems.bulkPut(remoteForSetlist)
-    }
+  }
+  const teamItems = await getDocs(collection(firestore!, 'teams', teamId, 'setlistItems'))
+  const teamItemsBySetlist = new Map<string, SetlistItem[]>()
+  for (const snap of teamItems.docs) {
+    const item = snap.data() as SetlistItem
+    const bucket = teamItemsBySetlist.get(item.setlistId) ?? []
+    bucket.push(item)
+    teamItemsBySetlist.set(item.setlistId, bucket)
+  }
+  for (const sid of downloadedTeamSetlistIds) {
+    const remoteForSetlist = teamItemsBySetlist.get(sid) ?? []
+    const remoteIds = new Set(remoteForSetlist.map(i => i.id))
+    const localItems = await db.setlistItems.where('setlistId').equals(sid).toArray()
+    const toDelete = localItems.filter(i => !remoteIds.has(i.id)).map(i => i.id)
+    if (toDelete.length > 0) await db.setlistItems.bulkDelete(toDelete)
+    if (remoteForSetlist.length > 0) await db.setlistItems.bulkPut(remoteForSetlist)
   }
 }
 
@@ -378,15 +401,13 @@ async function repairOrphaned(userId: string): Promise<void> {
   if (localStorage.getItem(REPAIR_FLAG)) return   // already done on this device
   if (!firestore) return
 
-  // Build myTeamIds from local teams + sharedTeamId refs in local books
+  // Team content may only be written by owners/contributors (Firestore rules),
+  // so only those teams are repaired; readers' team copies are left alone.
   const allBooks = await db.books.toArray()
   const allTeams = await db.teams.toArray()
-  const myTeamIds = new Set([
-    ...allTeams
-      .filter(t => t.ownerId === userId || t.members.some(m => m.userId === userId))
-      .map(t => t.id),
-    ...allBooks.map(b => b.sharedTeamId).filter(Boolean) as string[],
-  ])
+  const myTeamIds = new Set(
+    allTeams.filter(t => canEditTeamContent(t, userId)).map(t => t.id)
+  )
 
   // ── Books: upload any book not present in Firestore ──
   for (const book of allBooks) {
@@ -427,6 +448,7 @@ async function repairOrphaned(userId: string): Promise<void> {
   // ── Setlists: upload any setlist not present in Firestore ──
   const allSetlists = await db.setlists.toArray()
   for (const setlist of allSetlists) {
+    if (setlist.sharedTeamId && !myTeamIds.has(setlist.sharedTeamId)) continue
     const target = setlist.sharedTeamId && myTeamIds.has(setlist.sharedTeamId)
       ? doc(firestore, 'teams', setlist.sharedTeamId, 'setlists', setlist.id)
       : doc(firestore, 'users', userId, 'setlists', setlist.id)
@@ -462,7 +484,7 @@ export async function syncNow(userId: string, userEmail: string): Promise<void> 
 /** Write a team document to Firestore (called after creating/updating a team). */
 export async function syncTeam(team: Team): Promise<void> {
   if (!firestore) return
-  await setDoc(doc(firestore, 'teams', team.id), stripUndefined(team))
+  await setDoc(doc(firestore, 'teams', team.id), stripUndefined(withAccessFields(team)))
 }
 
 /**

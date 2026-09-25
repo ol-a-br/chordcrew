@@ -134,6 +134,12 @@ export interface Team {
   invites: TeamInvite[]
   createdAt: number
   updatedAt: number
+  // Access-control fields derived from ownerId/members/invites by
+  // withAccessFields() (src/utils/teamAccess.ts). Firestore security rules and
+  // the invite Cloud Functions rely on them — never set them by hand.
+  memberIds?: string[]                        // owner + every member uid
+  roles?: Record<string, TeamMemberRole>      // uid → role
+  inviteEmails?: string[]                     // lower-cased emails of pending email invites
 }
 
 export interface SongNote {
