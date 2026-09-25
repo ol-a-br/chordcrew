@@ -68,21 +68,6 @@ Use targeted `Edit` calls on specific code sections rather than full-file `Write
 - Design tokens are fixed — do not change the surface/ink/chord colour palette or the Outfit + JetBrains Mono fonts.
 - MIT licence — do not add dependencies with incompatible licences.
 
-## Tech stack
-
-| Layer | Library |
-|-------|---------|
-| Framework | React 18 + TypeScript + Vite |
-| Styling | Tailwind CSS v3 (custom tokens in `tailwind.config.js`) |
-| ChordPro | chordsheetjs |
-| Local DB | Dexie.js (IndexedDB) |
-| Editor | CodeMirror 6 |
-| Auth | Firebase Auth (Google Sign-In) |
-| Cloud DB | Firestore (manual sync, Phase 3) |
-| Hosting | Firebase Hosting |
-| PWA | vite-plugin-pwa + Workbox |
-| i18n | react-i18next (EN + DE) |
-
 ## Design tokens (Tailwind)
 
 ```js
@@ -183,13 +168,7 @@ Do not add `env(safe-area-inset-top)` to the root `<div>` — it would double-co
 
 ## Sync architecture
 
-`SyncContext` exposes `{ status, pendingCount, lastSync, error, syncNow }`.
-
-- `status`: `'unconfigured' | 'clean' | 'pending' | 'syncing' | 'error'`
-- Every Dexie write calls `markPending(entityType, id)` which inserts/updates a `SyncState` row
-- `syncNow()`: `uploadPending()` → `downloadPersonal()` → `downloadTeams()`
-- `stripUndefined()` in `firestoreSync.ts` strips `undefined` fields before Firestore writes (Firestore rejects them)
-- Team songs are uploaded to both `/users/{uid}/songs/{id}` and `/teams/{teamId}/songs/{id}` when the song's book has `sharedTeamId`
+See `src/sync/CLAUDE.md` for implementation details (SyncContext shape, stripUndefined, team dual-write).
 
 ## Teams architecture
 
