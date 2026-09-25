@@ -105,3 +105,41 @@ describe('renderToText with a {capo} directive', () => {
     expect(text).not.toContain('Dm')
   })
 })
+
+// ─── renderToHtml — song content must never become live markup ───────────────
+// chordsheetjs emits song text unescaped. Song content is untrusted (share
+// links, team songs, imports), so renderToHtml sanitizes its output. Every
+// position a ChordPro author controls is covered here.
+
+describe('renderToHtml sanitizes untrusted song content', () => {
+  const PAYLOAD = '<img src=x onerror=alert(1)>'
+  const positions: Record<string, string> = {
+    title:    `{title: ${PAYLOAD}}\n[C]la`,
+    subtitle: `{title: T}\n{subtitle: ${PAYLOAD}}\n[C]la`,
+    chord:    `{title: T}\n[${PAYLOAD}]la`,
+    lyrics:   `{title: T}\n[C]la ${PAYLOAD} la`,
+    comment:  `{title: T}\n{comment: ${PAYLOAD}}\n[C]la`,
+    label:    `{title: T}\n{start_of_verse: ${PAYLOAD}}\n[C]la\n{end_of_verse}`,
+  }
+
+  for (const [position, content] of Object.entries(positions)) {
+    it(`strips markup injected via the ${position}`, () => {
+      const html = renderToHtml(content, 0)
+      expect(html).not.toMatch(/<img|onerror/i)
+    })
+  }
+
+  it('removes script elements and event-handler attributes', () => {
+    const html = renderToHtml('{title: T}\n[C]a <script>alert(1)</script> <svg onload=alert(1)> b', 0)
+    expect(html).not.toMatch(/<script|<svg|onload|alert/i)
+  })
+
+  it('keeps the chordsheetjs structure and the text of normal songs', () => {
+    const html = renderToHtml('{title: Amazing Grace}\n{start_of_chorus}\n[G]Amazing [C]grace & <3\n{end_of_chorus}', 0)
+    expect(html).toContain('<h1>Amazing Grace</h1>')
+    expect(html).toContain('class="chord"')
+    expect(html).toContain('class="lyrics"')
+    expect(html).toContain('>G<')
+    expect(html).toContain('&amp; &lt;3')
+  })
+})

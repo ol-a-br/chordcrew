@@ -1,6 +1,24 @@
 import ChordSheetJS, { Chord, Key } from 'chordsheetjs'
+import DOMPurify from 'dompurify'
 
 const { ChordProParser, HtmlDivFormatter, TextFormatter } = ChordSheetJS
+
+// ─── HTML sanitization ───────────────────────────────────────────────────────
+// chordsheetjs's HtmlDivFormatter does NOT escape song text: a title, lyric,
+// chord, comment or section label containing markup is emitted as raw HTML.
+// Song content is untrusted (share links, team songs, imports), and the output
+// is injected with dangerouslySetInnerHTML — so every render is passed through
+// an allow-list sanitizer limited to the structure chordsheetjs produces.
+const SANITIZE_CONFIG = {
+  ALLOWED_TAGS: ['div', 'span', 'h1', 'h2', 'h3', 'h4', 'table', 'tbody', 'tr', 'td', 'br'],
+  ALLOWED_ATTR: ['class'],
+}
+
+export function sanitizeSongHtml(html: string): string {
+  // Fail closed: without a DOM, DOMPurify would return its input unchanged.
+  if (!DOMPurify.isSupported) throw new Error('HTML sanitizer unavailable')
+  return DOMPurify.sanitize(html, SANITIZE_CONFIG)
+}
 
 // ─── Preprocess chords.wiki extensions before standard parse ─────────────────
 // {sop: Name} / {start_of_part: Name} → {start_of_verse: Name}
@@ -108,7 +126,7 @@ export function renderToHtml(content: string, transposeOffset = 0): string {
   song = song.setCapo(null)
 
   const formatter = new HtmlDivFormatter({ normalizeChords: false })
-  return formatter.format(song)
+  return sanitizeSongHtml(formatter.format(song))
 }
 
 // ─── Render to plain text ─────────────────────────────────────────────────────
