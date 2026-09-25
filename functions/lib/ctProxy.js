@@ -7,6 +7,7 @@
  * open relay:
  *   - callers must be signed-in ChordCrew users (Firebase ID token in
  *     X-Firebase-ID-Token; Authorization carries the ChurchTools token)
+ *   - App Check token in X-Firebase-AppCheck (see appCheck.ts for rollout)
  *   - no CORS headers: only the app itself (same origin via the Hosting
  *     rewrite) can use it from a browser
  *   - the target must be https://<name>.church.tools, and only the API
@@ -17,6 +18,7 @@ exports.ctProxy = void 0;
 exports.resolveTarget = resolveTarget;
 const functions = require("firebase-functions/v1");
 const admin = require("firebase-admin");
+const appCheck_1 = require("./appCheck");
 const CT_HOSTNAME_SUFFIX = '.church.tools';
 // Every ChurchTools route used by src/churchtools/api.ts, with its methods.
 const ALLOWED_ROUTES = [
@@ -79,6 +81,10 @@ exports.ctProxy = functions
     .https.onRequest(async (req, res) => {
     if (!(await isSignedIn(req.get('x-firebase-id-token')))) {
         res.status(401).json({ error: 'Sign in required' });
+        return;
+    }
+    if (!(await (0, appCheck_1.appCheckAllows)(req.get('x-firebase-appcheck')))) {
+        res.status(401).json({ error: 'App verification failed' });
         return;
     }
     const baseUrl = req.get('x-ct-base-url');

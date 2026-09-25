@@ -20,10 +20,11 @@ exports.withAccessFields = withAccessFields;
 exports.findInvite = findInvite;
 const functions = require("firebase-functions/v1");
 const admin = require("firebase-admin");
+const appCheck_1 = require("./appCheck");
 const { HttpsError } = functions.https;
 const callable = functions
     .region('europe-west1')
-    .runWith({ timeoutSeconds: 30, maxInstances: 10 })
+    .runWith({ timeoutSeconds: 30, maxInstances: 10, enforceAppCheck: appCheck_1.ENFORCE_APP_CHECK })
     .https;
 /** Mirror of withAccessFields() in src/utils/teamAccess.ts — keep both in sync. */
 function withAccessFields(team) {
