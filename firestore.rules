@@ -18,11 +18,30 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
-    // Public read-only share links — anyone can read, owner can write/overwrite
+    // Public read-only share links — anyone can read. Only the user who first
+    // published a share may overwrite or delete it: checking the *stored*
+    // ownerId (not just the incoming one) stops other signed-in users from
+    // replacing a share's content or taking it over. Must match the fields
+    // written by publishSetlistShare() in src/utils/share.ts.
+    function isValidShare() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['encoded', 'setlistName', 'ownerId', 'createdAt', 'expiresAt'])
+          && d.ownerId == request.auth.uid
+          && d.encoded is string && d.encoded.size() <= 900000
+          && d.setlistName is string && d.setlistName.size() <= 500
+          && d.createdAt is timestamp
+          && d.expiresAt is timestamp
+          && d.expiresAt <= request.time + duration.value(31, 'd');
+    }
+
     match /shares/{shareId} {
       allow read: if true;
-      allow write: if request.auth != null
-                   && request.resource.data.ownerId == request.auth.uid;
+      allow create: if request.auth != null && isValidShare();
+      allow update: if request.auth != null
+                    && resource.data.ownerId == request.auth.uid
+                    && isValidShare();
+      allow delete: if request.auth != null
+                    && resource.data.ownerId == request.auth.uid;
     }
   }
 }
