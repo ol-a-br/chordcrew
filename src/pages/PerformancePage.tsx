@@ -116,6 +116,19 @@ export default function PerformancePage() {
   const book = useLiveQuery(() => song?.bookId ? db.books.get(song.bookId) : undefined, [song?.bookId])
   const teamId = book?.sharedTeamId
 
+  // ── Disable the browser's swipe-back gesture while performing ─────────────
+  // At the first column a backward swipe can't scroll any further, so Chrome
+  // treats the overscroll as "history back" and leaves performance mode instead
+  // of letting handleTouchEnd go to the previous song. The gesture is governed
+  // by the root scroller, and swipes can start on the tap-zone overlay rather
+  // than the scroll container, so the rule goes on <html>, only while mounted.
+  useEffect(() => {
+    const root = document.documentElement
+    const previous = root.style.overscrollBehaviorX
+    root.style.overscrollBehaviorX = 'none'
+    return () => { root.style.overscrollBehaviorX = previous }
+  }, [])
+
   // ── Load settings ─────────────────────────────────────────────────────────
   useEffect(() => {
     getSettings().then(s => {
