@@ -2,8 +2,9 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
-  // tests/auth/* need the Firebase Auth emulator — run via `npm run test:auth`
-  testIgnore: '**/auth/**',
+  // tests/auth/* need the Firebase Auth emulator — run via `npm run test:auth`;
+  // tests/firebase/* are Vitest emulator tests — run via `npm run test:firebase`
+  testIgnore: ['**/auth/**', '**/firebase/**'],
   fullyParallel: false,
   workers: 2,
   retries: 0,
