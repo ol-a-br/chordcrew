@@ -90,5 +90,24 @@ service cloud.firestore {
       allow delete: if request.auth != null
                     && resource.data.ownerId == request.auth.uid;
     }
+
+    // In-app feedback (FeedbackModal) — write-only for signed-in users, in
+    // their own name. Nobody reads it from the client; the maintainer exports
+    // it with the Admin SDK (scripts/export-feedback.mjs).
+    match /feedback/{feedbackId} {
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasOnly([
+                         'stars', 'category', 'message', 'userId', 'userEmail',
+                         'displayName', 'appVersion', 'language', 'submittedAt'])
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.stars is int
+                    && request.resource.data.stars >= 1 && request.resource.data.stars <= 5
+                    && request.resource.data.category in ['general', 'bug', 'feature']
+                    && request.resource.data.message is string
+                    && request.resource.data.message.size() > 0
+                    && request.resource.data.message.size() <= 5000;
+    }
+
+    // Anything not matched above (any other collection) is denied.
   }
 }
