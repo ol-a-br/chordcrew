@@ -69,6 +69,7 @@ Use targeted `Edit` calls on specific code sections rather than full-file `Write
 - Design tokens are fixed — do not change the surface/ink/chord colour palette or the Outfit + JetBrains Mono fonts.
 - MIT licence — do not add dependencies with incompatible licences.
 - Firestore rules are code — change `firestore.rules` (never the Firebase console), cover the change in `tests/firebase/`, and run `npm run test:firebase`. Any new collection needs an explicit rule; everything unlisted is denied.
+- A Content-Security-Policy is set in `firebase.json` (production only — the Vite dev server has none). Loading anything from a new external origin (script, style, font, image, API, iframe) requires adding that origin to the CSP, or it will silently fail in production. Never add `'unsafe-eval'` or inline-script allowances.
 
 ## Design tokens (Tailwind)
 
