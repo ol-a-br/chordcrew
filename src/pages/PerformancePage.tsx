@@ -502,7 +502,11 @@ export default function PerformancePage() {
   return (
     <div
       className="fixed inset-0 bg-surface-0 flex flex-col z-50"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      // Keep song content out of the top safe area: since iPadOS 26 the system
+      // draws a blurred scroll-edge effect behind the status bar, which smears
+      // any lyrics underneath it. The absolutely positioned controls overlay
+      // still starts at the viewport top and pads itself below the status bar.
+      style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
       onPointerMove={(e) => { if (e.pointerType === 'mouse') resetHideTimer() }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}

@@ -165,8 +165,9 @@ The viewport meta uses `viewport-fit=cover` so web content extends under the sys
 **PerformancePage (full-screen, outside AppShell)**
 - The controls overlay at the top uses `paddingTop: max(0.75rem, env(safe-area-inset-top))`.
 - The bottom already uses `paddingBottom: env(safe-area-inset-bottom)`.
+- The root container also has `paddingTop: env(safe-area-inset-top)` so song content never sits under the status bar — since iPadOS 26 the system blurs whatever is behind it. The absolute controls overlay still starts at top 0.
 
-Do not add `env(safe-area-inset-top)` to the root `<div>` — it would double-count with the mobile header's own safe-area padding.
+Do not add `env(safe-area-inset-top)` to the AppShell root `<div>` — it would double-count with the mobile header's own safe-area padding.
 
 ## Sync architecture
 
