@@ -2,10 +2,11 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2, Cloud, ExternalLink } from 'lucide-react'
-import { db, upsertSongVersions, markPending } from '@/db'
+import { db, upsertSongVersions, markPending, getSettings } from '@/db'
 import { deleteSongFromCloud, fetchTeamNoteIndicator } from '@/sync/firestoreSync'
 import { buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
 import { getLinkStatus } from '@/utils/linkedSongs'
+import { parseKemperRig, formatKemperRig } from '@/midi/kemper'
 import { ChordProEditor } from '@/components/editor/ChordProEditor'
 import type { ChordProEditorHandle } from '@/components/editor/ChordProEditor'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
@@ -30,6 +31,16 @@ function updateDirective(content: string, directive: string, value: string): str
   return `{${directive}: ${value}}\n${content}`
 }
 
+/** Shows how a {x_kemper_rig} value is read ("Perf 6 · Slot 2", "PC 17") or flags it as invalid. */
+function RigHint({ value }: { value: string }) {
+  const rig = parseKemperRig(value)
+  return (
+    <span className={`text-[10px] whitespace-nowrap ${rig ? 'text-ink-faint' : 'text-red-400'}`}>
+      {rig ? formatKemperRig(rig) : 'invalid'}
+    </span>
+  )
+}
+
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -40,6 +51,8 @@ export default function EditorPage() {
   const { baseUrl: ctBaseUrl, token: ctToken } = useChurchTools()
   const song = useLiveQuery(() => id ? db.songs.get(id) : undefined, [id])
   const isCTSong = !!(song?.ctSongId)
+  // The Kemper rig field only appears once MIDI out is switched on in Settings
+  const midiEnabled = useLiveQuery(async () => (await getSettings()).midiEnabled, [])
 
   const [content, setContent] = useState('')
   const [tags, setTags] = useState<string[]>([])
@@ -391,7 +404,11 @@ export default function EditorPage() {
           { label: 'Tempo',  directive: 'tempo',  value: derivedMeta.tempo  ? String(derivedMeta.tempo) : '', width: 'w-14', type: 'number' },
           { label: 'Capo',   directive: 'capo',   value: derivedMeta.capo   ? String(derivedMeta.capo)  : '', width: 'w-12', type: 'number' },
           { label: 'Time',   directive: 'time',   value: derivedMeta.time   ?? '', width: 'w-14', type: 'text' },
-        ]).map(({ label, directive, value, width, type }) => (
+          ...(midiEnabled ? [
+            { label: 'Rig', directive: 'x_kemper_rig', value: derivedMeta.kemperRig ?? '', width: 'w-14', type: 'text',
+              title: 'Kemper rig sent on song change: program number (17) or Performance.Slot (6.2)', placeholder: '6.2' },
+          ] : []),
+        ]).map(({ label, directive, value, width, type, title, placeholder }) => (
           <label key={directive} className="flex items-center gap-1 text-xs">
             <span className="text-ink-faint shrink-0">{label}</span>
             <input
@@ -400,8 +417,11 @@ export default function EditorPage() {
               key={`${directive}-${song?.id}-${value}`}
               onBlur={e => commitMetaField(directive, e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-              className={`${width} bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50`}
+              title={title}
+              placeholder={placeholder}
+              className={`${width} bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50 placeholder:text-ink-faint/40`}
             />
+            {directive === 'x_kemper_rig' && value && <RigHint value={value} />}
             {directive === 'tempo' && (
               <button
                 type="button"

@@ -8,6 +8,8 @@
  *   MIDI-4  With MIDI disabled in Settings nothing is sent
  *   MIDI-5  Settings: enabling MIDI auto-selects the WIDI output
  *   MIDI-6  Settings: browsers without Web MIDI get an explanation instead of controls
+ *   MIDI-7  Editor: the Rig field writes {x_kemper_rig} and shows how it is read
+ *   MIDI-8  Editor: the Rig field is hidden while MIDI is off
  *
  * Web MIDI is replaced by an in-page mock (see mockWebMidi) that records every
  * send(data, timestamp), so no device or permission prompt is involved.
@@ -198,6 +200,37 @@ test.describe('MIDI out — Kemper rig + tempo on song change', () => {
     const all = await sent(page)
     expect(all[0].data).toEqual([0xC0, 16])
     expect(all[1].data).toEqual(NRPN_TEMPO_120)
+  })
+})
+
+test.describe('MIDI — editor rig field', () => {
+  test.beforeEach(async ({ page }) => { await waitForApp(page) })
+
+  test('MIDI-7: the Rig field writes {x_kemper_rig} and explains the value', async ({ page }) => {
+    const s = await seed(page, true)
+    await page.goto(`/editor/${s.songB}`)
+    const rig = page.getByTitle(/Kemper rig sent on song change/)
+    await expect(rig).toHaveValue('17')
+    await expect(page.getByText('PC 17')).toBeVisible()
+
+    await rig.fill('6.2')
+    await rig.press('Enter')
+    await expect(page.getByText('Perf 6 · Slot 2')).toBeVisible()
+    await expect.poll(() => page.evaluate((id) => new Promise<string>((resolve, reject) => {
+      const req = indexedDB.open('ChordCrewDB')
+      req.onerror = () => reject(req.error)
+      req.onsuccess = () => {
+        const get = req.result.transaction('songs').objectStore('songs').get(id)
+        get.onsuccess = () => resolve(get.result.transcription.content)
+      }
+    }), s.songB), { timeout: 5000 }).toContain('{x_kemper_rig: 6.2}')
+  })
+
+  test('MIDI-8: the Rig field is hidden while MIDI is off', async ({ page }) => {
+    const s = await seed(page, false)
+    await page.goto(`/editor/${s.songB}`)
+    await expect(page.getByTitle('Tap tempo')).toBeVisible()
+    await expect(page.getByTitle(/Kemper rig sent on song change/)).toHaveCount(0)
   })
 })
 
