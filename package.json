@@ -36,7 +36,7 @@
     "react-dom": "^18.2.0",
     "react-i18next": "^14.1.0",
     "react-router-dom": "^7.18.2",
-    "tailwind-merge": "^2.2.1"
+    "tailwind-merge": "^3.7.0"
   },
   "overrides": {
     "serialize-javascript": "^7.0.5"
