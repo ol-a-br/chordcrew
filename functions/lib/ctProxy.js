@@ -111,7 +111,9 @@ async function isSignedIn(idToken) {
 exports.ctProxy = functions
     .region('europe-west1')
     .runWith({ timeoutSeconds: 30, maxInstances: 10 })
-    .https.onRequest(async (req, res) => {
+    // cors: false is explicit because firebase-functions ≥ 7.4 otherwise adds a
+    // permissive CORS wrapper whenever the emulator's enableCors debug flag is set.
+    .https.onRequest({ cors: false }, async (req, res) => {
     if (!(await isSignedIn(req.get('x-firebase-id-token')))) {
         res.status(401).json({ error: 'Sign in required' });
         return;
