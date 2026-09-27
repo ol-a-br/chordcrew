@@ -1,0 +1,207 @@
+import { useState, useEffect, useCallback } from 'react'
+import type { AppSettings } from '@/types'
+import { parseKemperRig, formatKemperRig } from '@/midi/kemper'
+import {
+  isMidiSupported, getMidiAccess, listOutputs, onMidiPortsChanged, sendMidiTest,
+  type MidiOutputInfo,
+} from '@/midi/midiService'
+
+interface Props {
+  settings: AppSettings
+  update: (patch: Partial<AppSettings>) => Promise<void>
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-3">
+      <span className="text-sm">{label}</span>
+      <div>{children}</div>
+    </div>
+  )
+}
+
+const TEMPO_MODES = [
+  { mode: 'nrpn', label: 'Exact' },
+  { mode: 'tap',  label: 'Tap' },
+  { mode: 'off',  label: 'Off' },
+] as const
+
+/** Settings → MIDI: send each song's Kemper rig + tempo to a Web MIDI output (e.g. CME WIDI Master). */
+export function MidiSettingsSection({ settings, update }: Props) {
+  const supported = isMidiSupported()
+  const [outputs, setOutputs] = useState<MidiOutputInfo[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [testRig, setTestRig] = useState('')
+  const [testBpm, setTestBpm] = useState('120')
+  const [testResult, setTestResult] = useState<string | null>(null)
+
+  const refresh = useCallback(async (interactive: boolean) => {
+    const access = await getMidiAccess(interactive)
+    if (!access) return null
+    const list = listOutputs(access)
+    setOutputs(list)
+    return list
+  }, [])
+
+  // List outputs (without prompting) once MIDI is on, and keep the list live.
+  useEffect(() => {
+    if (!supported || !settings.midiEnabled) return
+    refresh(false)
+    return onMidiPortsChanged(() => { refresh(false) })
+  }, [supported, settings.midiEnabled, refresh])
+
+  const enable = async () => {
+    setError(null)
+    // The only place that may show the browser's MIDI permission prompt.
+    const list = await refresh(true)
+    if (!list) {
+      setError('MIDI access was blocked. Allow MIDI for this site in the browser settings and try again.')
+      return
+    }
+    const patch: Partial<AppSettings> = { midiEnabled: true }
+    if (!settings.midiOutputId) {
+      const widi = list.find(o => /widi|kemper/i.test(o.name))
+      if (widi) Object.assign(patch, { midiOutputId: widi.id, midiOutputName: widi.name })
+    }
+    await update(patch)
+  }
+
+  const selected = outputs.find(o => o.id === settings.midiOutputId)
+    ?? outputs.find(o => !!settings.midiOutputName && o.name === settings.midiOutputName)
+  const parsedTestRig = parseKemperRig(testRig)
+
+  const runTest = async () => {
+    if (testRig.trim() && !parsedTestRig) { setTestResult('Rig must be a number 1–128 or Performance.Slot like 6.2'); return }
+    const ok = await sendMidiTest({ rig: parsedTestRig, bpm: Number(testBpm) || 0 }, settings)
+    setTestResult(ok ? 'Sent.' : 'No connected MIDI output selected.')
+  }
+
+  return (
+    <section>
+      <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-1">MIDI · Kemper Profiler</h2>
+      <p className="text-xs text-ink-muted mb-3">
+        When a song is opened, send its rig (<code className="font-mono">{'{x_kemper_rig: …}'}</code>) and
+        tempo (<code className="font-mono">{'{tempo: …}'}</code>) to a Kemper Profiler — e.g. via a CME WIDI Master
+        Bluetooth adapter. Rig: a program number (<code className="font-mono">17</code>) or
+        Performance.Slot (<code className="font-mono">6.2</code>).
+      </p>
+
+      {!supported ? (
+        <div className="bg-surface-1 rounded-xl px-4 py-3 text-sm text-ink-muted">
+          This browser can't send MIDI (no Web MIDI support — e.g. Safari on iPad/iPhone).
+          Use Chrome or Edge on Android, macOS or Windows.
+        </div>
+      ) : (
+        <div className="bg-surface-1 rounded-xl px-4 divide-y divide-surface-3">
+          <Row label="Send MIDI on song change">
+            <button
+              role="switch"
+              aria-checked={settings.midiEnabled}
+              aria-label="Send MIDI on song change"
+              onClick={() => settings.midiEnabled ? update({ midiEnabled: false }) : enable()}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                settings.midiEnabled ? 'bg-chord' : 'bg-surface-3'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                settings.midiEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </Row>
+
+          {error && <p className="py-2 text-xs text-red-400">{error}</p>}
+
+          {settings.midiEnabled && (
+            <>
+              <Row label="Output">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${selected?.connected ? 'bg-green-500' : 'bg-surface-3'}`}
+                    title={selected?.connected ? 'Connected' : 'Not connected'}
+                  />
+                  <select
+                    aria-label="MIDI output"
+                    value={selected?.id ?? ''}
+                    onChange={e => {
+                      const o = outputs.find(x => x.id === e.target.value)
+                      update({ midiOutputId: o?.id ?? '', midiOutputName: o?.name ?? '' })
+                    }}
+                    className="bg-surface-2 text-sm rounded-lg px-3 py-1.5 border border-surface-3 focus:outline-none max-w-[12rem]"
+                  >
+                    <option value="">
+                      {settings.midiOutputName && !selected ? `${settings.midiOutputName} (offline)` : '— none —'}
+                    </option>
+                    {outputs.map(o => (
+                      <option key={o.id} value={o.id}>{o.name}{o.connected ? '' : ' (offline)'}</option>
+                    ))}
+                  </select>
+                </div>
+              </Row>
+
+              <Row label="MIDI channel">
+                <select
+                  aria-label="MIDI channel"
+                  value={settings.midiChannel}
+                  onChange={e => update({ midiChannel: Number(e.target.value) })}
+                  className="bg-surface-2 text-sm rounded-lg px-3 py-1.5 border border-surface-3 focus:outline-none"
+                >
+                  {Array.from({ length: 16 }, (_, i) => i + 1).map(ch => (
+                    <option key={ch} value={ch}>{ch}</option>
+                  ))}
+                </select>
+              </Row>
+
+              <Row label="Tempo">
+                <div className="flex gap-0 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
+                  {TEMPO_MODES.map(({ mode, label }) => (
+                    <button
+                      key={mode}
+                      onClick={() => update({ midiTempoMode: mode })}
+                      className={`px-3 py-1.5 text-sm ${settings.midiTempoMode === mode ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:text-ink'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </Row>
+
+              <div className="py-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm flex-wrap">
+                  <span className="text-ink-muted">Test</span>
+                  <label className="flex items-center gap-1 text-xs">
+                    <span className="text-ink-faint">Rig</span>
+                    <input
+                      aria-label="Test rig"
+                      value={testRig}
+                      onChange={e => setTestRig(e.target.value)}
+                      placeholder="6.2"
+                      className="w-14 bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50 placeholder:text-ink-faint/40"
+                    />
+                  </label>
+                  <label className="flex items-center gap-1 text-xs">
+                    <span className="text-ink-faint">BPM</span>
+                    <input
+                      aria-label="Test BPM"
+                      type="number"
+                      value={testBpm}
+                      onChange={e => setTestBpm(e.target.value)}
+                      className="w-14 bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50"
+                    />
+                  </label>
+                  <button
+                    onClick={runTest}
+                    className="px-3 py-1 text-xs rounded-lg border border-surface-3 bg-surface-2 text-ink hover:border-chord/50"
+                  >
+                    Send
+                  </button>
+                  {parsedTestRig && <span className="text-xs text-ink-faint">{formatKemperRig(parsedTestRig)}</span>}
+                </div>
+                {testResult && <p className="text-xs text-ink-muted">{testResult}</p>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}

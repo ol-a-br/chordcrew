@@ -6,6 +6,7 @@ import { useCaptureKey } from '@/hooks/useKeyboard'
 import { Button } from '@/components/shared/Button'
 import { useSync } from '@/sync/SyncContext'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
+import { MidiSettingsSection } from '@/components/midi/MidiSettingsSection'
 import type { AppSettings } from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 
@@ -213,6 +214,9 @@ export default function SettingsPage() {
           </Row>
         </div>
       </section>
+
+      {/* MIDI — Kemper rig + tempo on song change */}
+      <MidiSettingsSection settings={settings} update={update} />
 
       {/* Sync */}
       {status !== 'unconfigured' && (

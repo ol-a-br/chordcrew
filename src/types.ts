@@ -180,6 +180,12 @@ export interface AppSettings {
   churchToolsUrl: string
   churchToolsToken: string
   churchToolsCategoryId: number  // CT song category id; 0 = first/default category
+  // MIDI out (Kemper Profiler) — per device, never synced. See src/midi/.
+  midiEnabled: boolean           // send the song's rig + tempo when a song is opened
+  midiOutputId: string           // selected Web MIDI output port id ('' = none)
+  midiOutputName: string         // its name — fallback match when the browser assigns a new port id
+  midiChannel: number            // 1–16 (the Kemper listens on its "MIDI Global Channel", default Omni)
+  midiTempoMode: 'nrpn' | 'tap' | 'off'  // exact Rig Tempo via NRPN, 4× Tap Tempo, or no tempo
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -197,6 +203,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   churchToolsUrl: '',
   churchToolsToken: '',
   churchToolsCategoryId: 0,
+  midiEnabled: false,
+  midiOutputId: '',
+  midiOutputName: '',
+  midiChannel: 1,
+  midiTempoMode: 'nrpn',
 }
 
 // ─── chords.wiki import types ─────────────────────────────────────────────────
