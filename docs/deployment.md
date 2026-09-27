@@ -14,7 +14,29 @@ Requires `firebase-tools` installed and an active `firebase login` session. Uses
 
 ### GitHub Actions
 
-`.github/workflows/deploy.yml` exists but is **disabled** (trigger: `workflow_dispatch` only). It will not run on any push or merge until re-enabled. This is intentional while working solo.
+**CI (`.github/workflows/ci.yml`)** runs on every pull request and on pushes to `develop`/`main` — no secrets, read-only token, GitHub-owned actions only. Three parallel jobs:
+
+| Job | What it checks |
+|---|---|
+| Build, unit tests, audit | `npm run build`, functions build, committed `functions/lib` matches `functions/src`, `npm run test:unit`, `npm audit --omit=dev --audit-level=high` (root + functions) |
+| Firestore rules & Cloud Functions | `npm run test:firebase` on the emulators (Java + firebase-tools installed in the job) |
+| E2E | Playwright, `chromium` project (the WebKit/iPad and Android suites stay local) |
+
+**Deploy (`.github/workflows/deploy.yml`)** exists but is **disabled** (trigger: `workflow_dispatch` only). It will not run on any push or merge until re-enabled. This is intentional while working solo.
+
+### GitHub repository settings (one-time, in the web UI)
+
+These can't be set from the repo files — do them once under **Settings**:
+
+1. **Branch protection** — *Settings → Branches → Add rule* (or *Rules → Rulesets*), for `develop` **and** `main`:
+   - ✅ Require a pull request before merging
+   - ✅ Require status checks to pass → select **Build, unit tests, audit**, **Firestore rules & Cloud Functions (emulators)** and **E2E (Playwright, chromium)** (they appear in the list after CI has run once)
+   - ✅ Block force pushes; ✅ Do not allow deletions
+   - Approvals: solo, leave at 0 (you can't approve your own PRs); set to 1 once collaborators join
+2. **Code scanning** — *Settings → Code security → Code scanning → CodeQL analysis → Set up → Default* (JavaScript/TypeScript + GitHub Actions).
+3. **Secret scanning** — *Settings → Code security*: enable **Secret scanning** and **Push protection** (blocks pushes that contain API keys or service-account JSON).
+4. **Private vulnerability reporting** — *Settings → Code security*: enable, so the link in `SECURITY.md` works.
+5. **Dependabot** — *Settings → Code security*: **Dependabot alerts** and **Dependabot security updates** on. Version updates for `/`, `/functions` and GitHub Actions are configured in `.github/dependabot.yml`.
 
 ### Branch strategy
 
@@ -64,7 +86,7 @@ GitHub repo → **Settings → Branches → Add branch protection rule** for `ma
 - ✅ Require a pull request before merging
 - ✅ Require at least 1 approval
 - ✅ Do not allow bypassing the above settings (applies to admins too)
-- ✅ Require status checks to pass (add the `deploy` job once it exists)
+- ✅ Require status checks to pass (the three CI checks — see [GitHub repository settings](#github-repository-settings-one-time-in-the-web-ui))
 
 This ensures every deploy is preceded by a deliberate code review — no direct pushes to `main`.
 
@@ -161,11 +183,13 @@ reCAPTCHA can't attest `localhost`. With a site key in `.env.local`, `npm run de
 |------|--------|-------|
 | Auto-deploy disabled on push | ✅ done | `workflow_dispatch` only in deploy.yml |
 | `develop` branch as default | ✅ done | |
-| `main` branch protection | ⬜ pending | Require PR + review before merge |
+| CI on every PR | ✅ done | `.github/workflows/ci.yml` — build, unit, audit, emulator security tests, E2E |
+| Branch protection (`develop` + `main`, required CI checks) | ⬜ pending | See [GitHub repository settings](#github-repository-settings-one-time-in-the-web-ui) |
+| CodeQL default setup, secret scanning + push protection, private vulnerability reporting | ⬜ pending | Same section — verify/enable in Settings → Code security |
 | `FIREBASE_SERVICE_ACCOUNT` secret set | ⬜ pending | Needed before re-enabling CI |
 | Service account scoped to Hosting Admin only | ⬜ pending | Downgrade from Editor in GCP IAM |
 | Dependabot alerts reviewed | ✅ done | Removed unused `jspdf`/`html2canvas`; 0 critical remaining |
-| Dependabot version updates configured | ✅ done | `.github/dependabot.yml` — grouped weekly PRs |
+| Dependabot version updates configured | ✅ done | `.github/dependabot.yml` — grouped weekly PRs for `/`, `/functions` and GitHub Actions |
 | SECURITY.md added | ✅ done | GitHub-standard security policy |
 | Security headers + CSP | ✅ done | `firebase.json` → `hosting.headers`, see [Security headers](#security-headers--content-security-policy) |
 | App Check (reCAPTCHA Enterprise) | ⬜ in progress | Code ready; console setup + monitor → enforce, see [App Check](#app-check) |

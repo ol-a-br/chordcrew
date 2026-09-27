@@ -1,0 +1,137 @@
+name: CI
+
+# Runs on every pull request and on pushes to develop/main. No secrets are
+# used: the app runs in local mode (Firebase unconfigured) and the security
+# tests run against the Firebase emulators with a demo-* project id, so this
+# is safe for pull requests from forks too.
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, unit tests, audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix functions
+
+      - name: Type-check and build the app
+        run: npm run build
+
+      - name: Build Cloud Functions
+        run: npm run build --prefix functions
+
+      # functions/lib is committed and deployed as-is: it must match src.
+      - name: Check functions/lib is up to date
+        run: |
+          if ! git diff --quiet -- functions/lib; then
+            echo "::error::functions/lib is out of date — run 'npm run build --prefix functions' and commit the result."
+            git diff --stat -- functions/lib
+            exit 1
+          fi
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      # Runtime dependencies only — dev/build tooling advisories are tracked by
+      # Dependabot but don't block (see SECURITY.md → dependency policy).
+      - name: Audit runtime dependencies
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=high --prefix functions
+
+  firebase-security:
+    name: Firestore rules & Cloud Functions (emulators)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+
+      # The Firestore emulator is a Java application.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache emulator downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-15
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix functions
+          npm install -g firebase-tools@15
+
+      - name: Security tests (npm run test:firebase)
+        run: npm run test:firebase
+
+  e2e:
+    name: E2E (Playwright, chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E tests
+        run: npx playwright test --project=chromium
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
