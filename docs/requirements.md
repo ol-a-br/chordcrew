@@ -215,7 +215,7 @@
 
 ## REQ-MIDI — MIDI Out (Kemper Profiler)
 
-Opening a song sends its guitar rig and tempo to a Kemper Profiler over Web MIDI (e.g. CME WIDI Master Bluetooth adapter on the Kemper's MIDI In). Code: `src/midi/`.
+Opening a song sends its guitar rig and tempo to a Kemper Profiler over Web MIDI (e.g. CME WIDI Master Bluetooth adapter on the Kemper's MIDI In). Code: `src/midi/`. Implementation, byte-level protocol, hardware test checklist and sources: [`midi-kemper.md`](midi-kemper.md).
 
 | ID | Requirement | Status |
 |----|-------------|--------|

@@ -31,6 +31,7 @@ See the README's [Testing](README.md#testing) section for prerequisites and one-
 - `docs/requirements.md` — requirements spec with implementation status (REQ-IDs)
 - `docs/roadmap.md` — phased implementation plan with decision log
 - `docs/deployment.md` — CI/CD setup, branch strategy, security checklist, Dependabot notes
+- `docs/midi-kemper.md` — Kemper MIDI out: protocol bytes, implementation, hardware test checklist, sources
 - `data/chords_wiki_library_export_20260329.json` — real export (4 books, 298 songs, 88 setlists)
 
 ## Branch strategy
@@ -176,7 +177,7 @@ Do not add `env(safe-area-inset-top)` to the AppShell root `<div>` — it would 
 
 ## MIDI out (Kemper Profiler)
 
-Opening a song in Viewer or Performance mode sends its rig (`{x_kemper_rig: 17 | 6.2}`) and tempo (`{tempo}`) to the Web MIDI output chosen in Settings → MIDI (per-device settings, never synced). Tempo defaults to an exact NRPN write of Kemper Rig Tempo (page 4, param 0, BPM × 64). The send path must stay stage-safe: no UI or toasts, never throws, and `getMidiAccess(true)` (which may show the permission prompt) is only called from Settings. Safari/iOS has no Web MIDI — everything no-ops there. See REQ-MIDI in `docs/requirements.md`.
+Opening a song in Viewer or Performance mode sends its rig (`{x_kemper_rig: 17 | 6.2}`) and tempo (`{tempo}`) to the Web MIDI output chosen in Settings → MIDI (per-device settings, never synced). Tempo defaults to an exact NRPN write of Kemper Rig Tempo (page 4, param 0, BPM × 64). The send path must stay stage-safe: no UI or toasts, never throws, and `getMidiAccess(true)` (which may show the permission prompt) is only called from Settings. Safari/iOS has no Web MIDI — everything no-ops there. See REQ-MIDI in `docs/requirements.md` and `docs/midi-kemper.md`.
 
 ## Sync architecture
 
