@@ -86,6 +86,44 @@ Useful once there are multiple contributors who can merge PRs.
 
 ---
 
+## Security headers & Content-Security-Policy
+
+`firebase.json` → `hosting.headers` sets, for every response:
+
+| Header | Purpose |
+|---|---|
+| `X-Content-Type-Options: nosniff` | Browsers must not guess content types |
+| `Referrer-Policy: strict-origin-when-cross-origin` | No full URLs (song/setlist IDs) leak to other sites |
+| `Strict-Transport-Security` | HTTPS only for a year |
+| `Permissions-Policy` | Camera, microphone, location, payment, USB off (screen wake lock stays allowed) |
+
+and for all app pages (everything except Firebase's reserved `/__/*` paths, which serve the sign-in helper pages):
+
+| Header | Purpose |
+|---|---|
+| `Content-Security-Policy` | Only the app's own code runs; external sources are limited to what the app uses (see below). Blocks injected scripts even if some other bug lets markup through |
+| `X-Frame-Options: DENY` (+ `frame-ancestors 'none'`) | ChordCrew can't be embedded in another site (clickjacking) |
+
+**Allowed external origins** — each one exists for a reason:
+
+| Directive | Origin | Why |
+|---|---|---|
+| `script-src` | `apis.google.com` | Firebase Auth helper for Google sign-in |
+| `script-src`, `frame-src`, `connect-src` | `www.google.com/recaptcha/`, `www.gstatic.com/recaptcha/`, `recaptcha.google.com/recaptcha/` | App Check (reCAPTCHA Enterprise) |
+| `style-src`, `font-src` | `fonts.googleapis.com`, `fonts.gstatic.com` | Outfit / JetBrains Mono web fonts |
+| `img-src` | `*.googleusercontent.com` | Google profile pictures |
+| `connect-src` | `*.googleapis.com` | Firestore, Auth, App Check, Installations |
+| `connect-src` | `*.cloudfunctions.net` | Callable functions (team invites) |
+| `frame-src` | `*.firebaseapp.com` | Sign-in helper iframe when the auth domain differs from the page |
+
+`style-src` allows `'unsafe-inline'` because the editor (CodeMirror) injects its styles at runtime; scripts never get an inline or `eval` exception.
+
+**Adding a new external service** (e.g. an analytics or lyrics API): add its origin to the matching directive, then verify as below. The Vite dev server sends no CSP, so a missing origin only shows up in production.
+
+**Verify before deploying** a CSP change: `npm run build`, then `firebase emulators:start --only hosting` serves `dist/` with these headers on http://127.0.0.1:5000 — click through the app and watch the browser console for `Refused to …` messages. After deploying, sign in once and run a sync (Google sign-in and Firestore can't be exercised against the emulator).
+
+**Rollback:** delete the `Content-Security-Policy` entry from `firebase.json` and `npm run deploy`.
+
 ## App Check
 
 [Firebase App Check](https://firebase.google.com/docs/app-check) makes Firestore and the Cloud Functions accept requests only from the real ChordCrew web app — not from scripts that reuse the (public) Firebase config. The browser proves itself with an invisible reCAPTCHA Enterprise check; no user interaction.
@@ -129,6 +167,7 @@ reCAPTCHA can't attest `localhost`. With a site key in `.env.local`, `npm run de
 | Dependabot alerts reviewed | ✅ done | Removed unused `jspdf`/`html2canvas`; 0 critical remaining |
 | Dependabot version updates configured | ✅ done | `.github/dependabot.yml` — grouped weekly PRs |
 | SECURITY.md added | ✅ done | GitHub-standard security policy |
+| Security headers + CSP | ✅ done | `firebase.json` → `hosting.headers`, see [Security headers](#security-headers--content-security-policy) |
 | App Check (reCAPTCHA Enterprise) | ⬜ in progress | Code ready; console setup + monitor → enforce, see [App Check](#app-check) |
 | Firestore rules deployed from the repo | ✅ done | `npm run deploy` includes `firestore`; rules tested with `npm run test:firebase` |
 | GitHub Environment approval gate | ⬜ optional | Add when collaborators join |
