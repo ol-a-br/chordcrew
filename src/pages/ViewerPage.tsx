@@ -15,6 +15,7 @@ import { SongUploadDialog } from '@/components/churchtools/SongUploadDialog'
 import { getLinkStatus } from '@/utils/linkedSongs'
 import { LinkStatusBadge } from '@/components/songs/LinkStatusBadge'
 import { SyncCopiesDialog } from '@/components/songs/SyncCopiesDialog'
+import { useSongMidi } from '@/midi/useSongMidi'
 import type { SetlistItem, Book, Song } from '@/types'
 
 export default function ViewerPage() {
@@ -75,6 +76,9 @@ export default function ViewerPage() {
     () => song ? getLinkStatus(song, viewerSongMap) : 'none',
     [song, viewerSongMap]
   )
+
+  // MIDI out: Kemper rig + tempo on song change
+  useSongMidi(song)
 
   // Setlist context for prev/next navigation
   // Track last-accessed time for "recently accessed" sort in library

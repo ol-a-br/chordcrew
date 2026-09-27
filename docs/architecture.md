@@ -148,6 +148,12 @@ When a cross-song navigation happens, `navPending = true` prevents further swipe
 
 ---
 
+## MIDI out (Kemper Profiler)
+
+`useSongMidi` (Viewer + Performance) hands each opened song's `{x_kemper_rig}` and `{tempo}` to `src/midi/midiService.ts`, which sends Bank Select/Program Change and — 300 ms later — the tempo (NRPN Rig Tempo) to the Web MIDI output chosen in Settings. Settings live in the local `settings` row (per device, not synced); the send path is silent and never prompts for permission. Protocol, design decisions, hardware checklist and sources: [`midi-kemper.md`](midi-kemper.md).
+
+---
+
 ## Playwright test matrix
 
 | Project | Browser | Device | Notes |

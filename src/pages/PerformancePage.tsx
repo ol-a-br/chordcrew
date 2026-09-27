@@ -9,6 +9,7 @@ import { useKeyboardNav } from '@/hooks/useKeyboard'
 import { transposeKey } from '@/utils/chordpro'
 import { NotesPanel } from '@/components/shared/NotesPanel'
 import { useAuth } from '@/auth/AuthContext'
+import { useSongMidi } from '@/midi/useSongMidi'
 import type { SetlistItem } from '@/types'
 
 
@@ -111,6 +112,9 @@ export default function PerformancePage() {
     setTranspose(currentSetlistItem.transposeOffset ?? 0)
     if (currentSetlistItem.columnCount) setColumns(currentSetlistItem.columnCount)
   }, [currentSetlistItem])
+
+  // ── MIDI out: Kemper rig + tempo on song change (silent, no network) ─────
+  useSongMidi(song)
 
   // ── Book lookup for team ID (notes indicator) ────────────────────────────
   const book = useLiveQuery(() => song?.bookId ? db.books.get(song.bookId) : undefined, [song?.bookId])
