@@ -525,8 +525,17 @@ test.describe('iPad 13" landscape — 4-column layout', () => {
     // 4 columns (default in landscape)
     const colWidth4 = await getColumnWidthPx()
 
+    // Controls auto-hide 3 s after mount, and a hidden overlay is pointer-events-none,
+    // so on a slow engine (WebKit) the tap would fall through to the song content.
+    // Re-show them the way a user would — a pointer move (onPointerMove) — and switch
+    // immediately. A touch tap is avoided: it could hit a tap zone and change songs.
+    const overlay = page.locator('div.absolute.top-0.inset-x-0.z-10').first()
+    await page.mouse.move(300, 300)
+    await page.mouse.move(320, 310)
+    await expect(overlay).toHaveClass(/opacity-100/, { timeout: 3000 })
+
     // Switch to 5 columns
-    await page.locator('.bg-surface-2\\/80 button').filter({ hasText: '5' }).first().tap()
+    await overlay.locator('.bg-surface-2\\/80 button').filter({ hasText: '5' }).first().tap()
     await page.waitForTimeout(300)
     const colWidth5 = await getColumnWidthPx()
 
