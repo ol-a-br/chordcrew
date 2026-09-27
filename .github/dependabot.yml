@@ -56,6 +56,31 @@ updates:
       - dependency-name: "chordsheetjs"
         update-types: ["version-update:semver-major"]
 
+  # ── Cloud Functions (functions/) ─────────────────────────────────────────
+  # Separate package.json — runs server-side and handles internet traffic
+  # (ctProxy, team invites), so keep it current too.
+  - package-ecosystem: npm
+    directory: /functions
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 3
+    groups:
+      functions-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Major bumps change the functions API — migrate deliberately.
+      - dependency-name: "firebase-functions"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "firebase-admin"
+        update-types: ["version-update:semver-major"]
+
   # ── GitHub Actions ───────────────────────────────────────────────────────
   - package-ecosystem: github-actions
     directory: /
