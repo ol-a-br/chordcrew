@@ -175,6 +175,7 @@ export interface ChordProMeta {
   ccli?: string
   copyright?: string
   url?: string
+  kemperRig?: string   // {x_kemper_rig: 17 | 6.2} — raw value, parsed by src/midi/kemper.ts
 }
 
 export function extractMeta(content: string): ChordProMeta {
@@ -193,6 +194,7 @@ export function extractMeta(content: string): ChordProMeta {
   meta.ccli      = match('ccli')
   meta.copyright = match('copyright')
   meta.url       = match('url')
+  meta.kemperRig = match('x_kemper_rig')
 
   const tempo = match('tempo')
   if (tempo) meta.tempo = parseInt(tempo, 10)
