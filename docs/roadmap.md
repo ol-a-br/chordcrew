@@ -173,6 +173,7 @@ Focus: richer song metadata, multiple import sources, library backup/restore.
 | Edit presence banner | SYNC-06 | deferred |
 | Additional UI languages (beyond EN/DE) | — | |
 | Chord diagram rendering for `{chord:}` / `{define:}` | — | Out of scope per spec |
+| **MIDI out: Kemper rig + tempo on song change** | MIDI-01–09 | ✅ done |
 
 ---
 
@@ -208,6 +209,7 @@ To be completed before onboarding any additional contributors. Full details and 
 
 | Area | Limitation | Impact | Workaround |
 |------|-----------|--------|------------|
+| MIDI out | Safari on iPad/iPhone (and every iOS browser, all WebKit) has no Web MIDI API; Apple has declined to ship it. | Rig/tempo can't be sent from an iPad or iPhone. | Use Chrome/Edge on an Android tablet, Mac or Windows PC. On Android, Bluetooth MIDI devices usually have to be connected with a BLE-MIDI connector app first so Chrome sees them; on macOS pair them in Audio MIDI Setup → MIDI Studio → Bluetooth. |
 | ChurchTools songbook | Deleting a CT song that is currently used in a ChurchTools event agenda silently removes it from that agenda. ChurchTools does not return a conflict error; the song is just gone from the event. | Loss of agenda entry — the organiser must manually re-add the correct song. | Before deleting a CT song, check in ChurchTools which events use it (`/songs/{id}/arrangements/{arrId}` is referenced by which agendas). Consider adding a pre-delete check that queries CT event usage and warns the user if any scheduled event references the song. |
 
 ---
@@ -257,5 +259,7 @@ To be completed before onboarding any additional contributors. Full details and 
 | 2026-04-26 | CT song delete calls `ctDeleteSong` directly, no Firestore tombstone | CT books bypass Firestore sync entirely; each device re-syncs from CT independently. |
 | 2026-04-29 | CT category change requires `PUT /api/songs/{id}` (not PATCH) | `PATCH /api/songs/{id}` silently ignores `categoryId`/`song_category_id` — returns 200 but makes no change. CT only updates the category via a full `PUT` with the complete song object: `{ id: String(song.id), name, author, copyright, ccli, categoryId, practice_yn: 0, shouldPractice: false, arrangements: [{ name, isDefault, tempo }] }`. Implemented as `ctPutSong` in `src/churchtools/api.ts`. |
 | 2026-04-29 | `uploadPending` accumulates errors rather than throwing on first failure | A permissions error on one entity type (e.g. teams) was blocking all subsequent entity syncs (songs, setlists). Now collects errors and reports a summary at the end so partial syncs succeed. |
+| 2026-09-27 | Kemper rig stored as `{x_kemper_rig}` directive in the song content | Same pattern as `{tempo}`/`{key}`: syncs, backs up and edits with the song, no schema/sync/rules change. `x_` directives are ignored by other ChordPro tools. Trade-off: it is per song, not per musician — if several players with different rigs share a team song, a per-user store (like song notes) would be needed. |
+| 2026-09-27 | Kemper tempo via NRPN Rig Tempo (BPM × 64), tap tempo only as fallback | NRPN sets the exact BPM in one message; four taps over Bluetooth MIDI jitter by several ms per tap, and MIDI clock would need a continuous stream. Kemper's MIDI Parameter Documentation lists Rig Tempo (page 4, param 0) but not its scale; ×64 matches a Kemper-forum SysEx example for 120 BPM and PySwitch's Kemper client (value / 64 = BPM). Tap mode stays selectable in case a firmware behaves differently. |
 
-*Last updated: 2026-04-29*
+*Last updated: 2026-09-27*

@@ -96,6 +96,10 @@ src/
   firebase/index.ts               # Firebase init (graceful no-op if unconfigured)
   i18n/{index,en,de}.ts/json      # react-i18next EN+DE
   hooks/useKeyboard.ts            # Pedal/keyboard nav hook
+  midi/
+    kemper.ts                     # Pure Kemper MIDI builders: rig (PC / Perf.Slot), NRPN tempo, tap tempo
+    midiService.ts                # Web MIDI wrapper: access/permission, output lookup, send on song change
+    useSongMidi.ts                # Hook for Viewer + Performance: sends {x_kemper_rig} + {tempo} on song change
   utils/chordpro.ts               # parse, renderToHtml, extractMeta, buildSearchText
   sync/
     firestoreSync.ts              # uploadPending, downloadPersonal, downloadTeams, syncNow
@@ -169,6 +173,10 @@ The viewport meta uses `viewport-fit=cover` so web content extends under the sys
 - The root container also has `paddingTop: env(safe-area-inset-top)` so song content never sits under the status bar — since iPadOS 26 the system blurs whatever is behind it. The absolute controls overlay still starts at top 0.
 
 Do not add `env(safe-area-inset-top)` to the AppShell root `<div>` — it would double-count with the mobile header's own safe-area padding.
+
+## MIDI out (Kemper Profiler)
+
+Opening a song in Viewer or Performance mode sends its rig (`{x_kemper_rig: 17 | 6.2}`) and tempo (`{tempo}`) to the Web MIDI output chosen in Settings → MIDI (per-device settings, never synced). Tempo defaults to an exact NRPN write of Kemper Rig Tempo (page 4, param 0, BPM × 64). The send path must stay stage-safe: no UI or toasts, never throws, and `getMidiAccess(true)` (which may show the permission prompt) is only called from Settings. Safari/iOS has no Web MIDI — everything no-ops there. See REQ-MIDI in `docs/requirements.md`.
 
 ## Sync architecture
 

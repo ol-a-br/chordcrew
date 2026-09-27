@@ -213,6 +213,24 @@
 
 ---
 
+## REQ-MIDI — MIDI Out (Kemper Profiler)
+
+Opening a song sends its guitar rig and tempo to a Kemper Profiler over Web MIDI (e.g. CME WIDI Master Bluetooth adapter on the Kemper's MIDI In). Code: `src/midi/`.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| MIDI-01 | Rig per song via the custom directive `{x_kemper_rig: …}` in the song content: a program number `1–128` (Program Change) or `Performance.Slot` such as `6.2` (Bank Select LSB + Program Change, 5 slots per performance, banks of 128). | done |
+| MIDI-02 | Tempo comes from the existing `{tempo}` directive (`transcription.tempo`); no separate BPM field. | done |
+| MIDI-03 | Tempo mode per device: **Exact** (default) = NRPN write of Rig Tempo, address page 4 / parameter 0, raw value BPM × 64; **Tap** = 4 × CC 30 (value 0) one beat apart; **Off**. No MIDI clock (continuous, jitters over Bluetooth). | done |
+| MIDI-04 | Rig is sent first; the tempo follows 300 ms later so a tempo stored in the rig can't override it. Messages carry Web MIDI timestamps, and each song's messages queue behind the previous song's so tap sequences never interleave. | done |
+| MIDI-05 | Sent on song change in Viewer and Performance mode. Re-opening the same song (e.g. Viewer → Present) does not resend; the current song is sent again when the selected output (re)connects. | done |
+| MIDI-06 | Settings → MIDI: on/off, output device (remembered by id and name), channel 1–16, tempo mode, test sender. Stored in the local settings row — per device, never synced. | done |
+| MIDI-07 | Stage-safe: no UI, toasts or network from the send path; errors are swallowed; the MIDI permission prompt can only appear from Settings. | done |
+| MIDI-08 | Browsers without Web MIDI (Safari on iPad/iPhone) no-op silently; Settings explains the limitation. | done |
+| MIDI-09 | Editor metadata bar shows a Rig field (writes `{x_kemper_rig}`, shows "PC 17" / "Perf 6 · Slot 2" / "invalid") only while MIDI is enabled. | done |
+
+---
+
 ## REQ-TEAMS — Teams & Collaboration
 
 | ID | Requirement | Status |
