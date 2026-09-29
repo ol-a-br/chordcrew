@@ -10,7 +10,8 @@
  *   MIDI-6  Settings: browsers without Web MIDI get an explanation instead of controls
  *   MIDI-7  Editor: the Rig field writes {x_kemper_rig} and shows how it is read
  *   MIDI-8  Editor: the Rig field is hidden while MIDI is off
- *   MIDI-9  Settings: works with the iOS "Web MIDI Browser" polyfill
+ *   MIDI-9  Settings: works with the iOS "Web MIDI Browser" polyfill and auto-selects
+ *           its lone "Bluetooth" output
  *
  * Web MIDI is replaced by an in-page mock (see mockWebMidi) that records every
  * send(data, timestamp), so no device or permission prompt is involved.
@@ -278,8 +279,8 @@ test('MIDI-9: works with the iOS "Web MIDI Browser" polyfill (non-chainable then
   await expect(toggle).toHaveAttribute('aria-checked', 'true')
   await expect(page.getByText(/MIDI access/)).toHaveCount(0)
 
+  // The only output is named "Bluetooth" (iOS BLE MIDI) → auto-selected.
   const select = page.getByRole('combobox', { name: 'MIDI output' })
-  await select.selectOption({ label: 'Bluetooth' })
   await expect(select).toHaveValue('-1523')
   await page.getByRole('textbox', { name: 'Test rig' }).fill('17')
   await page.getByRole('button', { name: 'Send', exact: true }).click()

@@ -63,7 +63,10 @@ export function MidiSettingsSection({ settings, update }: Props) {
     }
     const patch: Partial<AppSettings> = { midiEnabled: true }
     if (!settings.midiOutputId) {
+      // iOS names Bluetooth MIDI endpoints (e.g. the WIDI) just "Bluetooth" —
+      // pick it too, but only when it is the only output.
       const widi = list.find(o => /widi|kemper/i.test(o.name))
+        ?? (list.length === 1 && /bluetooth/i.test(list[0].name) ? list[0] : undefined)
       if (widi) Object.assign(patch, { midiOutputId: widi.id, midiOutputName: widi.name })
     }
     await update(patch)
