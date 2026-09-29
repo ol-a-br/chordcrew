@@ -10,6 +10,7 @@
  *   MIDI-6  Settings: browsers without Web MIDI get an explanation instead of controls
  *   MIDI-7  Editor: the Rig field writes {x_kemper_rig} and shows how it is read
  *   MIDI-8  Editor: the Rig field is hidden while MIDI is off
+ *   MIDI-9  Settings: works with the iOS "Web MIDI Browser" polyfill
  *
  * Web MIDI is replaced by an in-page mock (see mockWebMidi) that records every
  * send(data, timestamp), so no device or permission prompt is involved.
@@ -243,4 +244,36 @@ test('MIDI-6: browsers without Web MIDI get an explanation instead of controls',
   await page.goto('/settings')
   await expect(page.getByText(/can't send MIDI/)).toBeVisible()
   await expect(page.getByRole('switch', { name: 'Send MIDI on song change' })).toHaveCount(0)
+})
+
+test('MIDI-9: works with the iOS "Web MIDI Browser" polyfill (non-chainable then, non-iterable port map)', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __midiSent: number[][] }
+    w.__midiSent = []
+    // Mirrors mizuhiki/WebMIDIAPIShimForiOS: then() only stores the callbacks and
+    // returns undefined; values() returns an iterator without Symbol.iterator.
+    const output = {
+      id: 'widi-ios', name: 'WIDI Master', manufacturer: 'CME', type: 'output',
+      state: 'connected', connection: 'closed',
+      send(data: number[]) { w.__midiSent.push(Array.from(data)) },
+    }
+    const outputs = {
+      size: 1,
+      forEach(cb: (o: typeof output) => void) { cb(output) },
+      values() { let done = false; return { next: () => done ? { value: undefined, done } : (done = true, { value: output, done: false }) } },
+      get: (id: string) => id === output.id ? output : undefined,
+    }
+    const access = { inputs: { size: 0, forEach() {} }, outputs, sysexEnabled: false, onstatechange: null, addEventListener() {} }
+    Object.defineProperty(navigator, 'requestMIDIAccess', {
+      configurable: true,
+      value: () => ({ then(accept: (a: unknown) => void) { setTimeout(() => accept(access), 10) } }),
+    })
+  })
+  await waitForApp(page)
+  await page.goto('/settings')
+  const toggle = page.getByRole('switch', { name: 'Send MIDI on song change' })
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  await expect(page.getByText(/MIDI access/)).toHaveCount(0)
+  await expect(page.getByRole('combobox', { name: 'MIDI output' })).toHaveValue('widi-ios')
 })

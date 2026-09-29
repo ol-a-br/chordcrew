@@ -53,11 +53,12 @@ export async function getMidiAccess(interactive = false): Promise<MIDIAccess | n
       if (state === 'prompt' || state === 'denied') return null
     }
     if (!accessPromise) {
-      accessPromise = navigator.requestMIDIAccess().then(access => {
-        // iOS Web MIDI browsers inject a polyfill whose MIDIAccess may not be
-        // an EventTarget — fall back to the onstatechange property there.
-        if (typeof access.addEventListener === 'function') access.addEventListener('statechange', onStateChange)
-        else access.onstatechange = onStateChange
+      // Wrap in a real Promise: the iOS "Web MIDI Browser" polyfill returns a
+      // thenable whose then() only stores the callbacks and returns undefined.
+      accessPromise = new Promise<MIDIAccess>((resolve, reject) => {
+        navigator.requestMIDIAccess().then(resolve, reject)
+      }).then(access => {
+        access.addEventListener('statechange', onStateChange)
         return access
       })
     }
@@ -99,8 +100,18 @@ export function onMidiPortsChanged(fn: () => void): () => void {
   return () => { listeners.delete(fn) }
 }
 
+/**
+ * All outputs as an array. Uses forEach because the iOS polyfill's port map
+ * returns iterators that aren't iterable (no Symbol.iterator), so spread fails.
+ */
+function outputsOf(access: MIDIAccess): MIDIOutput[] {
+  const outputs: MIDIOutput[] = []
+  access.outputs.forEach(o => { outputs.push(o) })
+  return outputs
+}
+
 export function listOutputs(access: MIDIAccess): MidiOutputInfo[] {
-  return [...access.outputs.values()].map(o => ({
+  return outputsOf(access).map(o => ({
     id: o.id,
     name: o.name || o.id,
     connected: o.state === 'connected',
@@ -108,7 +119,7 @@ export function listOutputs(access: MIDIAccess): MidiOutputInfo[] {
 }
 
 function findOutput(access: MIDIAccess, settings: AppSettings): MIDIOutput | null {
-  const connected = [...access.outputs.values()].filter(o => o.state === 'connected')
+  const connected = outputsOf(access).filter(o => o.state === 'connected')
   return connected.find(o => o.id === settings.midiOutputId)
     ?? connected.find(o => !!settings.midiOutputName && o.name === settings.midiOutputName)
     ?? null
@@ -121,14 +132,7 @@ function schedule(output: MIDIOutput, messages: ScheduledMidi[]) {
   // Timestamps let the browser time the messages even while the main thread
   // is busy rendering the new song.
   const start = Math.max(performance.now(), busyUntil)
-  for (const m of messages) {
-    try {
-      output.send(m.data, start + m.delayMs)
-    } catch {
-      // Some iOS Web MIDI polyfills reject the timestamp argument — send now instead.
-      output.send(m.data)
-    }
-  }
+  for (const m of messages) output.send(m.data, start + m.delayMs)
   busyUntil = start + Math.max(...messages.map(m => m.delayMs)) + 20
 }
 
