@@ -68,7 +68,10 @@ export async function getMidiAccess(interactive = false): Promise<MIDIAccess | n
     return access
   } catch (e) {
     accessPromise = null
-    accessError = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+    // Polyfills may reject with a non-Error (even an empty string) — always report something.
+    accessError = e instanceof Error
+      ? `${e.name}: ${e.message}`
+      : (typeof e === 'string' ? e : JSON.stringify(e) ?? String(e)) || `empty ${typeof e} rejection`
     return null
   }
 }
