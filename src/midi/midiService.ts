@@ -112,15 +112,15 @@ function outputsOf(access: MIDIAccess): MIDIOutput[] {
 
 export function listOutputs(access: MIDIAccess): MidiOutputInfo[] {
   return outputsOf(access).map(o => ({
-    id: o.id,
-    name: o.name || o.id,
+    id: String(o.id),   // the iOS polyfill uses numeric CoreMIDI ids
+    name: o.name || String(o.id),
     connected: o.state === 'connected',
   }))
 }
 
 function findOutput(access: MIDIAccess, settings: AppSettings): MIDIOutput | null {
   const connected = outputsOf(access).filter(o => o.state === 'connected')
-  return connected.find(o => o.id === settings.midiOutputId)
+  return connected.find(o => String(o.id) === settings.midiOutputId)
     ?? connected.find(o => !!settings.midiOutputName && o.name === settings.midiOutputName)
     ?? null
 }

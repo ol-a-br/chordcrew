@@ -251,9 +251,11 @@ test('MIDI-9: works with the iOS "Web MIDI Browser" polyfill (non-chainable then
     const w = window as unknown as { __midiSent: number[][] }
     w.__midiSent = []
     // Mirrors mizuhiki/WebMIDIAPIShimForiOS: then() only stores the callbacks and
-    // returns undefined; values() returns an iterator without Symbol.iterator.
+    // returns undefined; values() returns an iterator without Symbol.iterator;
+    // port ids are numbers.
     const output = {
-      id: 'widi-ios', name: 'WIDI Master', manufacturer: 'CME', type: 'output',
+      // Numeric CoreMIDI id; iOS names Bluetooth MIDI endpoints "Bluetooth"
+      id: -1523, name: 'Bluetooth', manufacturer: 'CME', type: 'output',
       state: 'connected', connection: 'closed',
       send(data: number[]) { w.__midiSent.push(Array.from(data)) },
     }
@@ -275,5 +277,12 @@ test('MIDI-9: works with the iOS "Web MIDI Browser" polyfill (non-chainable then
   await toggle.click()
   await expect(toggle).toHaveAttribute('aria-checked', 'true')
   await expect(page.getByText(/MIDI access/)).toHaveCount(0)
-  await expect(page.getByRole('combobox', { name: 'MIDI output' })).toHaveValue('widi-ios')
+
+  const select = page.getByRole('combobox', { name: 'MIDI output' })
+  await select.selectOption({ label: 'Bluetooth' })
+  await expect(select).toHaveValue('-1523')
+  await page.getByRole('textbox', { name: 'Test rig' }).fill('17')
+  await page.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(page.getByText('Sent.')).toBeVisible()
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __midiSent: number[][] }).__midiSent.length)).toBeGreaterThan(0)
 })
