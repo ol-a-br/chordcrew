@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { AppSettings } from '@/types'
 import { parseKemperRig, formatKemperRig } from '@/midi/kemper'
 import {
-  isMidiSupported, getMidiAccess, listOutputs, onMidiPortsChanged, sendMidiTest,
+  isMidiSupported, getMidiAccess, getMidiAccessError, listOutputs, onMidiPortsChanged, sendMidiTest,
   type MidiOutputInfo,
 } from '@/midi/midiService'
 
@@ -55,7 +55,10 @@ export function MidiSettingsSection({ settings, update }: Props) {
     // The only place that may show the browser's MIDI permission prompt.
     const list = await refresh(true)
     if (!list) {
-      setError('MIDI access was blocked. Allow MIDI for this site in the browser settings and try again.')
+      const reason = getMidiAccessError()
+      setError(reason && !/^(SecurityError|NotAllowedError)\b/.test(reason)
+        ? `MIDI access failed (${reason}).`
+        : `MIDI access was blocked. Allow MIDI for this site in the browser settings and try again.${reason ? ` (${reason})` : ''}`)
       return
     }
     const patch: Partial<AppSettings> = { midiEnabled: true }

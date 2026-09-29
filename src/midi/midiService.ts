@@ -25,6 +25,7 @@ let accessPromise: Promise<MIDIAccess> | null = null
 let activeSong: ActiveSongMidi | null = null
 let lastSentKey: string | null = null
 let busyUntil = 0      // performance.now() time at which the last scheduled message goes out
+let accessError: string | null = null
 const listeners = new Set<() => void>()
 
 export function isMidiSupported(): boolean {
@@ -53,17 +54,28 @@ export async function getMidiAccess(interactive = false): Promise<MIDIAccess | n
     }
     if (!accessPromise) {
       accessPromise = navigator.requestMIDIAccess().then(access => {
-        access.addEventListener('statechange', onStateChange)
+        // iOS Web MIDI browsers inject a polyfill whose MIDIAccess may not be
+        // an EventTarget — fall back to the onstatechange property there.
+        if (typeof access.addEventListener === 'function') access.addEventListener('statechange', onStateChange)
+        else access.onstatechange = onStateChange
         return access
       })
     }
   }
   try {
-    return await accessPromise
-  } catch {
+    const access = await accessPromise
+    accessError = null
+    return access
+  } catch (e) {
     accessPromise = null
+    accessError = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
     return null
   }
+}
+
+/** Why the last getMidiAccess() call failed (e.g. "SecurityError: …"), for Settings. Null after a success. */
+export function getMidiAccessError(): string | null {
+  return accessError
 }
 
 function onStateChange(e: Event) {
@@ -106,7 +118,14 @@ function schedule(output: MIDIOutput, messages: ScheduledMidi[]) {
   // Timestamps let the browser time the messages even while the main thread
   // is busy rendering the new song.
   const start = Math.max(performance.now(), busyUntil)
-  for (const m of messages) output.send(m.data, start + m.delayMs)
+  for (const m of messages) {
+    try {
+      output.send(m.data, start + m.delayMs)
+    } catch {
+      // Some iOS Web MIDI polyfills reject the timestamp argument — send now instead.
+      output.send(m.data)
+    }
+  }
   busyUntil = start + Math.max(...messages.map(m => m.delayMs)) + 20
 }
 
