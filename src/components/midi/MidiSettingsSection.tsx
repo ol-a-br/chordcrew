@@ -95,7 +95,8 @@ export function MidiSettingsSection({ settings, update }: Props) {
       {!supported ? (
         <div className="bg-surface-1 rounded-xl px-4 py-3 text-sm text-ink-muted">
           This browser can't send MIDI (no Web MIDI support — e.g. Safari on iPad/iPhone).
-          Use Chrome or Edge on Android, macOS or Windows.
+          On iPad/iPhone open ChordCrew in the Web MIDI Browser app; elsewhere use Chrome or Edge
+          on Android, macOS or Windows.
         </div>
       ) : (
         <div className="bg-surface-1 rounded-xl px-4 divide-y divide-surface-3">

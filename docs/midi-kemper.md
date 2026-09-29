@@ -35,6 +35,9 @@ sequenceDiagram
 - **Per device** (local settings row, never synced): on/off, MIDI output, channel, tempo mode.
 - Works wherever the browser implements the Web MIDI API (Chrome/Edge on Android, macOS,
   Windows). **Safari on iPad/iPhone has no Web MIDI** — there the feature is a silent no-op.
+  On iPad/iPhone it works in the third-party **Web MIDI Browser** app, which injects a
+  non-standard polyfill — see §4.1.
+
 
 ## 2. Song data
 
@@ -146,6 +149,9 @@ jitters over Bluetooth MIDI.
 - **Stage safety.** The send path shows no UI or toasts, makes no network calls and swallows
   every error; unsupported browsers return before touching IndexedDB. MIDI is local I/O, so
   the project's "no automatic sync" rule is unaffected.
+- **Access errors.** `getMidiAccess` records why access failed; Settings shows it in brackets
+  (`MIDI access was blocked … (SecurityError: …)` or `MIDI access failed (…)`) instead of a
+  generic message, so a failure on an unfamiliar browser can be diagnosed from one screenshot.
 - **Security headers.** Web MIDI needs no CSP change. The production `Permissions-Policy`
   header does not list `midi`, so the default allowlist (`self`) applies.
 
@@ -154,9 +160,34 @@ jitters over Bluetooth MIDI.
 | Field | Default | UI |
 |-------|---------|----|
 | `midiEnabled` | `false` | *Send MIDI on song change* |
-| `midiOutputId`, `midiOutputName` | `''` | *Output* (auto-selects a port named "WIDI…"/"Kemper…" when MIDI is switched on) |
+| `midiOutputId`, `midiOutputName` | `''` | *Output* (when MIDI is switched on with no output chosen: auto-selects a port named "WIDI…"/"Kemper…", else the only port if it is named "Bluetooth" — iOS) |
 | `midiChannel` | `1` | *MIDI channel* |
 | `midiTempoMode` | `'nrpn'` | *Tempo*: Exact / Tap / Off |
+
+### 4.1 iOS: the Web MIDI Browser polyfill
+
+iOS WebKit has no Web MIDI. The *Web MIDI Browser* app (Takashi Mizuhiki) is a WKWebView that
+injects [`WebMIDIAPIPolyfill.js`](https://github.com/mizuhiki/WebMIDIAPIShimForiOS/blob/master/WebMIDIAPIPolyfill/WebMIDIAPIPolyfill.js)
+into every page and bridges it to CoreMIDI. The polyfill deviates from the spec in ways that
+silently broke ChordCrew until 2026-09-29; `midiService.ts` now handles each of them:
+
+| Polyfill behaviour | Symptom in ChordCrew before the fix | Handling |
+|--------------------|-------------------------------------|----------|
+| `requestMIDIAccess()` returns its own fake "Promise": `then(accept, reject)` only stores the callbacks and returns `undefined` (not chainable; a second `then` replaces the first). | `requestMIDIAccess().then(…)` evaluated to `undefined`, `await` returned nothing, no error was recorded → Settings: "MIDI access was blocked" with no reason. | Wrapped in a real Promise: `new Promise((res, rej) => navigator.requestMIDIAccess().then(res, rej))`. |
+| `outputs.values()` / `entries()` return a custom iterator without `Symbol.iterator`. | `[...access.outputs.values()]` throws `TypeError`. | `outputsOf()` collects ports with `outputs.forEach` (works for native `Map` too). Never spread or `for…of` a port map. |
+| Port `id` is a **number** (CoreMIDI `kMIDIPropertyUniqueID`), not a string. | The output select compared number with the option's string value → selection always fell back to "— none —"; nothing was ever sent. | Ids normalised with `String(o.id)` in `listOutputs` and `findOutput`. |
+| Port `name` is the CoreMIDI endpoint name; Bluetooth LE MIDI endpoints (the WIDI Master) are named just **"Bluetooth"**. | The "WIDI/Kemper" auto-select never matched. | A lone output named "Bluetooth" is auto-selected. |
+| Rejection value is a plain object (`{ code: 1 }`) or anything else, not an `Error`. | — | Any rejection is turned into a non-empty reason string for Settings. |
+| `requestMIDIAccess({ sysex: true })` asks the app for SysEx confirmation; without SysEx, `send()` refuses `0xF0`. | — (ChordCrew never requests SysEx.) Web MIDI test/monitor sites ask to "Enable SysEx" because *they* request it. | Nothing to do — keep ChordCrew SysEx-free. |
+
+Things that work as specified in the polyfill and need no special handling: `addEventListener('statechange')`
+on `MIDIAccess`, port `state` (`connected`/`disconnected`), and `send(data, timestamp)` (the
+timestamp is converted to a native delay). WebKit's `navigator.permissions.query()` doesn't know the
+`midi` permission, so `permissionState()` returns `'unknown'` and song pages request access
+directly — fine, because the polyfill never shows a prompt for non-SysEx access.
+
+A proposal from another session to "request access without SysEx" was checked and rejected:
+ChordCrew never requested SysEx, so it could not have been the cause.
 
 ## 5. Platform support & setup
 
@@ -165,7 +196,8 @@ jitters over Bluetooth MIDI.
 | Android (Chrome, Edge) | ✅ | Bluetooth MIDI devices are usually not visible to Chrome by default; connect the WIDI first with a BLE-MIDI bridge app (e.g. *MIDI BLE Connect*) or CME's *WIDI App*, then pick it in Settings → MIDI. |
 | macOS (Chrome, Edge) | ✅ | *Audio MIDI Setup* → *Window → Show MIDI Studio* → Bluetooth icon → *Connect* next to the WIDI Master (no automatic pairing on macOS). |
 | Windows (Chrome, Edge) | ✅ API | Not verified with a Bluetooth MIDI device. |
-| iPad / iPhone (Safari and every iOS browser, all WebKit) | ❌ | Not possible in the PWA. The third-party *Web MIDI Browser* app adds Web MIDI to iOS, but it has its own storage (sync your library first) and Google sign-in in embedded browsers may be blocked — untested. |
+| iPad / iPhone — Safari and every normal iOS browser (all WebKit) | ❌ | Not possible in the PWA or in Safari. |
+| iPad / iPhone — *Web MIDI Browser* app | ✅ (polyfill, §4.1) | **Verified 2026-09-29 on iPad with CME WIDI Master → Kemper** (rig + tempo). Connect the WIDI inside the app (it shows up there by name), open `chordcrew.app`, Settings → MIDI → switch on; the output is listed as **"Bluetooth"**. The app has its own website storage, separate from Safari/home-screen ChordCrew — sync the library first. Google sign-in inside the app is untested. |
 
 ## 6. Testing
 
@@ -181,6 +213,9 @@ jitters over Bluetooth MIDI.
   - MIDI-5 Settings: enabling auto-selects the WIDI output; *Test* sends
   - MIDI-6 browsers without Web MIDI get an explanation instead of controls
   - MIDI-7/8 editor Rig field writes `{x_kemper_rig}`; hidden while MIDI is off
+  - MIDI-9 a mock of the iOS Web MIDI Browser polyfill (non-chainable `then`, non-iterable
+    port map, numeric id, output named "Bluetooth"): enabling works, "Bluetooth" is
+    auto-selected, *Test* sends. Fails if any of the §4.1 workarounds is removed.
 
 ### Hardware test checklist
 
@@ -209,7 +244,7 @@ The original task prompt proposed new song fields `midiProgramChange` and `bpm`,
 | PC number only | PC number **or** Performance.Slot | Profiler Stage users usually work in Performance Mode; slot → bank/PC is computed. |
 | 4 × Tap Tempo (CC 30) | NRPN Rig Tempo, tap as fallback | NRPN sets the exact BPM with one message; taps inherit Bluetooth jitter. |
 | MIDI clock | not used | Needs a continuous stream; jitters over Bluetooth. |
-| SysEx | not used | Would require the extra `sysex` permission; NRPN via plain CCs reaches the same parameter. |
+| SysEx | not used | Would require the extra `sysex` permission (and an extra confirmation in the iOS Web MIDI Browser); NRPN via plain CCs reaches the same parameter. |
 | Rig per musician | rig per song | A per-user store (like song notes) needs a new table, sync path and Firestore rules. Revisit if several players with different rigs share team songs. |
 
 ## 8. Known limitations / open points
@@ -220,7 +255,9 @@ The original task prompt proposed new song fields `midiProgramChange` and `bpm`,
   120 BPM with value `3B 7F` (= 7679 ≈ 120 × 64). A second, quoted *response* value in the
   same forum summary (`13 10`) does not fit and could not be checked (see Sources). → Verify
   with step 4 of the hardware checklist.
-- **No iOS support** (no Web MIDI in WebKit).
+- **iOS only via the Web MIDI Browser app** (no Web MIDI in WebKit); that app keeps its own
+  storage and relies on a non-standard polyfill (§4.1). The Settings hint on browsers without
+  Web MIDI points iPad/iPhone users to it.
 - **Rig is per song, not per musician** (see §7).
 - Re-opening a different song and coming back re-sends the rig: the Kemper reloads it, which
   discards manual changes made on the Kemper in between.
@@ -252,7 +289,8 @@ Access notes: *read* = the document or code was read directly during development
 | [MDN — `Navigator.requestMIDIAccess()`](https://developer.mozilla.org/docs/Web/API/Navigator/requestMIDIAccess) and [`MIDIOutput.send()`](https://developer.mozilla.org/docs/Web/API/MIDIOutput/send) | API shape; `send(data, timestamp)` for browser-timed delivery | read (via TypeScript DOM typings) |
 | [Super Simple Piano — "Web MIDI in 2026: Which Browsers Actually Work"](https://www.supersimplepiano.com/blog/web-midi-browser-compatibility-2026) | No Web MIDI in Safari on iOS/iPadOS; every iOS browser uses WebKit | summary |
 | [Hacker News — Apple declined to implement 16 Web APIs](https://news.ycombinator.com/item?id=23676109) | Background: Web MIDI declined for fingerprinting reasons | summary |
-| [Web MIDI Browser (App Store)](https://apps.apple.com/us/app/web-midi-browser/id953846217) | Possible iOS workaround (untested) | summary |
+| [Web MIDI Browser (App Store)](https://apps.apple.com/us/app/web-midi-browser/id953846217) | iOS app that adds Web MIDI; verified with ChordCrew 2026-09-29 | summary + device test |
+| [mizuhiki/WebMIDIAPIShimForiOS — `WebMIDIAPIPolyfill.js`, `MIDIDriver.m`, `WebViewDelegate.m`](https://github.com/mizuhiki/WebMIDIAPIShimForiOS) | The polyfill behind Web MIDI Browser: fake Promise, port map iterators, numeric CoreMIDI ids, endpoint names, SysEx confirmation (§4.1) | read |
 
 ### CME WIDI Master
 

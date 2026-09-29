@@ -140,7 +140,7 @@ export default function HelpPage() {
         <>
           <p>ChordCrew can switch your <strong className="text-ink">Kemper Profiler</strong> to the right rig and tempo whenever you open a song (Viewer or Performance mode) — e.g. via a <strong className="text-ink">CME WIDI Master</strong> Bluetooth adapter plugged into the Kemper's MIDI In.</p>
           <ol className="list-decimal list-inside space-y-1.5">
-            <li>Connect the MIDI adapter to your device (macOS: Audio MIDI Setup → Bluetooth; Android: a BLE-MIDI connector app).</li>
+            <li>Connect the MIDI adapter to your device (macOS: Audio MIDI Setup → Bluetooth; Android: a BLE-MIDI connector app; iPad/iPhone: inside the Web MIDI Browser app — see below).</li>
             <li>In <strong className="text-ink">Settings → MIDI</strong>, switch on <em>Send MIDI on song change</em>, allow MIDI access, pick the output and use <em>Test</em>.</li>
             <li>Give each song a rig — the editor shows a <strong className="text-ink">Rig</strong> field once MIDI is on:</li>
           </ol>
@@ -148,7 +148,7 @@ export default function HelpPage() {
 {x_kemper_rig: 17}   ← Program Change 17 (Browser Mode assignment)
 {x_kemper_rig: 6.2}  ← Performance 6, Slot 2 (Performance Mode)`}</Pre>
           <p><strong className="text-ink">Tempo</strong>: <em>Exact</em> sets the BPM directly; <em>Tap</em> sends four tap-tempo presses instead. The Kemper's MIDI channel is Omni by default, so channel 1 works.</p>
-          <p>Not available on iPad/iPhone: Safari has no Web MIDI. Use Chrome or Edge on Android, macOS or Windows.</p>
+          <p><strong className="text-ink">iPad/iPhone</strong>: Safari has no Web MIDI. Install the free <strong className="text-ink">Web MIDI Browser</strong> app, connect the WIDI there and open chordcrew.app in it — the WIDI is listed as output <em>"Bluetooth"</em>. The app keeps its own copy of your library, so sync first. Elsewhere use Chrome or Edge (Android, macOS, Windows).</p>
         </>
       } />
 
