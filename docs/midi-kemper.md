@@ -111,6 +111,30 @@ latency jitter), kept in case NRPN does not work on a given firmware.
 2. Tempo at *t* + **300 ms** (only when a rig was sent), so a tempo stored in the rig
    ("Tempo Enable") is loaded first and then overridden by the song tempo.
 
+### 3.5 Keeping the song tempo when switching slots mid-song (Kemper setup)
+
+ChordCrew sets the tempo once, when a song opens. If you then switch to another slot of the
+performance on the Kemper's footswitches, a slot with **Tempo Enable** on loads its own stored
+tempo and the song tempo is lost. ChordCrew cannot prevent this from the MIDI side:
+
+- An NRPN tempo (or Tempo Enable) write only affects the **currently active** slot, and is not
+  stored. Writing all five slots would mean switching through them — audible, and still not
+  persisted.
+
+**Recommended Kemper setup:** switch **Tempo Enable** (Rig settings, NRPN page 4 / param 2)
+**off** in every slot you switch to during songs, then store the performances. A slot without
+its own tempo should keep the tempo that is already running (ChordCrew's song tempo). Some
+sources also describe the tempo as shared across a performance's 5 slots.
+**Status: expected behaviour, not yet verified on hardware** — Kemper's official manual text
+could not be read (see Sources). Verify with hardware checklist step 9 and update this
+section with the result.
+
+Fallback if it does not hold: listen to the Kemper's MIDI out (the WIDI is bidirectional) for
+slot changes and re-send the song tempo after each one. Not implemented — it adds a MIDI-in
+path to stage-critical code and causes a brief tempo jump at every switch.
+
+### 3.6 Timestamps and queueing
+
 Messages carry Web MIDI **timestamps** (`MIDIOutput.send(data, timestamp)`), so the browser
 times them even while the main thread is busy rendering the new song. Each song's messages
 are queued behind the previous song's, so tap sequences never interleave when songs are
@@ -231,6 +255,9 @@ ChordCrew never requested SysEx, so it could not have been the cause.
 7. Performance mode with a setlist: flip songs with the pedal; rig and tempo follow each song.
 8. Switch the Kemper off and on while a song is open: the song's rig/tempo are sent again once
    the WIDI reconnects.
+9. Tempo across slots (§3.5): in one performance switch *Tempo Enable* off in slots 1 and 2 and
+   store it. *Test* rig `N.1` (N = that performance) at BPM 100, then switch to slot 2 on the
+   Kemper → the tempo must still read **100**. Record the result in §3.5.
 
 ## 7. Decisions and alternatives
 
@@ -244,6 +271,7 @@ The original task prompt proposed new song fields `midiProgramChange` and `bpm`,
 | PC number only | PC number **or** Performance.Slot | Profiler Stage users usually work in Performance Mode; slot → bank/PC is computed. |
 | 4 × Tap Tempo (CC 30) | NRPN Rig Tempo, tap as fallback | NRPN sets the exact BPM with one message; taps inherit Bluetooth jitter. |
 | MIDI clock | not used | Needs a continuous stream; jitters over Bluetooth. |
+| Write the song tempo into all 5 slots of a performance | Kemper setup: *Tempo Enable* off (§3.5) | MIDI tempo writes reach only the active slot and aren't stored; cycling through slots is audible. Re-sending tempo on Kemper slot changes (MIDI in) is the fallback if the setup doesn't work. |
 | SysEx | not used | Would require the extra `sysex` permission (and an extra confirmation in the iOS Web MIDI Browser); NRPN via plain CCs reaches the same parameter. |
 | Rig per musician | rig per song | A per-user store (like song notes) needs a new table, sync path and Firestore rules. Revisit if several players with different rigs share team songs. |
 
@@ -280,6 +308,7 @@ Access notes: *read* = the document or code was read directly during development
 | [Kemper Forum — MIDI program change in performance mode](https://forum.kemper-amps.com/forum/thread/34692-midi-program-change-in-performance-mode/) and [MIDI Program Changes To Kemper Performance](https://forum.kemper-amps.com/forum/thread/58902-midi-program-changes-to-kemper-performance/) | 625 slots via Bank Select LSB + PC; PC #27 → Performance 6 Slot 2; bank 0 ends at Performance 26 Slot 3; MSB not needed | summary |
 | [Kemper Forum — Midi → TAP tempo](https://forum.kemper-amps.com/forum/thread/4020-midi-tap-tempo/) | Press = 1 / release = 0; single event → value 0 (matches the PDF) | summary |
 | [Kemper Profiler Main Manual — MIDI Program Change Assignments (ManualsLib p. 244)](https://www.manualslib.com/manual/1984887/Kemper-Profiler.html?page=244) and [Rig Change in Browser Mode (p. 274)](https://www.manualslib.com/manual/1984887/Kemper-Profiler.html?page=274) | Browser Mode: PC numbers must be assigned to rigs on page *Browser Mode PrgChg* | summary |
+| [Kemper Forum — How to use performance mode](https://www.kemper-amps.com/forum/thread/29243-how-to-use-performance-mode/) | Performance settings such as the FX tempo can be shared across all 5 slots (§3.5) | summary |
 | [pencilresearch/midi — PR #303 "Add Kemper Profiler Stage"](https://github.com/pencilresearch/midi/pull/303) | Cross-check: Stage uses CC 0/32 + CC 47–54 and 14-bit NRPN via CC 6/38/98/99 | read |
 
 ### Web MIDI and platforms

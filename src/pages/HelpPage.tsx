@@ -148,6 +148,7 @@ export default function HelpPage() {
 {x_kemper_rig: 17}   ← Program Change 17 (Browser Mode assignment)
 {x_kemper_rig: 6.2}  ← Performance 6, Slot 2 (Performance Mode)`}</Pre>
           <p><strong className="text-ink">Tempo</strong>: <em>Exact</em> sets the BPM directly; <em>Tap</em> sends four tap-tempo presses instead. The Kemper's MIDI channel is Omni by default, so channel 1 works.</p>
+          <p><strong className="text-ink">Switching slots during a song</strong>: a slot with its own stored tempo replaces the song tempo when you step on it. To keep the song tempo, switch <em>Tempo Enable</em> off in the Rig settings of those slots on the Kemper and store the performance.</p>
           <p><strong className="text-ink">iPad/iPhone</strong>: Safari has no Web MIDI. Install the free <strong className="text-ink">Web MIDI Browser</strong> app, connect the WIDI there and open chordcrew.app in it — the WIDI is listed as output <em>"Bluetooth"</em>. The app keeps its own copy of your library, so sync first. Elsewhere use Chrome or Edge (Android, macOS, Windows).</p>
         </>
       } />
