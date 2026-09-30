@@ -8,6 +8,7 @@ import {
   type User as FirebaseUser,
 } from 'firebase/auth'
 import { auth, firebaseConfigured } from '@/firebase'
+import { clearToken as clearChurchToolsToken } from '@/churchtools/credentials'
 import type { User } from '@/types'
 
 interface AuthContextValue {
@@ -93,6 +94,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     if (!auth) return
+    // The ChurchTools token grants that user's full CT permissions — don't leave it
+    // behind on a shared device for whoever signs in next.
+    await clearChurchToolsToken().catch(() => { /* never block sign-out */ })
     await firebaseSignOut(auth)
   }
 

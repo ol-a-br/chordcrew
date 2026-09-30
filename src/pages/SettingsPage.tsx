@@ -319,6 +319,9 @@ export default function SettingsPage() {
                     <p className="text-xs text-ink-muted leading-relaxed">
                       In ChurchTools: <strong className="text-ink">Your profile → Security → Login tokens</strong> → create a token and paste it here. Your password is never stored.
                     </p>
+                    <p className="text-xs text-ink-muted leading-relaxed">
+                      A login token carries all of that user's ChurchTools permissions. Ideally use a dedicated ChurchTools user that only has access to songs and events. Signing out of ChordCrew removes the token from this device.
+                    </p>
                     <input
                       type="password"
                       value={ctTokenInput}

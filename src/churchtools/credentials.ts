@@ -43,7 +43,8 @@ export async function loadToken(baseUrl: string): Promise<string | null> {
         mediation: 'silent',
       } as CredentialRequestOptions)
       const pc = cred as (Credential & { password?: string }) | null
-      if (pc?.password) return pc.password
+      // Only accept the entry saved for this ChurchTools host
+      if (pc?.password && pc.id === credId(baseUrl)) return pc.password
     } catch {
       // fall through
     }
