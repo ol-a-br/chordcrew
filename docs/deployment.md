@@ -200,21 +200,21 @@ reCAPTCHA can't attest `localhost`. With a site key in `.env.local`, `npm run de
 
 ## Dependabot alerts
 
-As of 2026-04-06 (after cleanup): **0 critical, 4 high, 12 moderate** on `develop`.
+As of 2026-09-30: `npm audit` reports **0 vulnerabilities** in `/` and `/functions`.
 
-The 2 previous critical vulnerabilities were in `jspdf` — a dependency that was
-never actually imported in the app (the print pages use `@media print` instead).
-Both `jspdf` and `html2canvas` have been removed.
+History: the 2 former critical alerts were in `jspdf`, which was never imported
+(the print pages use `@media print`); `jspdf` and `html2canvas` were removed.
 
-Remaining alerts are all in **transitive dev/build dependencies** with no
-user-facing runtime exposure:
+Transitive fixes are pinned with `overrides` in the root `package.json`. Remove an
+override once the parent package ships the fixed version itself:
 
-| Package | Severity | Via | Fix available? |
-|---------|----------|-----|----------------|
-| `serialize-javascript` | High | workbox-build ← vite-plugin-pwa | awaiting upstream |
-| `undici` | High | @firebase/functions, @firebase/storage | awaiting Firebase SDK update |
-| Firebase SDK packages | Moderate | undici | awaiting Firebase SDK update |
-| `vite` / `esbuild` | Moderate | dev build chain | auto-fix applies patches |
+| Override | Why | Parent |
+|----------|-----|--------|
+| `serialize-javascript` `^7.0.5` | High-severity advisory in the PWA build chain | workbox-build ← vite-plugin-pwa |
+| `@grpc/grpc-js` `^1.14.5` | GHSA-m9gg-hp2v-232j, GHSA-f596-whhp-79r4; firebase pins `~1.9.0`, which has no patched release. Only the Node build of Firestore uses gRPC (tests, rules-unit-testing); the browser bundle uses WebChannel | @firebase/firestore ← firebase |
+
+`functions/` needs no override: `npm audit fix` there picks up the patched
+`@grpc/grpc-js` (via firebase-admin → google-gax).
 
 ```bash
 npm audit          # see full report
@@ -225,4 +225,4 @@ Do not run `npm audit fix --force` — it may introduce breaking changes.
 
 ---
 
-*Last updated: 2026-04-06*
+*Last updated: 2026-09-30*
