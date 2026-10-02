@@ -603,8 +603,17 @@ export default function LibraryPage() {
         }
       }
     }
+    const book = books?.find(b => b.id === bookId)
+    if (user) {
+      // Tombstone so the next sync deletes the Firestore copy instead of
+      // downloading it again (and propagates the deletion to other devices).
+      const paths = [`users/${user.id}/books/${bookId}`]
+      if (book?.sharedTeamId) paths.push(`teams/${book.sharedTeamId}/books/${bookId}`)
+      await markDeleted('book', bookId, paths)
+    } else {
+      await db.syncStates.delete(`book:${bookId}`)
+    }
     await db.books.delete(bookId)
-    await db.syncStates.delete(`book:${bookId}`)
     if (activeBookId === bookId) handleNavClick('all')
   }
 

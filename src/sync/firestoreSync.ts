@@ -191,6 +191,14 @@ async function applyDeletionLog(collectionPath: string): Promise<void> {
       await db.songs.delete(entityId).catch(() => {})
       await db.syncStates.delete(`song:${entityId}`).catch(() => {})
     }
+    if (entityType === 'book') {
+      const syncState = await db.syncStates.get(`book:${entityId}`)
+      if (syncState?.status === 'pending') continue  // local unsaved edit wins
+      const local = await db.books.get(entityId)
+      if (local && local.updatedAt > deletedAt) continue  // newer local version wins
+      await db.books.delete(entityId).catch(() => {})
+      await db.syncStates.delete(`book:${entityId}`).catch(() => {})
+    }
     if (Date.now() - deletedAt > DELETION_LOG_TTL) {
       await deleteDoc(snap.ref).catch(() => {})
     }
@@ -210,6 +218,7 @@ async function downloadPersonal(userId: string): Promise<Set<string>> {
   for (const snap of remoteBooks.docs) {
     const remote = snap.data() as Book
     const syncState = await db.syncStates.get(`book:${remote.id}`)
+    if (syncState?.status === 'deleted') continue  // locally deleted — don't re-add
     if (syncState?.status !== 'pending') {
       await db.books.put(remote)
     }
