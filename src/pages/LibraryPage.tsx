@@ -82,6 +82,7 @@ export default function LibraryPage() {
   const [showOrganizeMenu, setShowOrganizeMenu] = useState(false)
   const [showCtCategoryMenu, setShowCtCategoryMenu] = useState(false)
   const [bulkToast, setBulkToast] = useState<string | null>(null)
+  const [deletingBook, setDeletingBook] = useState<Book | null>(null)
   const bulkToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const books    = useLiveQuery(() => db.books.toArray(), [])
@@ -311,7 +312,12 @@ export default function LibraryPage() {
   const bulkDelete = async () => {
     const count = selectedIds.size
     if (!confirm(`Delete ${count} song${count !== 1 ? 's' : ''}? This cannot be undone.`)) return
-    const songs = sortedSongs.filter(s => selectedIds.has(s.id))
+    await deleteSongs(sortedSongs.filter(s => selectedIds.has(s.id)))
+    exitSelectMode()
+    showBulkToast(`Deleted ${count} song${count !== 1 ? 's' : ''}`)
+  }
+
+  const deleteSongs = async (songs: Song[]) => {
     for (const song of songs) {
       if (song.ctSongId != null) {
         // CT song: delete via CT API, then remove locally (no Firestore tombstone)
@@ -330,8 +336,6 @@ export default function LibraryPage() {
         await db.songs.delete(song.id)
       }
     }
-    exitSelectMode()
-    showBulkToast(`Deleted ${count} song${count !== 1 ? 's' : ''}`)
   }
 
   const ensureTeamBook = async (teamId: string, teamName: string): Promise<string> => {
@@ -586,23 +590,37 @@ export default function LibraryPage() {
     setRenameBookName('')
   }
 
-  const deleteBook = async (bookId: string, bookTitle: string) => {
-    const songCount = allSongs?.filter(s => s.bookId === bookId).length ?? 0
-    const msg = songCount > 0
-      ? `Delete book "${bookTitle}"? Its ${songCount} song${songCount !== 1 ? 's' : ''} will become unassigned.`
-      : `Delete book "${bookTitle}"?`
-    if (!confirm(msg)) return
-    // Reassign songs to no book (we can't leave dangling bookIds)
-    if (songCount > 0) {
-      const songs = allSongs?.filter(s => s.bookId === bookId) ?? []
-      const defaultBookId = personalBooks.find(b => b.id !== bookId)?.id
+  const deleteBook = async (book: Book) => {
+    const hasSongs = allSongs?.some(s => s.bookId === book.id) ?? false
+    if (hasSongs) {
+      setDeletingBook(book)  // DeleteBookDialog asks whether to delete the songs too
+      return
+    }
+    if (!confirm(`Delete book "${book.title}"?`)) return
+    await removeBook(book.id)
+  }
+
+  const deleteBookWithSongs = async (book: Book, deleteBookSongs: boolean) => {
+    setDeletingBook(null)
+    const songs = allSongs?.filter(s => s.bookId === book.id) ?? []
+    if (deleteBookSongs) {
+      await deleteSongs(songs)
+    } else if (user) {
+      // Keep the songs: move them to another personal book (we can't leave dangling bookIds)
+      const targetBookId = personalBooks.find(b => b.id !== book.id)?.id
+        ?? await createFallbackBook(user.id, user.displayName)
       for (const song of songs) {
-        if (defaultBookId) {
-          await db.songs.update(song.id, { bookId: defaultBookId, updatedAt: Date.now() })
-          await markPending('song', song.id)
-        }
+        await db.songs.update(song.id, { bookId: targetBookId, updatedAt: Date.now() })
+        await markPending('song', song.id)
       }
     }
+    await removeBook(book.id)
+    showBulkToast(deleteBookSongs
+      ? `Deleted "${book.title}" and ${songs.length} song${songs.length !== 1 ? 's' : ''}`
+      : `Deleted "${book.title}"`)
+  }
+
+  const removeBook = async (bookId: string) => {
     const book = books?.find(b => b.id === bookId)
     if (user) {
       // Tombstone so the next sync deletes the Firestore copy instead of
@@ -688,7 +706,7 @@ export default function LibraryPage() {
                 count={allSongs?.filter(s => s.bookId === book.id).length}
                 onClick={() => handleNavClick(book.id)}
                 onRename={() => startRenameBook(book)}
-                onDelete={() => deleteBook(book.id, book.title)}
+                onDelete={() => deleteBook(book)}
               />
             )
           ))}
@@ -1135,6 +1153,17 @@ export default function LibraryPage() {
       />
     )}
 
+    {deletingBook && (
+      <DeleteBookDialog
+        book={deletingBook}
+        songCount={allSongs?.filter(s => s.bookId === deletingBook.id).length ?? 0}
+        moveToTitle={personalBooks.find(b => b.id !== deletingBook.id)?.title}
+        onDeleteSongs={() => deleteBookWithSongs(deletingBook, true)}
+        onKeepSongs={() => deleteBookWithSongs(deletingBook, false)}
+        onClose={() => setDeletingBook(null)}
+      />
+    )}
+
     {syncDialogSong && (
       <SyncCopiesDialog
         song={syncDialogSong}
@@ -1338,6 +1367,62 @@ function CtBookNavItem({ book, active, count, onClick, onSync, syncing }: {
       </button>
     </div>
   )
+}
+
+function DeleteBookDialog({ book, songCount, moveToTitle, onDeleteSongs, onKeepSongs, onClose }: {
+  book: Book
+  songCount: number
+  moveToTitle?: string
+  onDeleteSongs: () => void
+  onKeepSongs: () => void
+  onClose: () => void
+}) {
+  const songs = `${songCount} song${songCount !== 1 ? 's' : ''}`
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-label={`Delete book "${book.title}"`}
+        className="bg-surface-1 border border-surface-3 rounded-2xl w-full max-w-sm shadow-2xl"
+        onClick={e => e.stopPropagation()}
+        onKeyDown={e => { if (e.key === 'Escape') onClose() }}
+      >
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-surface-3">
+          <Trash2 size={16} className="text-red-400 shrink-0" />
+          <span className="font-semibold text-sm flex-1 truncate">Delete book "{book.title}"?</span>
+          <button onClick={onClose} className="text-ink-muted hover:text-ink p-1 rounded">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <p className="text-sm text-ink-muted">
+            This book contains {songs}. Should they be deleted too?
+          </p>
+          <div className="flex flex-col gap-2">
+            <Button variant="danger" onClick={onDeleteSongs}>
+              Delete book and {songs}
+            </Button>
+            <Button variant="secondary" onClick={onKeepSongs} autoFocus>
+              {moveToTitle ? `Keep songs (move to "${moveToTitle}")` : 'Keep songs (move to a new book)'}
+            </Button>
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+async function createFallbackBook(ownerId: string, displayName: string): Promise<string> {
+  const id = generateId()
+  await db.books.add({
+    id, title: `${displayName}'s Songs`,
+    author: displayName, ownerId,
+    readOnly: false, shareable: true,
+    createdAt: Date.now(), updatedAt: Date.now(),
+  })
+  await markPending('book', id)
+  return id
 }
 
 async function ensureDefaultBook(ownerId: string, displayName: string): Promise<string> {
