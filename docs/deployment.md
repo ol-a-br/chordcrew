@@ -191,6 +191,7 @@ reCAPTCHA can't attest `localhost`. With a site key in `.env.local`, `npm run de
 | Dependabot alerts reviewed | ✅ done | Removed unused `jspdf`/`html2canvas`; 0 critical remaining |
 | Dependabot version updates configured | ✅ done | `.github/dependabot.yml` — grouped weekly PRs for `/`, `/functions` and GitHub Actions |
 | SECURITY.md added | ✅ done | GitHub-standard security policy |
+| GitHub Actions pinned to commit SHAs | ✅ done | `uses: owner/action@<sha> # vX.Y.Z` — a moved tag can't swap in other code; Dependabot updates the SHA and the comment |
 | Security headers + CSP | ✅ done | `firebase.json` → `hosting.headers`, see [Security headers](#security-headers--content-security-policy) |
 | App Check (reCAPTCHA Enterprise) | ⬜ in progress | Code ready; console setup + monitor → enforce, see [App Check](#app-check) |
 | Firestore rules deployed from the repo | ✅ done | `npm run deploy` includes `firestore`; rules tested with `npm run test:firebase` |
