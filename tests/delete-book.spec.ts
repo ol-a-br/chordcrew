@@ -118,3 +118,41 @@ test.describe('Delete book with songs', () => {
     expect(songs.filter(s => s.bookId === 'book-old')).toHaveLength(2)
   })
 })
+
+test.describe('(unassigned) book', () => {
+  const unassignedNav = (page: Page) =>
+    page.locator('aside button').filter({ hasText: '(unassigned)' })
+
+  test.beforeEach(async ({ page, viewport }) => {
+    test.skip((viewport?.width ?? 0) < 768, 'book sidebar hidden on narrow viewports')
+    await waitForApp(page)
+    await seed(page)
+  })
+
+  test('UA-1: hidden while every song has a book', async ({ page }) => {
+    await expect(page.locator('aside button').filter({ hasText: 'Old Book' })).toBeVisible()
+    await expect(unassignedNav(page)).toHaveCount(0)
+  })
+
+  test('UA-2: songs whose book is gone show up under (unassigned)', async ({ page }) => {
+    // Remove the book directly, leaving its songs with a dangling bookId
+    await page.evaluate(async () => {
+      await new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open('ChordCrewDB')
+        req.onsuccess = (e) => {
+          const tx = (e.target as IDBOpenDBRequest).result.transaction('books', 'readwrite')
+          tx.objectStore('books').delete('book-old')
+          tx.oncomplete = () => resolve()
+          tx.onerror = () => reject(tx.error)
+        }
+        req.onerror = () => reject(req.error)
+      })
+    })
+    await page.reload()  // raw IndexedDB writes don't notify Dexie live queries
+    await expect(unassignedNav(page)).toBeVisible()
+    await expect(unassignedNav(page)).toContainText('2')
+    await unassignedNav(page).click()
+    await expect(page.getByText('First Song').first()).toBeVisible()
+    await expect(page.getByText('Second Song').first()).toBeVisible()
+  })
+})

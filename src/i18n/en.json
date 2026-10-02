@@ -23,6 +23,7 @@
   "library": {
     "allSongs": "All Songs",
     "favorites": "Favorites",
+    "unassigned": "(unassigned)",
     "books": "Books",
     "newSong": "New Song",
     "newBook": "New Book",

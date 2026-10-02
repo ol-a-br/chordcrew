@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -53,7 +53,7 @@ export default function LibraryPage() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [syncDialogSong, setSyncDialogSong] = useState<Song | null>(null)
-  const [activeBookId, setActiveBookId] = useState<string | 'all' | 'favorites'>('all')
+  const [activeBookId, setActiveBookId] = useState<string | 'all' | 'favorites' | 'unassigned'>('all')
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [activeKey, setActiveKey] = useState<string | null>(null)
@@ -97,7 +97,7 @@ export default function LibraryPage() {
 
   // Is the currently selected book a CT book?
   const activeBookIsCT = useMemo(() => {
-    if (activeBookId === 'all' || activeBookId === 'favorites') return false
+    if (activeBookId === 'all' || activeBookId === 'favorites' || activeBookId === 'unassigned') return false
     return (books ?? []).find(b => b.id === activeBookId)?.sourceType === 'churchtools'
   }, [activeBookId, books])
 
@@ -132,6 +132,18 @@ export default function LibraryPage() {
     return m
   }, [books])
 
+  // Songs whose book is missing (no bookId, or the book no longer exists locally).
+  // Shown under a virtual "(unassigned)" book that only appears when there are any.
+  const unassignedSongs = useMemo(() => {
+    if (!allSongs || !books) return []
+    return allSongs.filter(s => !s.bookId || !bookMap[s.bookId])
+  }, [allSongs, books, bookMap])
+
+  // Leave the "(unassigned)" view once it empties — its nav item disappears
+  useEffect(() => {
+    if (activeBookId === 'unassigned' && books && unassignedSongs.length === 0) setActiveBookId('all')
+  }, [activeBookId, books, unassignedSongs.length])
+
   const songMap = useMemo(() => new Map((allSongs ?? []).map(s => [s.id, s])), [allSongs])
 
   const linkStatusMap = useMemo(() => {
@@ -152,7 +164,7 @@ export default function LibraryPage() {
 
   const isActiveReadOnly = useMemo(() => {
     if (activeTeamId) return activeTeamRole === 'reader'
-    if (activeBookId === 'all' || activeBookId === 'favorites') return false
+    if (activeBookId === 'all' || activeBookId === 'favorites' || activeBookId === 'unassigned') return false
     const book = (books ?? []).find(b => b.id === activeBookId)
     return book?.readOnly ?? false
   }, [activeTeamId, activeTeamRole, activeBookId, books])
@@ -178,6 +190,8 @@ export default function LibraryPage() {
       songs = songs.filter(s => bookTeamMap[s.bookId] === activeTeamId)
     } else if (activeBookId === 'favorites') {
       songs = songs.filter(s => s.isFavorite)
+    } else if (activeBookId === 'unassigned') {
+      songs = unassignedSongs
     } else if (activeBookId !== 'all') {
       songs = songs.filter(s => s.bookId === activeBookId)
     } else {
@@ -189,7 +203,7 @@ export default function LibraryPage() {
       songs = songs.filter(s => fuzzyMatch(s.searchText, query))
     }
     return songs
-  }, [allSongs, activeBookId, activeTeamId, activeTag, activeKey, query, bookTeamMap])
+  }, [allSongs, unassignedSongs, activeBookId, activeTeamId, activeTag, activeKey, query, bookTeamMap])
 
   const sortedSongs = useMemo(() => {
     const s = [...filteredSongs]
@@ -252,7 +266,7 @@ export default function LibraryPage() {
         await markPending('book', bookId)
       }
     } else {
-      bookId = activeBookId === 'all' || activeBookId === 'favorites'
+      bookId = activeBookId === 'all' || activeBookId === 'favorites' || activeBookId === 'unassigned'
         ? (personalBooks?.[0]?.id ?? await ensureDefaultBook(user.id, user.displayName))
         : activeBookId
     }
@@ -710,6 +724,15 @@ export default function LibraryPage() {
               />
             )
           ))}
+          {unassignedSongs.length > 0 && (
+            <NavItem
+              label={t('library.unassigned')}
+              icon={<BookOpen size={15} />}
+              active={activeBookId === 'unassigned' && !activeTeamId}
+              onClick={() => handleNavClick('unassigned')}
+              count={unassignedSongs.length}
+            />
+          )}
           {showNewBook && (
             <div className="px-2 pb-1">
               <input
@@ -810,6 +833,13 @@ export default function LibraryPage() {
                 onClick={() => handleNavClick(book.id)}
               />
             ))}
+            {unassignedSongs.length > 0 && (
+              <MobileChip
+                label={t('library.unassigned')}
+                active={activeBookId === 'unassigned' && !activeTeamId}
+                onClick={() => handleNavClick('unassigned')}
+              />
+            )}
             {myTeams.map(team => (
               <MobileChip
                 key={team.id}
