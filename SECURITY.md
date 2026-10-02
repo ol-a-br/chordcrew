@@ -35,34 +35,52 @@ directly.
 
 ## Scope
 
-ChordCrew is a **client-side Progressive Web App** with no server component.
+ChordCrew is a **client-side Progressive Web App** backed by Firebase. Its only
+server-side code is a small set of Cloud Functions in `functions/`: the
+ChurchTools proxy (`ctProxy`) and the team-invite callables
+(`listMyInvites`, `previewInvite`, `acceptInvite`, `declineInvite`).
 
 | Component | In scope |
 |-----------|----------|
 | Source code in this repository | ✅ |
 | Runtime JS delivered to end users (`npm run build` output) | ✅ |
 | Firebase configuration / Firestore security rules | ✅ |
+| Cloud Functions in `functions/` | ✅ |
 | Third-party npm dependencies (direct) | ✅ report so we can upgrade |
 | Transitive / dev-only build dependencies | ⬜ low priority; no user exposure |
 | Firebase infrastructure (Google-managed) | ❌ report to Google |
 
-Because the app has no custom backend, the highest-impact vulnerability classes are:
+The highest-impact vulnerability classes are:
 
 - **Client-side XSS** — particularly via ChordPro content rendered with
   `dangerouslySetInnerHTML`. Song content is untrusted (share links, team songs,
   imports) and chordsheetjs does not escape it, so `renderToHtml()` passes all
   output through a DOMPurify allow-list (`sanitizeSongHtml()` in `src/utils/chordpro.ts`)
 - **Firestore rules misconfiguration** — data exposure between users or teams
+- **Cloud Function abuse** — e.g. using `ctProxy` as a relay, or bypassing
+  invite checks
 - **Dependency supply-chain** — malicious packages in the npm graph
 
 ## Security hardening already in place
 
+- Firestore rules live in `firestore.rules`, are deployed by `npm run deploy`
+  and tested on the emulators (`npm run test:firebase`). Team access is
+  enforced by membership and role, not only in the UI
+- Team invites are accepted only through Cloud Functions that verify the
+  token or the caller's verified e-mail server-side
+- `ctProxy` accepts only signed-in app users (Firebase ID token) and HTTPS
+  `*.church.tools` targets, and sends no CORS headers (same-origin only)
+- Security headers and a Content-Security-Policy on Firebase Hosting (no
+  inline scripts, no eval)
+- Firebase App Check (reCAPTCHA Enterprise) — rolled out monitor-then-enforce
+- CI on every pull request: build, unit tests, `npm audit`, rules and
+  functions tests, E2E; GitHub Actions are pinned to commit SHAs
 - Auto-deploy to production is **disabled** (`workflow_dispatch` only); all
   deploys are intentional manual actions
-- `main` branch protection is pending (see `docs/deployment.md`)
-- Firebase service account will be scoped to **Hosting Admin only** before
-  CI/CD is re-enabled (no Firestore / Auth access)
-- Dependabot version updates and CodeQL analysis are enabled
+- Still pending (see `docs/deployment.md`): `main` branch protection,
+  verifying CodeQL / secret scanning in the repository settings, and scoping
+  the Firebase service account to **Hosting Admin only** before CI/CD is
+  re-enabled
 
 ## Dependency update policy
 

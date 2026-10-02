@@ -10,3 +10,8 @@ data
 
 # Firebase emulator logs
 *-debug.log
+
+# Build / test output
+functions/lib
+test-results
+playwright-report

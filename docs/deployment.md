@@ -18,7 +18,7 @@ Requires `firebase-tools` installed and an active `firebase login` session. Uses
 
 | Job | What it checks |
 |---|---|
-| Build, unit tests, audit | `npm run build`, functions build, committed `functions/lib` matches `functions/src`, `npm run test:unit`, `npm audit --omit=dev --audit-level=high` (root + functions) |
+| Build, unit tests, audit | `npm run build`, functions build, `npm run test:unit`, `npm audit --omit=dev --audit-level=high` (root + functions) |
 | Firestore rules & Cloud Functions | `npm run test:firebase` on the emulators (Java + firebase-tools installed in the job) |
 | E2E | Playwright, `chromium` project (the WebKit/iPad and Android suites stay local) |
 

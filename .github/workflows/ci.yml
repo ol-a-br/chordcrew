@@ -46,15 +46,6 @@ jobs:
       - name: Build Cloud Functions
         run: npm run build --prefix functions
 
-      # functions/lib is committed and deployed as-is: it must match src.
-      - name: Check functions/lib is up to date
-        run: |
-          if ! git diff --quiet -- functions/lib; then
-            echo "::error::functions/lib is out of date — run 'npm run build --prefix functions' and commit the result."
-            git diff --stat -- functions/lib
-            exit 1
-          fi
-
       - name: Unit tests
         run: npm run test:unit
 
