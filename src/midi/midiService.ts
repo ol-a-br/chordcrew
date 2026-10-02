@@ -9,7 +9,7 @@
 
 import { getSettings } from '@/db'
 import type { AppSettings } from '@/types'
-import { buildSongMidi, type ScheduledMidi, type SongMidiData } from './kemper'
+import { buildSongMidi, type ScheduledMidi, type SongMidiData, type TempoMode } from './kemper'
 
 export interface MidiOutputInfo {
   id: string
@@ -136,6 +136,13 @@ function schedule(output: MIDIOutput, messages: ScheduledMidi[]) {
   busyUntil = start + Math.max(...messages.map(m => m.delayMs)) + 20
 }
 
+function sendOptions(settings: AppSettings): { channel: number; tempoMode: TempoMode } {
+  return {
+    channel: settings.midiChannel,
+    tempoMode: settings.midiSendTempo ? settings.midiTempoMode : 'off',
+  }
+}
+
 async function sendActiveSong(): Promise<void> {
   const song = activeSong
   if (!song) return
@@ -146,15 +153,12 @@ async function sendActiveSong(): Promise<void> {
     const output = access && findOutput(access, settings)
     // No output yet → onStateChange retries as soon as one connects.
     if (!output || activeSong !== song) return
-    const key = JSON.stringify([
-      song.songId, song.rig, song.bpm, output.id, settings.midiChannel, settings.midiTempoMode,
-    ])
+    const opts = sendOptions(settings)
+    const data: SongMidiData = { rig: settings.midiSendRig ? song.rig : null, bpm: song.bpm }
+    const key = JSON.stringify([song.songId, data.rig, data.bpm, output.id, opts])
     if (key === lastSentKey) return   // same song opened again, e.g. Viewer → Performance
     lastSentKey = key
-    schedule(output, buildSongMidi(song, {
-      channel: settings.midiChannel,
-      tempoMode: settings.midiTempoMode,
-    }))
+    schedule(output, buildSongMidi(data, opts))
   } catch {
     // Never let MIDI break a song page.
   }
@@ -172,10 +176,8 @@ export async function sendMidiTest(data: SongMidiData, settings: AppSettings): P
     const access = await getMidiAccess(true)
     const output = access && findOutput(access, settings)
     if (!output) return false
-    schedule(output, buildSongMidi(data, {
-      channel: settings.midiChannel,
-      tempoMode: settings.midiTempoMode,
-    }))
+    // The test sends exactly what was typed, regardless of the rig / tempo switches.
+    schedule(output, buildSongMidi(data, { channel: settings.midiChannel, tempoMode: settings.midiTempoMode }))
     lastSentKey = null   // the Kemper state changed — re-opening a song sends again
     return true
   } catch {

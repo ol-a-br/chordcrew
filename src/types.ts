@@ -185,7 +185,9 @@ export interface AppSettings {
   midiOutputId: string           // selected Web MIDI output port id ('' = none)
   midiOutputName: string         // its name — fallback match when the browser assigns a new port id
   midiChannel: number            // 1–16 (the Kemper listens on its "MIDI Global Channel", default Omni)
-  midiTempoMode: 'nrpn' | 'tap' | 'off'  // exact Rig Tempo via NRPN, 4× Tap Tempo, or no tempo
+  midiSendRig: boolean           // send the song's {x_kemper_rig}; off = keep whatever rig is loaded on the Kemper
+  midiSendTempo: boolean         // send the song's {tempo}
+  midiTempoMode: 'nrpn' | 'tap'  // exact Rig Tempo via NRPN, or 4× Tap Tempo
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -207,6 +209,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   midiOutputId: '',
   midiOutputName: '',
   midiChannel: 1,
+  midiSendRig: true,
+  midiSendTempo: true,
   midiTempoMode: 'nrpn',
 }
 

@@ -12,6 +12,8 @@
  *   MIDI-8  Editor: the Rig field is hidden while MIDI is off
  *   MIDI-9  Settings: works with the iOS "Web MIDI Browser" polyfill and auto-selects
  *           its lone "Bluetooth" output
+ *   MIDI-11 "Send rig change" off → only the tempo is sent
+ *   MIDI-12 "Send tempo" off → only the rig is sent; legacy midiTempoMode 'off' still means no tempo
  *
  * Web MIDI is replaced by an in-page mock (see mockWebMidi) that records every
  * send(data, timestamp), so no device or permission prompt is involved.
@@ -79,10 +81,10 @@ async function waitForApp(page: Page) {
 interface Setup { setlistId: string; songA: string; songB: string }
 
 /** Two songs with rigs and tempos in one setlist, plus the MIDI settings. */
-async function seed(page: Page, midiEnabled: boolean): Promise<Setup> {
+async function seed(page: Page, midiEnabled: boolean, extraSettings: Record<string, unknown> = {}): Promise<Setup> {
   const d = {
     bookId: randomUUID(), songA: randomUUID(), songB: randomUUID(),
-    setlistId: randomUUID(), now: Date.now(), midiEnabled,
+    setlistId: randomUUID(), now: Date.now(), midiEnabled, extraSettings,
     contentA: '{title: Alpha}\n{x_kemper_rig: 6.2}\n{tempo: 120}\n\n[G]Short [C]song [G]content\n',
     contentB: '{title: Beta}\n{x_kemper_rig: 17}\n{tempo: 90}\n\n[D]Another [A]short [D]song\n',
   }
@@ -118,7 +120,8 @@ async function seed(page: Page, midiEnabled: boolean): Promise<Setup> {
       get.onsuccess = () => settings.put({
         ...(get.result ?? { id: 'app' }),
         midiEnabled: d.midiEnabled, midiOutputId: 'widi-1', midiOutputName: 'WIDI Master',
-        midiChannel: 1, midiTempoMode: 'nrpn',
+        midiChannel: 1, midiTempoMode: 'nrpn', midiSendRig: true, midiSendTempo: true,
+        ...d.extraSettings,
       })
     }
   }), d)
@@ -186,6 +189,29 @@ test.describe('MIDI out — Kemper rig + tempo on song change', () => {
     expect(await sent(page)).toHaveLength(0)
   })
 
+  test('MIDI-11: with "Send rig change" off only the tempo is sent', async ({ page }) => {
+    const s = await seed(page, true, { midiSendRig: false })
+    await openPerformance(page, s, s.songA, 0)
+    await expect.poll(async () => (await sent(page)).length).toBe(1)
+    await page.waitForTimeout(500)
+    const all = await sent(page)
+    expect(all).toHaveLength(1)
+    expect(all[0].data).toEqual(NRPN_TEMPO_120)
+  })
+
+  test('MIDI-12: with "Send tempo" off only the rig is sent (also for the legacy tempo mode "off")', async ({ page }) => {
+    for (const extra of [{ midiSendTempo: false }, { midiTempoMode: 'off' }]) {
+      const s = await seed(page, true, extra)
+      await openPerformance(page, s, s.songA, 0)
+      await expect.poll(async () => (await sent(page)).length).toBe(1)
+      await page.waitForTimeout(500)
+      const all = await sent(page)
+      expect(all).toHaveLength(1)
+      expect(all[0].data).toEqual([0xB0, 0, 0, 0xB0, 32, 0, 0xC0, 26])
+      await page.evaluate(() => { (window as unknown as { __midiSent: Sent[] }).__midiSent.length = 0 })
+    }
+  })
+
   test('MIDI-5: enabling MIDI in Settings selects the WIDI output', async ({ page }) => {
     await page.goto('/settings')
     const toggle = page.getByRole('switch', { name: 'Send MIDI on song change' })
@@ -195,6 +221,17 @@ test.describe('MIDI out — Kemper rig + tempo on song change', () => {
 
     const output = page.getByRole('combobox', { name: 'MIDI output' })
     await expect(output).toHaveValue('widi-1')
+
+    // Rig + tempo switches: on by default, the tempo method only shows while tempo is on
+    const rigSwitch = page.getByRole('switch', { name: 'Send rig change' })
+    const tempoSwitch = page.getByRole('switch', { name: 'Send tempo' })
+    await expect(rigSwitch).toHaveAttribute('aria-checked', 'true')
+    await expect(tempoSwitch).toHaveAttribute('aria-checked', 'true')
+    await expect(page.getByText('Tempo method')).toBeVisible()
+    await tempoSwitch.click()
+    await expect(tempoSwitch).toHaveAttribute('aria-checked', 'false')
+    await expect(page.getByText('Tempo method')).toHaveCount(0)
+    await tempoSwitch.click()
 
     await page.getByRole('textbox', { name: 'Test rig' }).fill('17')
     await page.getByRole('button', { name: 'Send', exact: true }).click()

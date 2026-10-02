@@ -71,7 +71,13 @@ db.on('ready', async () => {
 export async function getSettings(): Promise<AppSettings> {
   const row = await db.settings.get('app')
   // Merge with DEFAULT_SETTINGS so any field added after initial install gets its default
-  return row ? { ...DEFAULT_SETTINGS, ...row } : DEFAULT_SETTINGS
+  if (!row) return DEFAULT_SETTINGS
+  const settings = { ...DEFAULT_SETTINGS, ...row }
+  // Before midiSendTempo existed, "no tempo" was stored as midiTempoMode 'off'
+  if ((settings.midiTempoMode as string) === 'off') {
+    Object.assign(settings, { midiTempoMode: 'nrpn', midiSendTempo: false })
+  }
+  return settings
 }
 
 export async function saveSettings(patch: Partial<AppSettings>): Promise<void> {

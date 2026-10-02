@@ -11,19 +11,39 @@ interface Props {
   update: (patch: Partial<AppSettings>) => Promise<void>
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 py-3">
-      <span className="text-sm">{label}</span>
+      <div>
+        <span className="text-sm">{label}</span>
+        {hint && <p className="text-xs text-ink-muted mt-0.5">{hint}</p>}
+      </div>
       <div>{children}</div>
     </div>
+  )
+}
+
+function Switch({ label, checked, onClick }: { label: string; checked: boolean; onClick: () => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onClick}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+        checked ? 'bg-chord' : 'bg-surface-3'
+      }`}
+    >
+      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+        checked ? 'translate-x-6' : 'translate-x-1'
+      }`} />
+    </button>
   )
 }
 
 const TEMPO_MODES = [
   { mode: 'nrpn', label: 'Exact' },
   { mode: 'tap',  label: 'Tap' },
-  { mode: 'off',  label: 'Off' },
 ] as const
 
 /** Settings → MIDI: send each song's Kemper rig + tempo to a Web MIDI output (e.g. CME WIDI Master). */
@@ -101,19 +121,11 @@ export function MidiSettingsSection({ settings, update }: Props) {
       ) : (
         <div className="bg-surface-1 rounded-xl px-4 divide-y divide-surface-3">
           <Row label="Send MIDI on song change">
-            <button
-              role="switch"
-              aria-checked={settings.midiEnabled}
-              aria-label="Send MIDI on song change"
+            <Switch
+              label="Send MIDI on song change"
+              checked={settings.midiEnabled}
               onClick={() => settings.midiEnabled ? update({ midiEnabled: false }) : enable()}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                settings.midiEnabled ? 'bg-chord' : 'bg-surface-3'
-              }`}
-            >
-              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                settings.midiEnabled ? 'translate-x-6' : 'translate-x-1'
-              }`} />
-            </button>
+            />
           </Row>
 
           {error && <p className="py-2 text-xs text-red-400">{error}</p>}
@@ -158,7 +170,26 @@ export function MidiSettingsSection({ settings, update }: Props) {
                 </select>
               </Row>
 
-              <Row label="Tempo">
+              <Row
+                label="Send rig change"
+                hint={settings.midiSendRig ? undefined : 'Off: the Kemper keeps whatever rig is loaded; song rigs are ignored.'}
+              >
+                <Switch
+                  label="Send rig change"
+                  checked={settings.midiSendRig}
+                  onClick={() => update({ midiSendRig: !settings.midiSendRig })}
+                />
+              </Row>
+
+              <Row label="Send tempo">
+                <Switch
+                  label="Send tempo"
+                  checked={settings.midiSendTempo}
+                  onClick={() => update({ midiSendTempo: !settings.midiSendTempo })}
+                />
+              </Row>
+
+              {settings.midiSendTempo && <Row label="Tempo method">
                 <div className="flex gap-0 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
                   {TEMPO_MODES.map(({ mode, label }) => (
                     <button
@@ -170,7 +201,7 @@ export function MidiSettingsSection({ settings, update }: Props) {
                     </button>
                   ))}
                 </div>
-              </Row>
+              </Row>}
 
               <div className="py-3 space-y-2">
                 <div className="flex items-center gap-2 text-sm flex-wrap">

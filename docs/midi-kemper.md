@@ -32,7 +32,7 @@ sequenceDiagram
 ```
 
 - **Per song** (in the ChordPro content, synced with the song): the rig and the tempo.
-- **Per device** (local settings row, never synced): on/off, MIDI output, channel, tempo mode.
+- **Per device** (local settings row, never synced): on/off, MIDI output, channel, send rig on/off, send tempo on/off, tempo method.
 - Works wherever the browser implements the Web MIDI API (Chrome/Edge on Android, macOS,
   Windows). **Safari on iPad/iPhone has no Web MIDI** — there the feature is a silent no-op.
   On iPad/iPhone it works in the third-party **Web MIDI Browser** app, which injects a
@@ -150,7 +150,7 @@ jitters over Bluetooth MIDI.
 | `src/midi/kemper.ts` | Pure builders: `parseKemperRig`, `formatKemperRig`, `rigMessages`, `tempoNrpnMessages`, `tapTempoMessages`, `buildSongMidi` (order + delays). No browser APIs. |
 | `src/midi/midiService.ts` | Web MIDI wrapper: `isMidiSupported`, `getMidiAccess(interactive)`, `listOutputs`, `onMidiPortsChanged`, `setActiveSong`, `sendMidiTest`. Holds the only mutable state (access, active song, last sent song, send queue). |
 | `src/midi/useSongMidi.ts` | React hook used by `ViewerPage` and `PerformancePage`: derives `{ songId, rig, bpm }` and calls `setActiveSong` on song change / `null` on leave. |
-| `src/components/midi/MidiSettingsSection.tsx` | Settings → *MIDI · Kemper Profiler*: switch, output, channel, tempo mode, test sender; explanation on browsers without Web MIDI. |
+| `src/components/midi/MidiSettingsSection.tsx` | Settings → *MIDI · Kemper Profiler*: switch, output, channel, send-rig / send-tempo switches, tempo method, test sender; explanation on browsers without Web MIDI. |
 | `src/pages/EditorPage.tsx` | Rig field in the metadata bar (only while MIDI is enabled). |
 | `src/utils/chordpro.ts` | `extractMeta()` reads `{x_kemper_rig}` into `kemperRig`. |
 | `src/types.ts` | `AppSettings.midiEnabled / midiOutputId / midiOutputName / midiChannel / midiTempoMode` + defaults. |
