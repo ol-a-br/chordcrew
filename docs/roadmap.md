@@ -201,6 +201,7 @@ To be completed before onboarding any additional contributors. Full details and 
 | ~~Add Playwright tests for Performance mode setlist nav~~ | ~~medium~~ | ✅ done — `performance-navigation.spec.ts` (PERF-1–8) + `touch-ux.spec.ts` (TUX-1–8) |
 | ~~Add iPad / WebKit project to Playwright~~ | ~~medium~~ | ✅ done — `ipad` project (WebKit, 834×1194) runs all non-CDP tests |
 | Review chordsheetjs version for paragraph separation fix | low | Named sections currently merge into one `.paragraph` |
+| Major-version dependency upgrades | medium | Do on a separate branch (e.g. `chore/major-upgrades`), never directly on `develop`; one package per commit, merge only after `npm run build`, `test:unit`, `test`, `test:firebase` pass. Candidates (2026-10-02): **firebase-admin 12 → 14** in `functions/` (first — drops `node-forge`, Dependabot #107); `chordsheetjs` 9 → 18 (re-verify ruby/`<wbr>` post-processing and transpose); React 18 → 19 (+ `@types/react*`); Tailwind 3 → 4 (config format changes; keep design tokens). Skip a major if it brings no fix or feature we need. |
 | Swipe-gesture tests for WebKit/iPad | low | Playwright CDP touch injection only works on Chromium; need alternative (mouse drag or webkit-specific API) |
 
 ---

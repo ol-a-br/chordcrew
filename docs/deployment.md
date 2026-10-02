@@ -221,6 +221,12 @@ override once the parent package ships the fixed version itself:
 `functions/` needs no override: `npm audit fix` there picks up the patched
 `@grpc/grpc-js` (via firebase-admin → google-gax).
 
+Dismissed alerts:
+
+| Alert | Package | Why dismissed | Resolution |
+|-------|---------|---------------|------------|
+| #107 (GHSA-86w9-cpqp-85rv, 2026-10-02) | `node-forge` ≤ 1.4.0, no patched release | firebase-admin 12 only calls `privateKeyFromPem()` on service-account keys, never signature verification, and our functions use default credentials (`initializeApp()` without a key) | firebase-admin 14 drops `node-forge` — see "Major-version dependency upgrades" in `docs/roadmap.md` |
+
 ```bash
 npm audit          # see full report
 npm audit fix      # auto-fix where possible (test after)
@@ -230,4 +236,4 @@ Do not run `npm audit fix --force` — it may introduce breaking changes.
 
 ---
 
-*Last updated: 2026-09-30*
+*Last updated: 2026-10-02*
