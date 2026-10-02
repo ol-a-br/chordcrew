@@ -31,6 +31,8 @@ function updateDirective(content: string, directive: string, value: string): str
   return `{${directive}: ${value}}\n${content}`
 }
 
+const RIG_FIELD_TITLE = 'Kemper rig sent on song change: program number (17) or Performance.Slot (6.2)'
+
 /** Shows how a {x_kemper_rig} value is read ("Perf 6 · Slot 2", "PC 17") or flags it as invalid. */
 function RigHint({ value }: { value: string }) {
   const rig = parseKemperRig(value)
@@ -406,7 +408,7 @@ export default function EditorPage() {
           { label: 'Time',   directive: 'time',   value: derivedMeta.time   ?? '', width: 'w-14', type: 'text' },
           ...(midiEnabled ? [
             { label: 'Rig', directive: 'x_kemper_rig', value: derivedMeta.kemperRig ?? '', width: 'w-14', type: 'text',
-              title: 'Kemper rig sent on song change: program number (17) or Performance.Slot (6.2)', placeholder: '6.2' },
+              title: RIG_FIELD_TITLE, placeholder: '6.2' },
           ] : []),
         ]).map(({ label, directive, value, width, type, title, placeholder }) => (
           <label key={directive} className="flex items-center gap-1 text-xs">
@@ -446,7 +448,7 @@ export default function EditorPage() {
             size={14}
             className={`transition-transform duration-150 ${showExtraMeta ? 'rotate-180' : ''}`}
           />
-          {!showExtraMeta && !!(derivedMeta.ccli || derivedMeta.copyright || derivedMeta.url || tags.length > 0) && (
+          {!showExtraMeta && !!(derivedMeta.ccli || derivedMeta.copyright || derivedMeta.url || tags.length > 0 || (!midiEnabled && derivedMeta.kemperRig)) && (
             <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400 pointer-events-none" />
           )}
         </button>
@@ -496,6 +498,23 @@ export default function EditorPage() {
                 />
               </label>
             ))}
+            {/* Kemper rig lives in row 1 while MIDI is on; here it stays editable on devices without MIDI */}
+            {!midiEnabled && (
+              <label className="flex items-center gap-1 text-xs">
+                <span className="text-ink-faint shrink-0">Rig</span>
+                <input
+                  type="text"
+                  defaultValue={derivedMeta.kemperRig ?? ''}
+                  key={`x_kemper_rig-${song?.id}-${derivedMeta.kemperRig ?? ''}`}
+                  placeholder="6.2"
+                  title={RIG_FIELD_TITLE}
+                  onBlur={e => commitMetaField('x_kemper_rig', e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                  className="w-14 bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50 placeholder:text-ink-faint/40"
+                />
+                {derivedMeta.kemperRig && <RigHint value={derivedMeta.kemperRig} />}
+              </label>
+            )}
           </div>
 
           {/* Row 3: tags */}

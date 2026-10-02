@@ -227,7 +227,7 @@ Opening a song sends its guitar rig and tempo to a Kemper Profiler over Web MIDI
 | MIDI-06 | Settings → MIDI: on/off, output device (remembered by id and name), channel 1–16, *Send rig change* and *Send tempo* switches (each on by default; rig off = the Kemper keeps its current rig for every song), tempo method, test sender. Stored in the local settings row — per device, never synced. | done |
 | MIDI-07 | Stage-safe: no UI, toasts or network from the send path; errors are swallowed; the MIDI permission prompt can only appear from Settings. | done |
 | MIDI-08 | Browsers without Web MIDI (Safari on iPad/iPhone) no-op silently; Settings explains the limitation and points iPad/iPhone users to the *Web MIDI Browser* app. | done |
-| MIDI-09 | Editor metadata bar shows a Rig field (writes `{x_kemper_rig}`, shows "PC 17" / "Perf 6 · Slot 2" / "invalid") only while MIDI is enabled. | done |
+| MIDI-09 | Editor metadata bar shows a Rig field (writes `{x_kemper_rig}`, shows "PC 17" / "Perf 6 · Slot 2" / "invalid") in the first row while MIDI is enabled, otherwise in the expandable row (so rigs can be set on devices without Web MIDI). | done |
 | MIDI-10 | iPad/iPhone via the *Web MIDI Browser* app: works with its non-standard polyfill (fake Promise, non-iterable port maps, numeric port ids); its lone "Bluetooth" output (e.g. WIDI Master) is auto-selected. Settings shows the underlying reason when MIDI access fails. See `midi-kemper.md` §4.1. | done |
 
 ---

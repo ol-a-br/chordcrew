@@ -51,7 +51,7 @@ sequenceDiagram
 value as metadata and renders nothing, so the directive is invisible in the Viewer, in PDFs
 and in other ChordPro tools.
 
-When MIDI is enabled in Settings, the editor's first metadata row shows a **Rig** field that
+When MIDI is enabled in Settings, the editor's first metadata row shows a **Rig** field (otherwise it sits in the expandable CCLI / copyright row) that
 writes the directive and shows how it is read ("PC 17", "Perf 6 · Slot 2" or "invalid").
 
 ## 3. MIDI messages

@@ -9,7 +9,7 @@
  *   MIDI-5  Settings: enabling MIDI auto-selects the WIDI output
  *   MIDI-6  Settings: browsers without Web MIDI get an explanation instead of controls
  *   MIDI-7  Editor: the Rig field writes {x_kemper_rig} and shows how it is read
- *   MIDI-8  Editor: the Rig field is hidden while MIDI is off
+ *   MIDI-8  Editor: while MIDI is off the Rig field moves to the expandable metadata row
  *   MIDI-9  Settings: works with the iOS "Web MIDI Browser" polyfill and auto-selects
  *           its lone "Bluetooth" output
  *   MIDI-11 "Send rig change" off → only the tempo is sent
@@ -265,11 +265,15 @@ test.describe('MIDI — editor rig field', () => {
     }), s.songB), { timeout: 5000 }).toContain('{x_kemper_rig: 6.2}')
   })
 
-  test('MIDI-8: the Rig field is hidden while MIDI is off', async ({ page }) => {
+  test('MIDI-8: while MIDI is off the Rig field moves to the expandable metadata row', async ({ page }) => {
     const s = await seed(page, false)
     await page.goto(`/editor/${s.songB}`)
     await expect(page.getByTitle('Tap tempo')).toBeVisible()
     await expect(page.getByTitle(/Kemper rig sent on song change/)).toHaveCount(0)
+
+    await page.getByTitle(/Show CCLI/).click()
+    await expect(page.getByTitle(/Kemper rig sent on song change/)).toHaveValue('17')
+    await expect(page.getByText('PC 17')).toBeVisible()
   })
 })
 
