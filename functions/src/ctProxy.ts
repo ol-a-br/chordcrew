@@ -83,7 +83,7 @@ export const ctProxy = functions
     if (!(await isSignedIn(req.get('x-firebase-id-token')))) {
       res.status(401).json({ error: 'Sign in required' }); return
     }
-    if (!(await appCheckAllows(req.get('x-firebase-appcheck')))) {
+    if (!(await appCheckAllows('ctProxy', req.get('x-firebase-appcheck')))) {
       res.status(401).json({ error: 'App verification failed' }); return
     }
 

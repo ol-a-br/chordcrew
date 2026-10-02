@@ -10,16 +10,32 @@
  */
 
 import * as admin from 'firebase-admin'
+import * as functions from 'firebase-functions/v1'
 
 export const ENFORCE_APP_CHECK = process.env.ENFORCE_APP_CHECK === 'true'
 
+export type AppCheckStatus = 'verified' | 'missing' | 'invalid'
+
+/**
+ * One structured log line per request. The Firebase console has no App Check
+ * metrics for Cloud Functions, so this is how to tell whether enforcing would
+ * block real users: Logs Explorer → jsonPayload.message="appcheck".
+ */
+export function logAppCheck(fn: string, status: AppCheckStatus): void {
+  functions.logger.info('appcheck', { fn, status, enforced: ENFORCE_APP_CHECK })
+}
+
 /** Check the X-Firebase-AppCheck header of a plain HTTP (onRequest) function. */
-export async function appCheckAllows(token: string | undefined): Promise<boolean> {
-  if (!token) return !ENFORCE_APP_CHECK
-  try {
-    await admin.appCheck().verifyToken(token)
-    return true
-  } catch {
-    return false
+export async function appCheckAllows(fn: string, token: string | undefined): Promise<boolean> {
+  let status: AppCheckStatus = 'missing'
+  if (token) {
+    try {
+      await admin.appCheck().verifyToken(token)
+      status = 'verified'
+    } catch {
+      status = 'invalid'
+    }
   }
+  logAppCheck(fn, status)
+  return status === 'verified' || (status === 'missing' && !ENFORCE_APP_CHECK)
 }

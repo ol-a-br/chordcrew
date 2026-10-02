@@ -160,13 +160,17 @@ The code is in place (`src/firebase/index.ts`, `functions/src/appCheck.ts`) and 
 2. **Register the app** — Firebase Console → *App Check* → *Apps* → the web app → *reCAPTCHA Enterprise* → paste the **site key** → Save.
 3. **Configure the build** — add `VITE_APPCHECK_SITE_KEY=<site key>` to `.env.local` (and the `VITE_APPCHECK_SITE_KEY` repo secret once CI deploys). The site key is public; it is not a secret.
 4. `npm run deploy`, then open the app and run a sync once.
-5. **Watch the metrics** — Firebase Console → *App Check* → *APIs*: Cloud Firestore and Cloud Functions show *verified* vs. *unverified* requests. Give it a few days of normal use.
+5. **Watch the metrics** for a few days of normal use:
+   - **Firestore** — Firebase Console → *App Check* → *APIs* → *Cloud Firestore*: verified vs. unverified requests, split into *outdated client*, *unknown origin* and *invalid*.
+   - **Cloud Functions** — the console shows no metrics for them ("Learn how to enforce…"). Each function logs one line per request instead: Google Cloud → *Logs Explorer*, query `jsonPayload.message="appcheck"`, and look at `jsonPayload.status` (`verified` / `missing` / `invalid`) per `jsonPayload.fn`.
+
+   Sync is manual, so traffic is low; a handful of verified requests is normal. What matters is the **unverified** side. *Outdated client* / `missing` usually means a device still runs a cached app version from before App Check: open the app on that device, let the PWA update, and sync once.
 
 Nothing is blocked in this phase, except requests carrying an **invalid** App Check token.
 
 ### Phase 2 — Enforce
 
-When (almost) all requests show as verified:
+When unverified Firestore requests and `missing` function logs have stopped — every band device has synced at least once on the current version:
 
 1. **Firestore** — Firebase Console → *App Check* → *APIs* → *Cloud Firestore* → **Enforce**.
 2. **Cloud Functions** — set `ENFORCE_APP_CHECK=true` in `functions/.env`, commit, `npm run deploy`.

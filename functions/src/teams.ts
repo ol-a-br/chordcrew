@@ -16,7 +16,7 @@
 
 import * as functions from 'firebase-functions/v1'
 import * as admin from 'firebase-admin'
-import { ENFORCE_APP_CHECK } from './appCheck'
+import { ENFORCE_APP_CHECK, logAppCheck } from './appCheck'
 
 type Role = 'owner' | 'contributor' | 'reader'
 
@@ -103,6 +103,7 @@ function teamRef(teamId: string) {
 const invalidInvite = () => new HttpsError('not-found', 'This invite is not valid.')
 
 export const previewInvite = callable.onCall(async (data, context) => {
+  logAppCheck('previewInvite', context.app ? 'verified' : 'missing')
   const teamId = stringArg(data, 'teamId', true)
   const token = stringArg(data, 'token', false)
   // Holding a link token is enough to see the team name before signing in.
@@ -128,6 +129,7 @@ export const previewInvite = callable.onCall(async (data, context) => {
 })
 
 export const acceptInvite = callable.onCall(async (data, context) => {
+  logAppCheck('acceptInvite', context.app ? 'verified' : 'missing')
   const caller = requireCaller(context)
   const teamId = stringArg(data, 'teamId', true)
   const token = stringArg(data, 'token', false)
@@ -161,6 +163,7 @@ export const acceptInvite = callable.onCall(async (data, context) => {
 })
 
 export const declineInvite = callable.onCall(async (data, context) => {
+  logAppCheck('declineInvite', context.app ? 'verified' : 'missing')
   const caller = requireCaller(context)
   const teamId = stringArg(data, 'teamId', true)
   if (!caller.email) return { ok: true }
@@ -180,6 +183,7 @@ export const declineInvite = callable.onCall(async (data, context) => {
 })
 
 export const listMyInvites = callable.onCall(async (_data, context) => {
+  logAppCheck('listMyInvites', context.app ? 'verified' : 'missing')
   const caller = requireCaller(context)
   if (!caller.email) return []
 
