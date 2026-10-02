@@ -26,6 +26,7 @@ const HelpPage           = lazy(() => import('@/pages/HelpPage'))
 const OnboardingPage     = lazy(() => import('@/pages/OnboardingPage'))
 const TeamJoinPage       = lazy(() => import('@/pages/TeamJoinPage'))
 const SharePage          = lazy(() => import('@/pages/SharePage'))
+const KemperRigsPage     = lazy(() => import('@/pages/KemperRigsPage'))
 
 function PageLoader() {
   return (
@@ -83,6 +84,7 @@ function AuthenticatedRoutes() {
             <Route path="/join/:teamId"   element={<TeamJoinPage />} />
             <Route path="/import"         element={<ImportPage />} />
             <Route path="/curation"       element={<CurationPage />} />
+            <Route path="/midi/rigs"      element={<KemperRigsPage />} />
             <Route path="/help"           element={<HelpPage />} />
             <Route path="/settings"       element={<SettingsPage />} />
             <Route path="*"               element={<Navigate to="/library" replace />} />

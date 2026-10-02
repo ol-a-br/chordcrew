@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   parseKemperRig, formatKemperRig, rigMessages, tempoNrpnMessages,
   tapTempoMessages, buildSongMidi, RIG_LOAD_DELAY_MS,
+  parseKemperRigPattern, rigMatchesPattern, buildRigRemap, kemperRigValue,
 } from './kemper'
 
 describe('parseKemperRig', () => {
@@ -116,5 +117,52 @@ describe('extractMeta → kemperRig', () => {
     expect(meta.kemperRig).toBe('6.2')
     expect(meta.tempo).toBe(120)
     expect(extractMeta('{title: Song}').kemperRig).toBeUndefined()
+  })
+})
+
+describe('rig remapping', () => {
+  const remap = (from: string, to: string, value: string) => {
+    const r = buildRigRemap(from, to)
+    if ('error' in r) throw new Error(r.error)
+    const rig = parseKemperRig(value)
+    return rigMatchesPattern(rig, r.from) ? r.replace(rig!) : null
+  }
+
+  it('parses rig and whole-performance patterns', () => {
+    expect(parseKemperRigPattern('6.*')).toEqual({ kind: 'performance', performance: 6 })
+    expect(parseKemperRigPattern(' 12 / * ')).toEqual({ kind: 'performance', performance: 12 })
+    expect(parseKemperRigPattern('6.2')).toEqual({ kind: 'rig', rig: { kind: 'performance', performance: 6, slot: 2 } })
+    expect(parseKemperRigPattern('17')).toEqual({ kind: 'rig', rig: { kind: 'program', program: 17 } })
+    expect(parseKemperRigPattern('126.*')).toBeNull()
+    expect(parseKemperRigPattern('*')).toBeNull()
+  })
+
+  it('replaces one rig, matching equivalent spellings', () => {
+    expect(remap('6.2', '8.3', '6/2')).toBe('8.3')
+    expect(remap('6.2', '8.3', '6.1')).toBeNull()
+    expect(remap('17', '6.2', '17')).toBe('6.2')
+    expect(remap('17', '6.2', '6.2')).toBeNull()
+  })
+
+  it('moves a whole performance, keeping each slot', () => {
+    expect(remap('6.*', '8.*', '6.4')).toBe('8.4')
+    expect(remap('6.*', '8.*', '7.4')).toBeNull()
+    expect(remap('6.*', '8.*', '6')).toBeNull()      // program 6 is not performance 6
+    expect(remap('6.*', '17', '6.5')).toBe('17')
+  })
+
+  it('removes the rig when To is empty', () => {
+    expect(remap('6.*', '', '6.1')).toBe('')
+  })
+
+  it('rejects invalid combinations', () => {
+    expect(buildRigRemap('x', '1')).toHaveProperty('error')
+    expect(buildRigRemap('6.2', '8.*')).toHaveProperty('error')
+    expect(buildRigRemap('6.2', '200')).toHaveProperty('error')
+  })
+
+  it('formats rigs as directive values', () => {
+    expect(kemperRigValue({ kind: 'program', program: 17 })).toBe('17')
+    expect(kemperRigValue({ kind: 'performance', performance: 6, slot: 2 })).toBe('6.2')
   })
 })

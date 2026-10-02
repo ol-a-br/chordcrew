@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isKnownChord, renderToHtml, renderToText } from './chordpro'
+import { isKnownChord, renderToHtml, renderToText, setDirective } from './chordpro'
 
 // ─── isKnownChord — recognized qualities and roots ────────────────────────────
 
@@ -141,5 +141,32 @@ describe('renderToHtml sanitizes untrusted song content', () => {
     expect(html).toContain('class="lyrics"')
     expect(html).toContain('>G<')
     expect(html).toContain('&amp; &lt;3')
+  })
+})
+
+// ─── setDirective — metadata fields write directives into the content ─────────
+
+describe('setDirective', () => {
+  const song = '{title: A}\n{x_kemper_rig: 6.2}\n{tempo: 120}\n\n[G]Words\n'
+
+  it('replaces an existing directive', () => {
+    expect(setDirective(song, 'x_kemper_rig', '8.1')).toBe('{title: A}\n{x_kemper_rig: 8.1}\n{tempo: 120}\n\n[G]Words\n')
+  })
+
+  it('inserts a missing directive at the top', () => {
+    expect(setDirective('{title: A}\n', 'tempo', '90')).toBe('{tempo: 90}\n{title: A}\n')
+  })
+
+  it('removes a directive together with its own line', () => {
+    expect(setDirective(song, 'x_kemper_rig', '')).toBe('{title: A}\n{tempo: 120}\n\n[G]Words\n')
+    expect(setDirective('{title: A}\n{tempo: 120}', 'tempo', ' ')).toBe('{title: A}\n')
+  })
+
+  it('removes an inline directive without touching the rest of the line', () => {
+    expect(setDirective('{title: A} {tempo: 120}\n', 'tempo', '')).toBe('{title: A} \n')
+  })
+
+  it('leaves content alone when removing a directive that is not there', () => {
+    expect(setDirective(song, 'capo', '')).toBe(song)
   })
 })

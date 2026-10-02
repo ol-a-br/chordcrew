@@ -14,6 +14,8 @@
  *           its lone "Bluetooth" output
  *   MIDI-11 "Send rig change" off → only the tempo is sent
  *   MIDI-12 "Send tempo" off → only the rig is sent; legacy midiTempoMode 'off' still means no tempo
+ *   MIDI-13 Kemper rigs table: inline rig + tempo edits write the directives
+ *   MIDI-14 Kemper rigs table: bulk replace moves a whole performance and removes a rig
  *
  * Web MIDI is replaced by an in-page mock (see mockWebMidi) that records every
  * send(data, timestamp), so no device or permission prompt is involved.
@@ -127,6 +129,16 @@ async function seed(page: Page, midiEnabled: boolean, extraSettings: Record<stri
   }), d)
   return { setlistId: d.setlistId, songA: d.songA, songB: d.songB }
 }
+
+/** The song's stored ChordPro content, read straight from IndexedDB. */
+const songContent = (page: Page, id: string) => page.evaluate((id) => new Promise<string>((resolve, reject) => {
+  const req = indexedDB.open('ChordCrewDB')
+  req.onerror = () => reject(req.error)
+  req.onsuccess = () => {
+    const get = req.result.transaction('songs').objectStore('songs').get(id)
+    get.onsuccess = () => resolve(get.result.transcription.content)
+  }
+}), id)
 
 const sent = (page: Page) => page.evaluate(() =>
   (window as unknown as { __midiSent: Sent[] }).__midiSent)
@@ -255,14 +267,7 @@ test.describe('MIDI — editor rig field', () => {
     await rig.fill('6.2')
     await rig.press('Enter')
     await expect(page.getByText('Perf 6 · Slot 2')).toBeVisible()
-    await expect.poll(() => page.evaluate((id) => new Promise<string>((resolve, reject) => {
-      const req = indexedDB.open('ChordCrewDB')
-      req.onerror = () => reject(req.error)
-      req.onsuccess = () => {
-        const get = req.result.transaction('songs').objectStore('songs').get(id)
-        get.onsuccess = () => resolve(get.result.transcription.content)
-      }
-    }), s.songB), { timeout: 5000 }).toContain('{x_kemper_rig: 6.2}')
+    await expect.poll(() => songContent(page, s.songB), { timeout: 5000 }).toContain('{x_kemper_rig: 6.2}')
   })
 
   test('MIDI-8: while MIDI is off the Rig field moves to the expandable metadata row', async ({ page }) => {
@@ -274,6 +279,55 @@ test.describe('MIDI — editor rig field', () => {
     await page.getByTitle(/Show CCLI/).click()
     await expect(page.getByTitle(/Kemper rig sent on song change/)).toHaveValue('17')
     await expect(page.getByText('PC 17')).toBeVisible()
+  })
+})
+
+test.describe('MIDI — Kemper rigs table', () => {
+  test.beforeEach(async ({ page }) => { await waitForApp(page) })
+
+  test('MIDI-13: inline rig and tempo edits write the directives', async ({ page }) => {
+    const s = await seed(page, true)
+    await page.goto('/midi/rigs')
+    await expect(page.getByTestId('rig-row')).toHaveCount(2)
+
+    const rigB = page.getByRole('textbox', { name: 'Rig of Beta' })
+    await expect(rigB).toHaveValue('17')
+    await rigB.fill('6.3')
+    await rigB.press('Enter')
+    await expect.poll(() => songContent(page, s.songB)).toContain('{x_kemper_rig: 6.3}')
+    await expect(page.getByText('Perf 6 · Slot 3')).toBeVisible()
+
+    const tempoA = page.getByRole('spinbutton', { name: 'Tempo of Alpha' })
+    await tempoA.fill('128')
+    await tempoA.press('Enter')
+    await expect.poll(() => songContent(page, s.songA)).toContain('{tempo: 128}')
+
+    // Esc discards an edit
+    await rigB.fill('99')
+    await rigB.press('Escape')
+    await page.waitForTimeout(300)
+    expect(await songContent(page, s.songB)).toContain('{x_kemper_rig: 6.3}')
+  })
+
+  test('MIDI-14: bulk replace moves a whole performance and removes a rig', async ({ page }) => {
+    const s = await seed(page, true)
+    await page.goto('/midi/rigs')
+
+    await page.getByRole('textbox', { name: 'Replace rig from' }).fill('6.*')
+    await page.getByRole('textbox', { name: 'Replace rig to' }).fill('8.*')
+    await expect(page.getByText('→ 8.2')).toBeVisible()
+    await page.getByRole('button', { name: 'Replace in 1 song…' }).click()
+    await page.getByRole('button', { name: 'Yes, update 1 song' }).click()
+    await expect(page.getByText(/Updated 1 song/)).toBeVisible()
+    expect(await songContent(page, s.songA)).toContain('{x_kemper_rig: 8.2}')
+    expect(await songContent(page, s.songB)).toContain('{x_kemper_rig: 17}')
+
+    await page.getByRole('textbox', { name: 'Replace rig from' }).fill('17')
+    await page.getByRole('button', { name: 'Replace in 1 song…' }).click()
+    await page.getByRole('button', { name: 'Yes, update 1 song' }).click()
+    await expect.poll(() => songContent(page, s.songB)).not.toContain('x_kemper_rig')
+    await page.getByRole('button', { name: 'No rig' }).click()
+    await expect(page.getByTestId('rig-row')).toHaveCount(1)
   })
 })
 

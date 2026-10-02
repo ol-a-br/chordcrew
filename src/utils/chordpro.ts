@@ -205,6 +205,19 @@ export function extractMeta(content: string): ChordProMeta {
   return meta
 }
 
+/** Replace or insert a ChordPro directive in the content string; an empty value removes it. */
+export function setDirective(content: string, directive: string, value: string): string {
+  const re = new RegExp(`\\{${directive}\\s*:[^}]*\\}`, 'gi')
+  if (re.test(content)) {
+    if (value.trim()) return content.replace(re, `{${directive}: ${value}}`)
+    // Removing: drop the whole line when the directive stands alone on it
+    const ownLine = new RegExp(`^[ \\t]*\\{${directive}\\s*:[^}]*\\}[ \\t]*(\\r?\\n|$)`, 'gim')
+    return content.replace(ownLine, '').replace(re, '')
+  }
+  if (!value.trim()) return content
+  return `{${directive}: ${value}}\n${content}`
+}
+
 // ─── Expand repeat sections for performance mode ─────────────────────────────
 // In performance mode, a song might contain a section label like [Chorus] with
 // no content following it (just a repeat marker). This function finds those

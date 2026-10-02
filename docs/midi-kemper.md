@@ -151,6 +151,7 @@ jitters over Bluetooth MIDI.
 | `src/midi/midiService.ts` | Web MIDI wrapper: `isMidiSupported`, `getMidiAccess(interactive)`, `listOutputs`, `onMidiPortsChanged`, `setActiveSong`, `sendMidiTest`. Holds the only mutable state (access, active song, last sent song, send queue). |
 | `src/midi/useSongMidi.ts` | React hook used by `ViewerPage` and `PerformancePage`: derives `{ songId, rig, bpm }` and calls `setActiveSong` on song change / `null` on leave. |
 | `src/components/midi/MidiSettingsSection.tsx` | Settings → *MIDI · Kemper Profiler*: switch, output, channel, send-rig / send-tempo switches, tempo method, test sender; explanation on browsers without Web MIDI. |
+| `src/pages/KemperRigsPage.tsx` | *Kemper rigs* table (`/midi/rigs`): inline rig/tempo edits and bulk *Replace rig* (`buildRigRemap` in `kemper.ts`). Writes directives via `setDirective` (`src/utils/chordpro.ts`). |
 | `src/pages/EditorPage.tsx` | Rig field in the metadata bar (only while MIDI is enabled). |
 | `src/utils/chordpro.ts` | `extractMeta()` reads `{x_kemper_rig}` into `kemperRig`. |
 | `src/types.ts` | `AppSettings.midiEnabled / midiOutputId / midiOutputName / midiChannel / midiTempoMode` + defaults. |

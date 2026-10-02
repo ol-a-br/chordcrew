@@ -124,6 +124,7 @@ src/
     TeamDetailPage.tsx            # Members, invites, role management; onSnapshot live sync
     ImportPage.tsx
     CurationPage.tsx              # Duplicates (Jaccard), parse errors scan, CSV export
+    KemperRigsPage.tsx            # /midi/rigs: table of every song's rig + tempo, inline edit, bulk rig replace
     HelpPage.tsx                  # User documentation, migration guides, troubleshooting
     PrintSongPage.tsx             # @media print PDF export for a single song
     PrintSetlistPage.tsx          # @media print PDF export for a full setlist
@@ -177,7 +178,7 @@ Do not add `env(safe-area-inset-top)` to the AppShell root `<div>` — it would 
 
 ## MIDI out (Kemper Profiler)
 
-Opening a song in Viewer or Performance mode sends its rig (`{x_kemper_rig: 17 | 6.2}`) and tempo (`{tempo}`) to the Web MIDI output chosen in Settings → MIDI (per-device settings, never synced). Tempo defaults to an exact NRPN write of Kemper Rig Tempo (page 4, param 0, BPM × 64). The send path must stay stage-safe: no UI or toasts, never throws, and `getMidiAccess(true)` (which may show the permission prompt) is only called from Settings. Safari/iOS has no Web MIDI — everything no-ops there. On iPad/iPhone it works in the **Web MIDI Browser** app, whose injected polyfill is non-standard: `requestMIDIAccess()` returns a non-chainable thenable (wrap it in a real Promise), port maps aren't iterable (use `forEach`, never spread), and port ids are numbers (always `String(id)`); BLE endpoints like the WIDI are named "Bluetooth". Keep E2E test MIDI-9 passing — see `docs/midi-kemper.md` §4.1. See REQ-MIDI in `docs/requirements.md` and `docs/midi-kemper.md`.
+Opening a song in Viewer or Performance mode sends its rig (`{x_kemper_rig: 17 | 6.2}`) and tempo (`{tempo}`) to the Web MIDI output chosen in Settings → MIDI (per-device settings, never synced; rig and tempo each have their own on/off switch). All songs' rigs can be checked and bulk-edited in the `/midi/rigs` table. Tempo defaults to an exact NRPN write of Kemper Rig Tempo (page 4, param 0, BPM × 64). The send path must stay stage-safe: no UI or toasts, never throws, and `getMidiAccess(true)` (which may show the permission prompt) is only called from Settings. Safari/iOS has no Web MIDI — everything no-ops there. On iPad/iPhone it works in the **Web MIDI Browser** app, whose injected polyfill is non-standard: `requestMIDIAccess()` returns a non-chainable thenable (wrap it in a real Promise), port maps aren't iterable (use `forEach`, never spread), and port ids are numbers (always `String(id)`); BLE endpoints like the WIDI are named "Bluetooth". Keep E2E test MIDI-9 passing — see `docs/midi-kemper.md` §4.1. See REQ-MIDI in `docs/requirements.md` and `docs/midi-kemper.md`.
 
 ## Sync architecture
 

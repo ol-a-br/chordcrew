@@ -229,6 +229,7 @@ Opening a song sends its guitar rig and tempo to a Kemper Profiler over Web MIDI
 | MIDI-08 | Browsers without Web MIDI (Safari on iPad/iPhone) no-op silently; Settings explains the limitation and points iPad/iPhone users to the *Web MIDI Browser* app. | done |
 | MIDI-09 | Editor metadata bar shows a Rig field (writes `{x_kemper_rig}`, shows "PC 17" / "Perf 6 · Slot 2" / "invalid") in the first row while MIDI is enabled, otherwise in the expandable row (so rigs can be set on devices without Web MIDI). | done |
 | MIDI-10 | iPad/iPhone via the *Web MIDI Browser* app: works with its non-standard polyfill (fake Promise, non-iterable port maps, numeric port ids); its lone "Bluetooth" output (e.g. WIDI Master) is auto-selected. Settings shows the underlying reason when MIDI access fails. See `midi-kemper.md` §4.1. | done |
+| MIDI-11 | *Kemper rigs* table (`/midi/rigs`, linked from Settings → MIDI): rig and tempo of every song, editable inline; filter by book, search, status (rig set / no rig / invalid); sort by title or rig. Bulk **Replace rig** for reorganised performances: one rig (`6.2 → 8.3`), a whole performance keeping each slot (`6.* → 8.*`), or remove (empty To); applies to the filtered songs, previews each change, needs a confirm click. ChurchTools songs, read-only books and team-reader songs are shown locked. Each change saves a song version and marks the song for sync. | done |
 
 ---
 

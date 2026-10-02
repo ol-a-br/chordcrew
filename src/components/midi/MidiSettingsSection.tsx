@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
+import { Table2 } from 'lucide-react'
 import type { AppSettings } from '@/types'
 import { parseKemperRig, formatKemperRig } from '@/midi/kemper'
 import {
@@ -111,6 +113,12 @@ export function MidiSettingsSection({ settings, update }: Props) {
         Bluetooth adapter. Rig: a program number (<code className="font-mono">17</code>) or
         Performance.Slot (<code className="font-mono">6.2</code>).
       </p>
+      <Link
+        to="/midi/rigs"
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-chord hover:text-chord-light"
+      >
+        <Table2 size={14} /> Edit the rigs of all songs
+      </Link>
 
       {!supported ? (
         <div className="bg-surface-1 rounded-xl px-4 py-3 text-sm text-ink-muted">

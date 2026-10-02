@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2, Cloud, ExternalLink } from 'lucide-react'
 import { db, upsertSongVersions, markPending, getSettings } from '@/db'
 import { deleteSongFromCloud, fetchTeamNoteIndicator } from '@/sync/firestoreSync'
-import { buildSearchText, extractMeta, lintChordPro } from '@/utils/chordpro'
+import { buildSearchText, extractMeta, lintChordPro, setDirective } from '@/utils/chordpro'
 import { getLinkStatus } from '@/utils/linkedSongs'
 import { parseKemperRig, formatKemperRig } from '@/midi/kemper'
 import { ChordProEditor } from '@/components/editor/ChordProEditor'
@@ -20,16 +20,6 @@ import type { Song, SongVersion } from '@/types'
 
 const AUTOSAVE_DELAY_MS = 1000
 const VERSION_INTERVAL_MS = 5 * 60 * 1000  // create a version at most every 5 min
-
-/** Replace or insert a ChordPro directive in the content string. */
-function updateDirective(content: string, directive: string, value: string): string {
-  const re = new RegExp(`\\{${directive}\\s*:[^}]*\\}`, 'gi')
-  if (re.test(content)) {
-    return content.replace(re, value.trim() ? `{${directive}: ${value}}` : '')
-  }
-  if (!value.trim()) return content
-  return `{${directive}: ${value}}\n${content}`
-}
 
 const RIG_FIELD_TITLE = 'Kemper rig sent on song change: program number (17) or Performance.Slot (6.2)'
 
@@ -223,7 +213,7 @@ export default function EditorPage() {
 
   const commitMetaField = (directive: string, value: string) => {
     setContent(prev => {
-      const updated = updateDirective(prev, directive, value)
+      const updated = setDirective(prev, directive, value)
       return updated
     })
     scheduleAutoSave()

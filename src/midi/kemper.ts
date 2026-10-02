@@ -148,3 +148,56 @@ export function buildSongMidi(
   }
   return out
 }
+
+// ─── Bulk rig remapping (Kemper rigs table) ─────────────────────────────────
+// After reorganising performances on the Kemper, many songs' rigs need the same
+// change: "6.2" → "8.2" for one rig, or "6.*" → "8.*" to move a whole
+// performance (each song keeps its slot).
+
+/** A rig as written in `{x_kemper_rig: …}` — "17" or "6.2". */
+export function kemperRigValue(rig: KemperRig): string {
+  return rig.kind === 'program' ? String(rig.program) : `${rig.performance}.${rig.slot}`
+}
+
+/** One rig ("17", "6.2") or every slot of a performance ("6.*"). */
+export type KemperRigPattern =
+  | { kind: 'rig'; rig: KemperRig }
+  | { kind: 'performance'; performance: number }
+
+export function parseKemperRigPattern(value: string): KemperRigPattern | null {
+  const all = value.trim().match(/^(\d{1,3})\s*[./]\s*\*$/)
+  if (all) {
+    const performance = Number(all[1])
+    return performance >= 1 && performance <= KEMPER_PERFORMANCES ? { kind: 'performance', performance } : null
+  }
+  const rig = parseKemperRig(value)
+  return rig ? { kind: 'rig', rig } : null
+}
+
+export function rigMatchesPattern(rig: KemperRig | null, pattern: KemperRigPattern): boolean {
+  if (!rig) return false
+  if (pattern.kind === 'performance') return rig.kind === 'performance' && rig.performance === pattern.performance
+  return kemperRigValue(rig) === kemperRigValue(pattern.rig)
+}
+
+/**
+ * Builds the replacement for a from → to remap, or an error message.
+ * `to` may be empty (remove the rig). "6.*" → "8.*" keeps each song's slot;
+ * "6.*" → "17" puts every slot of performance 6 on one rig.
+ */
+export function buildRigRemap(
+  from: string,
+  to: string,
+): { from: KemperRigPattern; replace: (rig: KemperRig) => string } | { error: string } {
+  const fromPattern = parseKemperRigPattern(from)
+  if (!fromPattern) return { error: 'From must be a rig (17, 6.2) or a whole performance (6.*)' }
+  if (!to.trim()) return { from: fromPattern, replace: () => '' }
+  const toPattern = parseKemperRigPattern(to)
+  if (!toPattern) return { error: 'To must be a rig (17, 6.2), a whole performance (8.*) or empty' }
+  if (toPattern.kind === 'rig') return { from: fromPattern, replace: () => kemperRigValue(toPattern.rig) }
+  if (fromPattern.kind !== 'performance') return { error: 'A whole performance (8.*) can only replace a whole performance (6.*)' }
+  return {
+    from: fromPattern,
+    replace: rig => rig.kind === 'performance' ? `${toPattern.performance}.${rig.slot}` : kemperRigValue(rig),
+  }
+}
