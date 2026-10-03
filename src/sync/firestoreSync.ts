@@ -339,14 +339,56 @@ async function downloadTeam(teamId: string, userId: string): Promise<void> {
     await db.teams.put(remoteTeam)
   }
 
+  // Team books — members who didn't create a team book only get it from here;
+  // without it their team songs have a dangling bookId and show as "(unassigned)".
+  const teamBooks = await getDocs(collection(firestore!, 'teams', teamId, 'books'))
+  const remoteBookIds = new Set<string>()
+  for (const snap of teamBooks.docs) {
+    const remote = snap.data() as Book
+    remoteBookIds.add(remote.id)
+    const syncState = await db.syncStates.get(`book:${remote.id}`)
+    if (syncState?.status === 'pending' || syncState?.status === 'deleted') continue
+    const local = await db.books.get(remote.id)
+    if (!local || remote.updatedAt > local.updatedAt) {
+      await db.books.put(stripUndefined({ ...remote, sharedTeamId: teamId }))
+    }
+  }
+  // Backfill: team books that only exist on an editor's device (never uploaded to
+  // the team space) are pushed now, so other members get them on their next sync.
+  if (canEditTeamContent(remoteTeam, userId)) {
+    const localTeamBooks = await db.books.where('sharedTeamId').equals(teamId).toArray()
+    for (const book of localTeamBooks) {
+      if (remoteBookIds.has(book.id)) continue
+      const syncState = await db.syncStates.get(`book:${book.id}`)
+      if (syncState?.status === 'deleted') continue
+      await setDoc(doc(firestore!, 'teams', teamId, 'books', book.id), stripUndefined(book))
+    }
+  }
+
   // Team songs
   const teamSongs = await getDocs(collection(firestore!, 'teams', teamId, 'songs'))
+  const teamSongBookIds = new Set<string>()
   for (const snap of teamSongs.docs) {
     const remote = snap.data() as Song
     const local = await db.songs.get(remote.id)
     const syncState = await db.syncStates.get(`song:${remote.id}`)
     if (syncState?.status === 'deleted') continue  // locally deleted — don't re-add
     if (!local || remote.updatedAt > local.updatedAt) await db.songs.put(remote)
+    if (remote.bookId) teamSongBookIds.add(remote.bookId)
+  }
+
+  // Fallback for team songs whose book is still missing (its editor hasn't synced
+  // since the backfill above): a local-only placeholder so the songs appear under
+  // the team. Never marked pending; updatedAt 0 so the real book replaces it.
+  for (const bookId of teamSongBookIds) {
+    if (await db.books.get(bookId)) continue
+    const syncState = await db.syncStates.get(`book:${bookId}`)
+    if (syncState?.status === 'deleted') continue
+    await db.books.put({
+      id: bookId, title: `${remoteTeam.name} Songs`, author: '',
+      ownerId: remoteTeam.ownerId, sharedTeamId: teamId,
+      readOnly: false, shareable: true, createdAt: 0, updatedAt: 0,
+    })
   }
 
   // Apply team deletion log — propagate song deletions to all team members
