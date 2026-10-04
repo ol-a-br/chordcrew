@@ -134,9 +134,11 @@ export default function LibraryPage() {
 
   // Songs whose book is missing (no bookId, or the book no longer exists locally).
   // Shown under a virtual "(unassigned)" book that only appears when there are any.
+  // ChurchTools songs are excluded: the CT book is local-only, so CT songs that were
+  // edited (rig, tags…) and synced arrive on devices without CT with a missing book.
   const unassignedSongs = useMemo(() => {
     if (!allSongs || !books) return []
-    return allSongs.filter(s => !s.bookId || !bookMap[s.bookId])
+    return allSongs.filter(s => s.ctSongId == null && (!s.bookId || !bookMap[s.bookId]))
   }, [allSongs, books, bookMap])
 
   // Leave the "(unassigned)" view once it empties — its nav item disappears
