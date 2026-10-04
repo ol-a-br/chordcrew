@@ -176,13 +176,16 @@ const DELETION_LOG_TTL = 90 * 24 * 60 * 60 * 1000  // 90 days
 // Read a deletion log collection, apply removals locally, prune expired records.
 // A deletion is skipped if the local copy has a pending edit or was updated after
 // the deletion timestamp (concurrent edit on this device wins).
-async function applyDeletionLog(collectionPath: string): Promise<void> {
-  if (!firestore) return
+// Returns entityId → deletedAt for every logged deletion.
+async function applyDeletionLog(collectionPath: string): Promise<Map<string, number>> {
+  const deleted = new Map<string, number>()
+  if (!firestore) return deleted
   const snaps = await getDocs(collection(firestore, collectionPath)).catch(() => null)
-  if (!snaps) return
+  if (!snaps) return deleted
   for (const snap of snaps.docs) {
     const { entityId, entityType, deletedAt } =
       snap.data() as { entityId: string; entityType: string; deletedAt: number }
+    deleted.set(entityId, deletedAt)
     if (entityType === 'song') {
       const syncState = await db.syncStates.get(`song:${entityId}`)
       if (syncState?.status === 'pending') continue  // local unsaved edit wins
@@ -203,6 +206,7 @@ async function applyDeletionLog(collectionPath: string): Promise<void> {
       await deleteDoc(snap.ref).catch(() => {})
     }
   }
+  return deleted
 }
 
 async function downloadPersonal(userId: string): Promise<Set<string>> {
@@ -339,6 +343,11 @@ async function downloadTeam(teamId: string, userId: string): Promise<void> {
     await db.teams.put(remoteTeam)
   }
 
+  // Apply the team deletion log first, so books/songs deleted by another member are
+  // removed locally before the backfill below could push them back to the team space.
+  const teamDeletions = await applyDeletionLog(`teams/${teamId}/deletions`)
+  const isDeleted = (b: Book) => b.updatedAt <= (teamDeletions.get(b.id) ?? -1)
+
   // Team books — members who didn't create a team book only get it from here;
   // without it their team songs have a dangling bookId and show as "(unassigned)".
   const teamBooks = await getDocs(collection(firestore!, 'teams', teamId, 'books'))
@@ -346,6 +355,11 @@ async function downloadTeam(teamId: string, userId: string): Promise<void> {
   for (const snap of teamBooks.docs) {
     const remote = snap.data() as Book
     remoteBookIds.add(remote.id)
+    // A copy re-uploaded after its deletion (by a device without this fix) — remove it
+    if (isDeleted(remote)) {
+      if (canEditTeamContent(remoteTeam, userId)) await deleteDoc(snap.ref).catch(() => {})
+      continue
+    }
     const syncState = await db.syncStates.get(`book:${remote.id}`)
     if (syncState?.status === 'pending' || syncState?.status === 'deleted') continue
     const local = await db.books.get(remote.id)
@@ -358,7 +372,7 @@ async function downloadTeam(teamId: string, userId: string): Promise<void> {
   if (canEditTeamContent(remoteTeam, userId)) {
     const localTeamBooks = await db.books.where('sharedTeamId').equals(teamId).toArray()
     for (const book of localTeamBooks) {
-      if (remoteBookIds.has(book.id)) continue
+      if (remoteBookIds.has(book.id) || isDeleted(book)) continue
       const syncState = await db.syncStates.get(`book:${book.id}`)
       if (syncState?.status === 'deleted') continue
       await setDoc(doc(firestore!, 'teams', teamId, 'books', book.id), stripUndefined(book))
@@ -381,7 +395,7 @@ async function downloadTeam(teamId: string, userId: string): Promise<void> {
   // since the backfill above): a local-only placeholder so the songs appear under
   // the team. Never marked pending; updatedAt 0 so the real book replaces it.
   for (const bookId of teamSongBookIds) {
-    if (await db.books.get(bookId)) continue
+    if (teamDeletions.has(bookId) || await db.books.get(bookId)) continue
     const syncState = await db.syncStates.get(`book:${bookId}`)
     if (syncState?.status === 'deleted') continue
     await db.books.put({
@@ -390,9 +404,6 @@ async function downloadTeam(teamId: string, userId: string): Promise<void> {
       readOnly: false, shareable: true, createdAt: 0, updatedAt: 0,
     })
   }
-
-  // Apply team deletion log — propagate song deletions to all team members
-  await applyDeletionLog(`teams/${teamId}/deletions`)
 
   // Team setlists + items
   const downloadedTeamSetlistIds = new Set<string>()
