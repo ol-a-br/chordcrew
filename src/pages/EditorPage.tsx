@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Eye, X, RotateCcw, Tag, History, ChevronDown, Trash2, Cloud, ExternalLink } from 'lucide-react'
-import { db, upsertSongVersions, markPending, getSettings } from '@/db'
+import { db, upsertSongVersions, markPending, markDeleted, getSettings } from '@/db'
 import { deleteSongFromCloud, fetchTeamNoteIndicator } from '@/sync/firestoreSync'
 import { buildSearchText, extractMeta, lintChordPro, setDirective } from '@/utils/chordpro'
 import { getLinkStatus } from '@/utils/linkedSongs'
@@ -234,9 +234,14 @@ export default function EditorPage() {
       }
       await db.songs.delete(song.id)
     } else {
+      // Tombstone (as in the library) so the deletion reaches other devices and the
+      // team copy is removed too — otherwise the next sync downloads the song again.
+      const teamId = (await db.books.get(song.bookId))?.sharedTeamId
+      const paths = [`users/${user.id}/songs/${song.id}`]
+      if (teamId) paths.push(`teams/${teamId}/songs/${song.id}`)
+      await markDeleted('song', song.id, paths)
+      deleteSongFromCloud(song.id, user.id, teamId).catch(() => {})
       await db.songs.delete(song.id)
-      await db.syncStates.delete(`song:${song.id}`)
-      deleteSongFromCloud(song.id, user.id, undefined).catch(() => {})
     }
     setDeletePhase('deleted')
     deleteTimerRef.current = setTimeout(() => navigate('/library'), 5000)
@@ -246,7 +251,9 @@ export default function EditorPage() {
     if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current)
     const s = deletedSongRef.current
     if (!s) return
-    await db.songs.put(s)
+    // Newer than any deletion record a sync may have written meanwhile
+    await db.songs.put({ ...s, updatedAt: Date.now() })
+    await db.syncStates.delete(`song:${s.id}`)  // drop the tombstone so markPending applies
     await markPending('song', s.id)
     deletedSongRef.current = null
     setDeletePhase('idle')
