@@ -48,7 +48,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   lastSyncRef.current = lastSync
 
   const pendingCount = useLiveQuery(
-    () => db.syncStates.where('status').equals('pending').count(),
+    () => db.syncStates.where('status').anyOf('pending', 'deleted').count(),
     [],
     0
   ) ?? 0
