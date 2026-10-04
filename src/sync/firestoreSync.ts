@@ -230,22 +230,28 @@ async function downloadPersonal(userId: string): Promise<Set<string>> {
   }
 
   // Songs — skip if pending (uploadPending handles it) or deleted (tombstone, don't re-add)
-  const remoteSongs = await getDocs(collection(firestore!, 'users', userId, 'songs'))
-  for (const snap of remoteSongs.docs) {
-    const remote = snap.data() as Song
-    const local = await db.songs.get(remote.id)
-    const syncState = await db.syncStates.get(`song:${remote.id}`)
-    if (syncState?.status === 'pending') continue
-    if (syncState?.status === 'deleted') continue  // locally deleted — don't re-add
+  // Local rows are read and written in bulk — one IndexedDB round trip per song
+  // made sync very slow on iPad Safari with several hundred songs.
+  const remoteSongs = (await getDocs(collection(firestore!, 'users', userId, 'songs')))
+    .docs.map(snap => snap.data() as Song)
+  const localSongs = await db.songs.bulkGet(remoteSongs.map(r => r.id))
+  const songStates = await db.syncStates.bulkGet(remoteSongs.map(r => `song:${r.id}`))
+  const songsToPut: Song[] = []
+  remoteSongs.forEach((remote, i) => {
+    const local = localSongs[i]
+    const syncState = songStates[i]
+    if (syncState?.status === 'pending') return
+    if (syncState?.status === 'deleted') return  // locally deleted — don't re-add
     if (!local || remote.updatedAt > local.updatedAt) {
       // Preserve device-local accessedAt when pulling remote content
-      await db.songs.put(stripUndefined({ ...remote, accessedAt: local?.accessedAt ?? remote.accessedAt }))
-      await db.syncStates.put({
-        id: `song:${remote.id}`, entityType: 'song', entityId: remote.id,
-        localVersion: 1, syncedVersion: 1, status: 'clean', updatedAt: Date.now(),
-      })
+      songsToPut.push(stripUndefined({ ...remote, accessedAt: local?.accessedAt ?? remote.accessedAt }))
     }
-  }
+  })
+  await db.songs.bulkPut(songsToPut)
+  await db.syncStates.bulkPut(songsToPut.map(song => ({
+    id: `song:${song.id}`, entityType: 'song' as const, entityId: song.id,
+    localVersion: 1, syncedVersion: 1, status: 'clean' as const, updatedAt: Date.now(),
+  })))
 
   // Setlists — same always-download approach as books
   const downloadedSetlistIds = new Set<string>()
@@ -382,14 +388,17 @@ async function downloadTeam(teamId: string, userId: string): Promise<void> {
   // Team songs
   const teamSongs = await getDocs(collection(firestore!, 'teams', teamId, 'songs'))
   const teamSongBookIds = new Set<string>()
-  for (const snap of teamSongs.docs) {
-    const remote = snap.data() as Song
-    const local = await db.songs.get(remote.id)
-    const syncState = await db.syncStates.get(`song:${remote.id}`)
-    if (syncState?.status === 'deleted') continue  // locally deleted — don't re-add
-    if (!local || remote.updatedAt > local.updatedAt) await db.songs.put(remote)
+  const remoteTeamSongs = teamSongs.docs.map(snap => snap.data() as Song)
+  const localTeamSongs = await db.songs.bulkGet(remoteTeamSongs.map(r => r.id))
+  const teamSongStates = await db.syncStates.bulkGet(remoteTeamSongs.map(r => `song:${r.id}`))
+  const teamSongsToPut: Song[] = []
+  remoteTeamSongs.forEach((remote, i) => {
+    if (teamSongStates[i]?.status === 'deleted') return  // locally deleted — don't re-add
+    const local = localTeamSongs[i]
+    if (!local || remote.updatedAt > local.updatedAt) teamSongsToPut.push(remote)
     if (remote.bookId) teamSongBookIds.add(remote.bookId)
-  }
+  })
+  await db.songs.bulkPut(teamSongsToPut)
 
   // Fallback for team songs whose book is still missing (its editor hasn't synced
   // since the backfill above): a local-only placeholder so the songs appear under
