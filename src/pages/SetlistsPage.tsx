@@ -552,7 +552,8 @@ function SetlistRow({
   onToggleSelect?: () => void
 }) {
   const itemCount = useLiveQuery(
-    () => db.setlistItems.where('setlistId').equals(setlist.id).count(),
+    () => db.setlistItems.where('setlistId').equals(setlist.id)
+      .filter(i => i.type === 'song' && !!i.songId).count(),
     [setlist.id]
   )
 
