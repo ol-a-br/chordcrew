@@ -15,7 +15,7 @@
  */
 
 import * as functions from 'firebase-functions/v1'
-import * as admin from 'firebase-admin'
+import { getFirestore } from 'firebase-admin/firestore'
 import { ENFORCE_APP_CHECK, logAppCheck } from './appCheck'
 
 type Role = 'owner' | 'contributor' | 'reader'
@@ -95,7 +95,7 @@ export function findInvite(team: Team, email: string, token: string): TeamInvite
 }
 
 function teamRef(teamId: string) {
-  return admin.firestore().collection('teams').doc(teamId)
+  return getFirestore().collection('teams').doc(teamId)
 }
 
 // Same response for "no such team" and "no valid invite", so the functions
@@ -134,7 +134,7 @@ export const acceptInvite = callable.onCall(async (data, context) => {
   const teamId = stringArg(data, 'teamId', true)
   const token = stringArg(data, 'token', false)
 
-  return admin.firestore().runTransaction(async tx => {
+  return getFirestore().runTransaction(async tx => {
     const ref = teamRef(teamId)
     const snap = await tx.get(ref)
     if (!snap.exists) throw invalidInvite()
@@ -168,7 +168,7 @@ export const declineInvite = callable.onCall(async (data, context) => {
   const teamId = stringArg(data, 'teamId', true)
   if (!caller.email) return { ok: true }
 
-  await admin.firestore().runTransaction(async tx => {
+  await getFirestore().runTransaction(async tx => {
     const ref = teamRef(teamId)
     const snap = await tx.get(ref)
     if (!snap.exists) return
@@ -187,7 +187,7 @@ export const listMyInvites = callable.onCall(async (_data, context) => {
   const caller = requireCaller(context)
   if (!caller.email) return []
 
-  const snap = await admin.firestore()
+  const snap = await getFirestore()
     .collection('teams')
     .where('inviteEmails', 'array-contains', caller.email)
     .limit(20)

@@ -9,7 +9,7 @@
  *      a valid token from the ChordCrew web app.
  */
 
-import * as admin from 'firebase-admin'
+import { getAppCheck } from 'firebase-admin/app-check'
 import * as functions from 'firebase-functions/v1'
 
 export const ENFORCE_APP_CHECK = process.env.ENFORCE_APP_CHECK === 'true'
@@ -30,7 +30,7 @@ export async function appCheckAllows(fn: string, token: string | undefined): Pro
   let status: AppCheckStatus = 'missing'
   if (token) {
     try {
-      await admin.appCheck().verifyToken(token)
+      await getAppCheck().verifyToken(token)
       status = 'verified'
     } catch {
       status = 'invalid'

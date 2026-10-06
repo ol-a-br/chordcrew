@@ -14,7 +14,7 @@
  */
 
 import * as functions from 'firebase-functions/v1'
-import * as admin from 'firebase-admin'
+import { getAuth } from 'firebase-admin/auth'
 import { appCheckAllows } from './appCheck'
 
 const CT_HOSTNAME_SUFFIX = '.church.tools'
@@ -67,7 +67,7 @@ export function resolveTarget(baseUrl: string, path: string, method: string, que
 async function isSignedIn(idToken: string | undefined): Promise<boolean> {
   if (!idToken) return false
   try {
-    await admin.auth().verifyIdToken(idToken)
+    await getAuth().verifyIdToken(idToken)
     return true
   } catch {
     return false
