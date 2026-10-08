@@ -65,6 +65,33 @@ function isChorusLabel(text: string): boolean {
   return CHORUS_TERMS.some(t => lower === t || lower.startsWith(t + ' ') || lower.startsWith(t + '-'))
 }
 
+// Approximate glyph widths, in em of the lyric font: a chord is JetBrains Mono
+// (0.6em per char) at the rt's 0.85em size; Barlow Condensed lyrics average
+// ~0.4em per char. Used to estimate how much lyric text covers a chord's width.
+const CHORD_CHAR_EM = 0.51
+const LYRIC_CHAR_EM = 0.4
+
+/**
+ * Split a chord position's lyric run into the part that goes into the <ruby>
+ * base and the rest, which follows the ruby as plain text.
+ *
+ * A ruby (base + chord) is an atomic inline box: WebKit/Safari never wraps
+ * text inside it, so a whole phrase sung over one chord ran past the column
+ * edge on iPad. The base therefore keeps only whole words until it is about as
+ * wide as the chord — so the chord still sits over its words without opening
+ * a gap after them — and everything after that wraps like normal text.
+ */
+export function splitRubyBase(lyrics: string, chord: string): [base: string, rest: string] {
+  const minChars = chord ? Math.ceil(chord.length * CHORD_CHAR_EM / LYRIC_CHAR_EM) + 1 : 0
+  const words = /\S+/g
+  let word: RegExpExecArray | null
+  while ((word = words.exec(lyrics))) {
+    const end = word.index + word[0].length
+    if (end >= minChars) return [lyrics.slice(0, end), lyrics.slice(end)]
+  }
+  return [lyrics, '']
+}
+
 /** Split a chord name into root + quality + bass. E.g. "Dsus4/A" → {root:"D", quality:"sus4", bass:"/A"}
  *  Parenthesized modifiers are normalised: "D(4)" → {root:"D", quality:"4", bass:""}
  */
@@ -359,8 +386,11 @@ export function SongRenderer({
     // Safari/WebKit treats display:ruby as an atomic inline box — adjacent ruby
     // elements have no break opportunity between them and lines overflow into
     // the next CSS column.  We insert a <wbr> (word-break opportunity) after
-    // each ruby (except the last in the row) so the browser can wrap the line
-    // at chord-position boundaries when the column width is exceeded.
+    // each chord position (except the last in the row) so the browser can wrap
+    // the line at chord-position boundaries when the column width is exceeded.
+    // Text inside a ruby can't wrap either, so each ruby's base holds only the
+    // first word(s) of its lyric run; the rest follows as plain, wrappable text
+    // (see splitRubyBase).
     container.querySelectorAll<HTMLElement>('.row').forEach(row => {
       if (row.classList.contains('section-header-row')) return
       const cols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
@@ -376,8 +406,9 @@ export function SongRenderer({
       cols.forEach((col, idx) => {
         const chordEl  = col.querySelector('.chord')
         const lyricsEl = col.querySelector('.lyrics')
+        const [base, rest] = splitRubyBase(lyricsEl?.textContent ?? '', chordEl?.textContent?.trim() ?? '')
         const ruby = document.createElement('ruby')
-        ruby.appendChild(document.createTextNode(lyricsEl?.textContent ?? ''))
+        ruby.appendChild(document.createTextNode(base))
         const rt = document.createElement('rt')
         rt.className = 'chord'
         if (chordEl) {
@@ -389,8 +420,13 @@ export function SongRenderer({
           ruby.style.marginRight = '0.75em'
         }
         col.replaceWith(ruby)
+        let last: ChildNode = ruby
+        if (rest) {
+          last = document.createTextNode(rest)
+          ruby.after(last)
+        }
         if (idx < cols.length - 1) {
-          ruby.insertAdjacentElement('afterend', document.createElement('wbr'))
+          last.after(document.createElement('wbr'))
         }
       })
     })

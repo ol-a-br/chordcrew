@@ -590,6 +590,22 @@ async function checkHorizontalOverflow(page: Page, tolerance = 6): Promise<{ ove
           overflowing.push(`"${text}" overflows col ${colIndex + 1} by ${Math.round(overflow)}px`)
         }
       })
+
+      // Plain lyric text following a ruby (the rest of a long run under one
+      // chord): every wrapped line fragment must stay within the column too
+      row.childNodes.forEach((node) => {
+        if (node.nodeType !== Node.TEXT_NODE || !node.textContent?.trim()) return
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        for (const rect of Array.from(range.getClientRects())) {
+          const overflow = rect.right - outputRect.left - colRightEdge
+          if (overflow > TOLERANCE) {
+            const text = node.textContent.trim().slice(0, 30)
+            overflowing.push(`"${text}" overflows col ${colIndex + 1} by ${Math.round(overflow)}px`)
+            break
+          }
+        }
+      })
     })
 
     return { overflowing, columnWidthPx: Math.round(columnWidth), containerHeight }
@@ -655,17 +671,11 @@ test.describe('iPad 13" landscape — zoom / font-scale regression (real song)',
   // ~311px CSS column width. Without overflow-wrap:break-word, long words/phrases
   // in ruby elements overflow and visually overlap the adjacent column.
   //
-  // Known limitation: a single <ruby> is an atomic inline box in both
-  // Chromium and WebKit — it never wraps internally across multiple lines,
-  // even with <wbr> inserted between its own words (verified empirically).
-  // At this most-extreme zoom level, a long multi-word run under one chord
-  // (e.g. "Gott bahnt immer einen") can end up ~8px wider than the space
-  // left on its wrapped line. Fixing this for real means abandoning ruby
-  // markup for long multi-word chord spans in favour of a hand-positioned
-  // label over a wrapping span — a rendering-architecture change, not a
-  // targeted fix. Slightly wider tolerance here (vs. IPAD-9/10) accepts that
-  // known gap at the extreme end while still catching real regressions.
-  const MAX_ZOOM_TOLERANCE = 10
+  // A single <ruby> is an atomic inline box — WebKit never wraps text inside
+  // it. SongRenderer therefore puts only the first word(s) of a lyric run into
+  // the ruby (splitRubyBase); the rest is plain text that wraps normally, so
+  // multi-word runs like "Gott bahnt immer einen" no longer overshoot.
+  const MAX_ZOOM_TOLERANCE = 6
 
   test('IPAD-11: lyrics stay within column at fontScale 2.5 (maximum zoom)', async ({ page }) => {
     await page.goto('/')
@@ -680,5 +690,69 @@ test.describe('iPad 13" landscape — zoom / font-scale regression (real song)',
       overflowing,
       `No lyric element should overflow its column at fontScale=2.5 (col width: ${columnWidthPx}px):\n` + overflowing.join('\n')
     ).toHaveLength(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Long lyric run under a single chord — bug: line overshoots the column end
+// ─────────────────────────────────────────────────────────────────────────────
+
+// A whole phrase sung over one chord. Each chord position used to become one
+// <ruby> holding the entire phrase; a ruby is an atomic inline box in Chromium
+// and WebKit, so the phrase could never wrap and ran past the column edge.
+const LONG_RUN_SONG = `{title: Long Run Test}
+{key: G}
+
+{start_of_verse: Verse 1}
+[G]Over the mountains and over the sea, your love is reaching out for me, never failing [D]here
+[Em]Und wenn die Nacht am dunkelsten ist, bist du das Licht, das niemals erlischt, [C]Herr
+{end_of_verse}
+`
+
+test.describe('iPad 13" landscape — long lyric run under one chord', () => {
+  let seeds: Seeds
+
+  test.beforeEach(async ({ page }) => {
+    await waitForApp(page)
+    await setDefaultColumnCount(page, 4)
+    seeds = await seedIdbWithContent(page, LONG_RUN_SONG, 'Long Run Test')
+  })
+
+  // ── IPAD-12: a phrase longer than the column wraps inside the column ───────
+  for (const scale of [1, 1.5, 2.5]) {
+    test(`IPAD-12: long lyric run wraps within the column at fontScale ${scale}`, async ({ page }) => {
+      await page.goto('/')
+      await page.evaluate((s) => localStorage.setItem('chordcrew-font-scale', String(s)), scale)
+      await openPerformance(page, seeds.songId, seeds.setlistId)
+      await page.waitForTimeout(400)
+
+      const { overflowing, columnWidthPx } = await checkHorizontalOverflow(page)
+      expect(
+        overflowing,
+        `No lyric element should overflow its column (col width: ${columnWidthPx}px):\n` + overflowing.join('\n')
+      ).toHaveLength(0)
+
+      // The lyrics must still be complete and in order
+      const text = await page.locator('.chordpro-output').evaluate((el) => {
+        const clone = el.cloneNode(true) as HTMLElement
+        clone.querySelectorAll('rt').forEach((rt) => rt.remove())
+        return clone.textContent?.replace(/\s+/g, ' ') ?? ''
+      })
+      expect(text).toContain('Over the mountains and over the sea, your love is reaching out for me, never failing here')
+      expect(text).toContain('Und wenn die Nacht am dunkelsten ist, bist du das Licht, das niemals erlischt, Herr')
+    })
+  }
+
+  // ── IPAD-13: the chord stays above the first word it belongs to ────────────
+  test('IPAD-13: chord stays anchored above the start of its lyric run', async ({ page }) => {
+    await openPerformance(page, seeds.songId, seeds.setlistId)
+    const anchors = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLElement>('.chordpro-output ruby')).map((ruby) => ({
+        chord: ruby.querySelector('rt')?.textContent ?? '',
+        base: Array.from(ruby.childNodes).filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join(''),
+      }))
+    )
+    expect(anchors.find((a) => a.chord === 'G')?.base.trim().startsWith('Over')).toBe(true)
+    expect(anchors.find((a) => a.chord === 'Em')?.base.trim().startsWith('Und')).toBe(true)
   })
 })

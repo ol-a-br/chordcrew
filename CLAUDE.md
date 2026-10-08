@@ -142,7 +142,7 @@ const transposed = song.transpose(semitones)  // returns new Song, does not muta
 const html = new ChordSheetJS.HtmlDivFormatter().format(transposed)
 ```
 
-After `dangerouslySetInnerHTML` renders the `.column` divs from chordsheetjs, a `useEffect` in `SongRenderer` runs a post-processing pass that converts each `.column` into a native `<ruby>` element so lyric text from different chord positions flows inline and wraps at real word boundaries. The chord name moves into `<rt class="chord">`. A `<wbr>` element is inserted after each `<ruby>` (except the last in a row) to provide explicit line-break opportunities between chord positions.
+After `dangerouslySetInnerHTML` renders the `.column` divs from chordsheetjs, a `useEffect` in `SongRenderer` runs a post-processing pass that converts each `.column` into a native `<ruby>` element so lyric text from different chord positions flows inline and wraps at real word boundaries. The chord name moves into `<rt class="chord">`. A `<wbr>` element is inserted after each chord position (except the last in a row) to provide explicit line-break opportunities between chord positions. A ruby never wraps internally in WebKit/Safari, so its base holds only the first word(s) of the lyric run — about as wide as the chord (`splitRubyBase`) — and the rest of the run follows the ruby as plain text; never put a whole lyric run back into the ruby, or long lines overshoot the column on iPad.
 
 Key CSS rules that must not be removed:
 - `.row { break-inside: avoid; overflow-wrap: break-word; }` — keeps chord+lyric pairs in one CSS column; `overflow-wrap` handles single words wider than the column width

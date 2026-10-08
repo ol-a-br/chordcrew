@@ -180,23 +180,21 @@ test.describe('Chord rendering — chord-only rows must have visible spacing', (
     const { songId } = await seedSong(page, CAPO_SONG, 'Capo Chord Test 3')
     await openViewer(page, songId)
 
-    // Find the verse row by one of its lyric words (ruby DOM order interleaves
-    // rt/chord text between base/lyric text nodes, so checking row.textContent
-    // for the full phrase is unreliable — check the base text nodes directly).
+    // Find the verse row by its lyrics. Ruby DOM order interleaves rt/chord
+    // text with the lyrics, so read each row's text with the rt elements
+    // removed (a ruby's base holds only the first word(s) of a lyric run; the
+    // rest follows the ruby as plain text).
     const result = await page.evaluate(() => {
-      const row = Array.from(document.querySelectorAll('.row'))
-        .find(r => Array.from(r.querySelectorAll('ruby')).some(ruby => {
-          const base = Array.from(ruby.childNodes).find(n => n.nodeType === Node.TEXT_NODE)
-          return base?.textContent?.includes('Line one')
-        }))
+      const lyricsOf = (r: Element) => {
+        const clone = r.cloneNode(true) as HTMLElement
+        clone.querySelectorAll('rt').forEach(rt => rt.remove())
+        return clone.textContent ?? ''
+      }
+      const row = Array.from(document.querySelectorAll('.row')).find(r => lyricsOf(r).includes('Line one'))
       if (!row) return { found: false }
       const rubies = Array.from(row.querySelectorAll('ruby'))
-      const baseTexts = rubies.map(r => {
-        const base = Array.from(r.childNodes).find(n => n.nodeType === Node.TEXT_NODE)
-        return base?.textContent ?? ''
-      })
       const marginRights = rubies.map(r => (r as HTMLElement).style.marginRight)
-      return { found: true, joinedLyrics: baseTexts.join(''), marginRights }
+      return { found: true, joinedLyrics: lyricsOf(row), marginRights }
     })
 
     expect(result.found, 'verse row with "Line one" not found').toBe(true)
