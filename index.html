@@ -1,7 +1,15 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<!--
+  translate="no" + the "google" meta: the UI is localized at build time from
+  src/i18n/*.json, so browser machine translation (Chrome/Safari "Translate
+  page") must never run. It turned chords into words ("Am" → "Bin", "Fb" →
+  "Facebook") and, by replacing React-owned text nodes, crashed the app to a
+  blank screen. lang is kept in sync with the UI language by src/i18n/index.ts.
+-->
+<html lang="en" class="dark" translate="no">
   <head>
     <meta charset="UTF-8" />
+    <meta name="google" content="notranslate" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0d1117" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

@@ -10,4 +10,14 @@ i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
 })
 
+// Keep <html lang> in sync with the UI language. A page declared as English
+// while showing German UI text makes browsers offer machine translation (which
+// index.html disables via translate="no") and gives screen readers the wrong
+// pronunciation.
+const syncDocumentLang = (lng: string | undefined) => {
+  if (lng) document.documentElement.lang = lng
+}
+syncDocumentLang(i18n.language)
+i18n.on('languageChanged', syncDocumentLang)
+
 export default i18n
