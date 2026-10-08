@@ -131,16 +131,17 @@ test.describe('Chord rendering — capo directive must not alter chords', () => 
     expect(html).not.toMatch(/>F</)
   })
 
-  test('transposing into an extreme key (G -> Gb) still renders a real chord, not grey text', async ({ page }) => {
+  test('transposing into an extreme key (G -> Gb) renders a practical, real chord', async ({ page }) => {
     await openViewer(page, songId)
-    // G major -> Gb major is one semitone down; Gb major's key signature
-    // respells the IV chord "Cmaj7" as "Cbmaj7".
+    // G major -> Gb major is one semitone down. The IV chord "Cmaj7" lands on
+    // B: chord charts write "Bmaj7", never the theoretical "Cbmaj7".
     await page.getByRole('button', { name: 'Transpose down' }).click()
     await page.waitForTimeout(200)
 
-    const info = await chordInfo(page, 'Cbmaj7')
-    expect(info, '"Cbmaj7" must appear verbatim after transposing G -> Gb').not.toBeNull()
-    expect(info!.isAnnotation, 'Cbmaj7 must not fall back to chord-annotation styling').toBe(false)
+    const info = await chordInfo(page, 'Bmaj7')
+    expect(info, '"Bmaj7" must appear after transposing G -> Gb').not.toBeNull()
+    expect(info!.isAnnotation, 'Bmaj7 must not fall back to chord-annotation styling').toBe(false)
+    expect(await page.locator('.chordpro-output').innerHTML()).not.toContain('Cb')
   })
 })
 

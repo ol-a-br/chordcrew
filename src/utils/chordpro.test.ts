@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isKnownChord, renderToHtml, renderToText, setDirective } from './chordpro'
+import { isKnownChord, renderToHtml, renderToText, setDirective, transposeKey, transposeChordName } from './chordpro'
 
 // ─── isKnownChord — recognized qualities and roots ────────────────────────────
 
@@ -65,12 +65,100 @@ describe('renderToHtml with a {capo} directive', () => {
     expect(html).not.toContain('ma7')
   })
 
-  it('respells chords correctly (not as chord-annotation text) when transposing into an extreme key', () => {
-    // G major -> Gb major (-1 semitone): the IV chord "Cmaj7" is properly
-    // spelled "Cbmaj7" per Gb major's key signature.
+  it('spells chords practically (not as chord-annotation text) when transposing into Gb', () => {
+    // G major -> Gb major (-1 semitone): the IV chord "Cmaj7" lands on B — chord
+    // charts write "Bmaj7", never the theoretical "Cbmaj7".
     const html = renderToHtml(CONTENT, -1)
-    expect(html).toContain('Cbmaj7')
+    expect(html).toContain('>Bmaj7<')
+    expect(html).not.toContain('Cb')
     expect(html).not.toContain('chord-annotation')
+  })
+})
+
+// ─── transposeKey / transposeChordName — practical enharmonic spelling ───────
+// chordsheetjs's own transpose/normalize produced theoretical keys and chord
+// names: a song in A transposed down 3 showed its G chord (now E) as "Fb" —
+// which a browser translator then turned into "Facebook".
+
+describe('transposeKey', () => {
+  const SPELLINGS = new Set(['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'])
+  const MINOR_SPELLINGS = new Set(['Cm', 'C#m', 'Dm', 'D#m', 'Ebm', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'Bbm', 'Bm'])
+
+  it('always lands on a commonly used key spelling', () => {
+    for (const key of ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B', 'C#', 'Cb']) {
+      for (let s = -11; s <= 11; s++) {
+        if (s === 0) continue
+        expect(SPELLINGS, `${key} ${s}`).toContain(transposeKey(key, s))
+        expect(MINOR_SPELLINGS, `${key}m ${s}`).toContain(transposeKey(key + 'm', s))
+      }
+    }
+  })
+
+  it('fixes the reported theoretical keys', () => {
+    expect(transposeKey('Eb', 1)).toBe('E')     // was "Fb"
+    expect(transposeKey('F#', -1)).toBe('F')    // was "E#"
+    expect(transposeKey('Db', -2)).toBe('B')    // was "Cb"
+    expect(transposeKey('C', 3)).toBe('Eb')     // was "D#"
+    expect(transposeKey('C', 8)).toBe('Ab')     // was "G#"
+    expect(transposeKey('C#m', -1)).toBe('Cm')  // was "B#m"
+  })
+
+  it('spells the tritone key by direction and keeps the key quality', () => {
+    expect(transposeKey('C', 6)).toBe('F#')
+    expect(transposeKey('C', -6)).toBe('Gb')
+    expect(transposeKey('Am', -6)).toBe('Ebm')
+    expect(transposeKey('Am', 6)).toBe('D#m')
+    expect(transposeKey('Cmaj', 2)).toBe('Dmaj')
+  })
+
+  it('leaves the key untouched without a transpose or for unknown formats', () => {
+    expect(transposeKey('Fb', 0)).toBe('Fb')
+    expect(transposeKey('G major', 2)).toBe('G major')
+    expect(transposeKey('', 2)).toBe('')
+  })
+})
+
+describe('transposeChordName', () => {
+  it('transposes G down 3 to E in a song in A (was "Fb")', () => {
+    expect(transposeChordName('G', -3, 'A')).toBe('E')
+  })
+
+  it('spells chords by their degree in the target key', () => {
+    expect(transposeChordName('Am', -3, 'G')).toBe('F#m')     // ii in E, was "Gbm"
+    expect(transposeChordName('D/F#', 2, 'G')).toBe('E/G#')
+    expect(transposeChordName('C/E', -1, 'C')).toBe('B/D#')
+    expect(transposeChordName('Bb', 2, 'C')).toBe('C')         // bVII stays a flat degree
+    expect(transposeChordName('Eb', 2, 'G')).toBe('F')         // bVI in A
+    expect(transposeChordName('C#dim', 3, 'C')).toBe('Edim')   // #I passing chord in Eb
+    expect(transposeChordName('E', 2, 'Am')).toBe('F#')        // V in Bm
+    expect(transposeChordName('G#dim', 2, 'Am')).toBe('A#dim') // #vii in Bm
+  })
+
+  it('never produces Cb, Fb, E# or B#', () => {
+    const chords = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B', 'Bm7/A', 'F#m', 'Gmaj7']
+    for (const key of ['', 'C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B', 'Am', 'Ebm', 'D#m', 'F#m']) {
+      for (let s = -11; s <= 11; s++) {
+        if (s === 0) continue
+        for (const chord of chords) {
+          const result = transposeChordName(chord, s, key)
+          expect(result, `${chord} ${s} in "${key}"`).not.toMatch(/(^|\/)(Cb|Fb|E#|B#)/)
+          expect(result, `${chord} ${s} in "${key}"`).not.toMatch(/##|[A-G]bb/)
+        }
+      }
+    }
+  })
+
+  it('keeps the chord suffix exactly as written', () => {
+    expect(transposeChordName('Cmaj7', 2, 'C')).toBe('Dmaj7')
+    expect(transposeChordName('Am7b5', 2, 'C')).toBe('Bm7b5')
+    expect(transposeChordName('Dsus4/A', -2, 'D')).toBe('Csus4/G')
+  })
+
+  it('spells with sharps up and flats down when the song has no key', () => {
+    expect(transposeChordName('G', -3)).toBe('E')
+    expect(transposeChordName('C', 1)).toBe('C#')
+    expect(transposeChordName('C', -1)).toBe('B')
+    expect(transposeChordName('D', -1)).toBe('Db')
   })
 })
 
