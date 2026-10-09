@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { firebaseConfigured } from '@/firebase'
 import { db } from '@/db'
 import { useAuth } from '@/auth/AuthContext'
@@ -14,6 +15,7 @@ import { listMyInvites, acceptInvite, declineInvite, type PendingInvite } from '
 
 export function TeamInviteNotification() {
   const { user } = useAuth()
+  const { t } = useTranslation()
   const [pending, setPending] = useState<PendingInvite[]>([])
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
 
@@ -52,23 +54,25 @@ export function TeamInviteNotification() {
           className="flex items-center gap-3 bg-chord/10 border border-chord/30 rounded-xl px-4 py-2.5 text-sm"
         >
           <div className="flex-1 min-w-0">
-            <span className="font-medium">{invite.ownerDisplayName}</span>
-            <span className="text-ink-muted"> invited you to join </span>
-            <span className="font-medium">{invite.teamName}</span>
-            <span className="text-ink-muted"> as </span>
-            <span className="text-chord">{invite.role}</span>
+            <span className="text-ink-muted">
+              <Trans
+                i18nKey="teams.inviteBanner"
+                values={{ name: invite.ownerDisplayName, team: invite.teamName, role: t(`teams.role.${invite.role}`) }}
+                components={{ b: <span className="font-medium text-ink" />, role: <span className="text-chord" /> }}
+              />
+            </span>
           </div>
           <button
             onClick={() => accept(invite)}
             className="text-xs px-2.5 py-1 bg-chord text-surface-0 rounded-lg hover:bg-chord-light shrink-0"
           >
-            Accept
+            {t('teams.accept')}
           </button>
           <button
             onClick={() => decline(invite)}
             className="text-xs px-2.5 py-1 text-ink-muted hover:text-ink shrink-0"
           >
-            Decline
+            {t('teams.decline')}
           </button>
         </div>
       ))}

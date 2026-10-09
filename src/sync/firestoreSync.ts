@@ -26,6 +26,7 @@ import {
 } from 'firebase/firestore'
 import { firestore } from '@/firebase'
 import { db } from '@/db'
+import i18n from '@/i18n'
 import { withAccessFields, canEditTeamContent } from '@/utils/teamAccess'
 import type { Book, Song, Setlist, SetlistItem, Team, SongNote } from '@/types'
 
@@ -164,7 +165,7 @@ async function uploadPending(userId: string): Promise<void> {
     throw new Error(
       errors.length === 1
         ? errors[0].message
-        : `${errors.length} entities failed to sync`
+        : i18n.t('sync.entitiesFailed', { count: errors.length })
     )
   }
 }
@@ -408,7 +409,7 @@ async function downloadTeam(teamId: string, userId: string): Promise<void> {
     const syncState = await db.syncStates.get(`book:${bookId}`)
     if (syncState?.status === 'deleted') continue
     await db.books.put({
-      id: bookId, title: `${remoteTeam.name} Songs`, author: '',
+      id: bookId, title: i18n.t('library.teamBookName', { team: remoteTeam.name }), author: '',
       ownerId: remoteTeam.ownerId, sharedTeamId: teamId,
       readOnly: false, shareable: true, createdAt: 0, updatedAt: 0,
     })

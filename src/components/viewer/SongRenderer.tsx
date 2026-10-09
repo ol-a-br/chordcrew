@@ -1,4 +1,5 @@
 import { useMemo, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { renderToHtml, isKnownChord, expandRepeatSections, transposeKey, transposeChordName, extractMeta } from '@/utils/chordpro'
 
 // ─── Module-level render cache ────────────────────────────────────────────────
@@ -65,6 +66,33 @@ function isChorusLabel(text: string): boolean {
   return CHORUS_TERMS.some(t => lower === t || lower.startsWith(t + ' ') || lower.startsWith(t + '-'))
 }
 
+// Approximate glyph widths, in em of the lyric font: a chord is JetBrains Mono
+// (0.6em per char) at the rt's 0.85em size; Barlow Condensed lyrics average
+// ~0.4em per char. Used to estimate how much lyric text covers a chord's width.
+const CHORD_CHAR_EM = 0.51
+const LYRIC_CHAR_EM = 0.4
+
+/**
+ * Split a chord position's lyric run into the part that goes into the <ruby>
+ * base and the rest, which follows the ruby as plain text.
+ *
+ * A ruby (base + chord) is an atomic inline box: WebKit/Safari never wraps
+ * text inside it, so a whole phrase sung over one chord ran past the column
+ * edge on iPad. The base therefore keeps only whole words until it is about as
+ * wide as the chord — so the chord still sits over its words without opening
+ * a gap after them — and everything after that wraps like normal text.
+ */
+export function splitRubyBase(lyrics: string, chord: string): [base: string, rest: string] {
+  const minChars = chord ? Math.ceil(chord.length * CHORD_CHAR_EM / LYRIC_CHAR_EM) + 1 : 0
+  const words = /\S+/g
+  let word: RegExpExecArray | null
+  while ((word = words.exec(lyrics))) {
+    const end = word.index + word[0].length
+    if (end >= minChars) return [lyrics.slice(0, end), lyrics.slice(end)]
+  }
+  return [lyrics, '']
+}
+
 /** Split a chord name into root + quality + bass. E.g. "Dsus4/A" → {root:"D", quality:"sus4", bass:"/A"}
  *  Parenthesized modifiers are normalised: "D(4)" → {root:"D", quality:"4", bass:""}
  */
@@ -96,6 +124,7 @@ export function SongRenderer({
   songKey,
   tempo,
 }: SongRendererProps) {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Use module-level cache — cache hits are instant even after component remount
@@ -359,11 +388,15 @@ export function SongRenderer({
     // Safari/WebKit treats display:ruby as an atomic inline box — adjacent ruby
     // elements have no break opportunity between them and lines overflow into
     // the next CSS column.  We insert a <wbr> (word-break opportunity) after
-    // each ruby (except the last in the row) so the browser can wrap the line
-    // at chord-position boundaries when the column width is exceeded.
+    // each chord position (except the last in the row) so the browser can wrap
+    // the line at chord-position boundaries when the column width is exceeded.
+    // Text inside a ruby can't wrap either, so each ruby's base holds only the
+    // first word(s) of its lyric run; the rest follows as plain, wrappable text
+    // (see splitRubyBase).
     container.querySelectorAll<HTMLElement>('.row').forEach(row => {
       if (row.classList.contains('section-header-row')) return
       const cols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
+      if (cols.length > 0) row.classList.add('lyric-row')   // see .lyric-row in index.css
       // Chord-only rows (e.g. an instrumental "[Em] [D] [Cmaj7]" line) have no
       // lyrics at all -- chordsheetjs drops the spaces between brackets, leaving
       // every column's lyrics empty. Browsers size a ruby's box to fit the wider
@@ -376,8 +409,9 @@ export function SongRenderer({
       cols.forEach((col, idx) => {
         const chordEl  = col.querySelector('.chord')
         const lyricsEl = col.querySelector('.lyrics')
+        const [base, rest] = splitRubyBase(lyricsEl?.textContent ?? '', chordEl?.textContent?.trim() ?? '')
         const ruby = document.createElement('ruby')
-        ruby.appendChild(document.createTextNode(lyricsEl?.textContent ?? ''))
+        ruby.appendChild(document.createTextNode(base))
         const rt = document.createElement('rt')
         rt.className = 'chord'
         if (chordEl) {
@@ -389,8 +423,16 @@ export function SongRenderer({
           ruby.style.marginRight = '0.75em'
         }
         col.replaceWith(ruby)
+        let last: ChildNode = ruby
+        if (rest) {
+          const span = document.createElement('span')
+          span.className = 'lyric-rest'
+          span.textContent = rest
+          ruby.after(span)
+          last = span
+        }
         if (idx < cols.length - 1) {
-          ruby.insertAdjacentElement('afterend', document.createElement('wbr'))
+          last.after(document.createElement('wbr'))
         }
       })
     })
@@ -474,14 +516,14 @@ export function SongRenderer({
       <div className="mx-4 mt-3 mb-1 bg-red-900/20 border border-red-700/40 rounded-lg overflow-hidden text-sm">
         <div className="flex items-center gap-2 px-3 py-2 bg-red-900/30 text-red-300 font-medium">
           <AlertTriangle size={14} />
-          {errors.length} parse {errors.length === 1 ? 'error' : 'errors'}
+          {t('lint.errorCount', { count: errors.length })}
         </div>
         <ul className="divide-y divide-red-900/20">
           {errors.map((err, i) => (
             <li key={i} className="flex items-start gap-3 px-3 py-2">
-              <span className="text-red-400 font-mono text-xs shrink-0 mt-0.5">Line {err.line}</span>
+              <span className="text-red-400 font-mono text-xs shrink-0 mt-0.5">{t('lint.line', { line: err.line })}</span>
               <div className="flex-1 min-w-0">
-                <div className="text-red-200 text-xs">{err.message}</div>
+                <div className="text-red-200 text-xs">{t(`lint.${err.code}`)}</div>
                 <div className="text-red-400/70 font-mono text-xs truncate mt-0.5">{err.text}</div>
               </div>
               {onJumpToLine && (
@@ -489,7 +531,7 @@ export function SongRenderer({
                   onClick={() => onJumpToLine(err.line)}
                   className="shrink-0 text-xs text-chord hover:text-chord/80 transition-colors mt-0.5"
                 >
-                  Fix →
+                  {t('lint.fix')}
                 </button>
               )}
             </li>

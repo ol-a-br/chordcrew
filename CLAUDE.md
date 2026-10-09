@@ -70,6 +70,7 @@ Use targeted `Edit` calls on specific code sections rather than full-file `Write
 - Design tokens are fixed — do not change the surface/ink/chord colour palette or the Outfit + JetBrains Mono fonts.
 - MIT licence — do not add dependencies with incompatible licences.
 - Firestore rules are code — change `firestore.rules` (never the Firebase console), cover the change in `tests/firebase/`, and run `npm run test:firebase`. Any new collection needs an explicit rule; everything unlisted is denied.
+- UI text is **static localization only**: every user-visible string (buttons, labels, tooltips, placeholders, toasts, dialogs, help text) lives in `src/i18n/<lang>.json` and is read with `t()` / `<Trans>` — never hardcode it in a component. Add new keys to **every** language file (en + de). `src/i18n/i18n.test.ts` fails on hardcoded JSX text, missing keys and mismatched placeholders. Song content is never translated, and browser machine translation stays disabled (`translate="no"` in `index.html`). A new language = a new JSON file plus one entry in `LANGUAGES` (`src/i18n/index.ts`).
 - A Content-Security-Policy is set in `firebase.json` (production only — the Vite dev server has none). Loading anything from a new external origin (script, style, font, image, API, iframe) requires adding that origin to the CSP, or it will silently fail in production. Never add `'unsafe-eval'` or inline-script allowances.
 
 ## Design tokens (Tailwind)
@@ -95,7 +96,7 @@ src/
   auth/AuthContext.tsx             # Google login + local-mode fallback
   db/index.ts                     # Dexie schema + query helpers (getMyTeams, getTeamRole)
   firebase/index.ts               # Firebase init (graceful no-op if unconfigured)
-  i18n/{index,en,de}.ts/json      # react-i18next EN+DE
+  i18n/{index,en,de}.ts/json      # react-i18next EN+DE; LANGUAGES registry in index.ts; i18n.test.ts guards it
   hooks/useKeyboard.ts            # Pedal/keyboard nav hook
   midi/
     kemper.ts                     # Pure Kemper MIDI builders: rig (PC / Perf.Slot), NRPN tempo, tap tempo
@@ -109,6 +110,7 @@ src/
     auth/LoginPage.tsx
     layout/AppShell.tsx           # Sidebar nav + mobile top bar + SyncBadge + TeamInviteNotification
     shared/Button.tsx
+    shared/ErrorBoundary.tsx      # Wraps the whole app: recovery screen + Reload instead of a blank page on any crash
     editor/ChordProEditor.tsx     # CodeMirror 6 with ChordPro syntax highlight
     viewer/SongRenderer.tsx       # dangerouslySetInnerHTML chordsheetjs output
     import/ChordsWikiImporter.tsx # chords.wiki JSON importer
@@ -142,10 +144,11 @@ const transposed = song.transpose(semitones)  // returns new Song, does not muta
 const html = new ChordSheetJS.HtmlDivFormatter().format(transposed)
 ```
 
-After `dangerouslySetInnerHTML` renders the `.column` divs from chordsheetjs, a `useEffect` in `SongRenderer` runs a post-processing pass that converts each `.column` into a native `<ruby>` element so lyric text from different chord positions flows inline and wraps at real word boundaries. The chord name moves into `<rt class="chord">`. A `<wbr>` element is inserted after each `<ruby>` (except the last in a row) to provide explicit line-break opportunities between chord positions.
+After `dangerouslySetInnerHTML` renders the `.column` divs from chordsheetjs, a `useEffect` in `SongRenderer` runs a post-processing pass that converts each `.column` into a native `<ruby>` element so lyric text from different chord positions flows inline and wraps at real word boundaries. The chord name moves into `<rt class="chord">`. A `<wbr>` element is inserted after each chord position (except the last in a row) to provide explicit line-break opportunities between chord positions. A ruby never wraps internally in WebKit/Safari, so its base holds only the first word(s) of the lyric run — about as wide as the chord (`splitRubyBase`) — and the rest of the run follows the ruby as plain text; never put a whole lyric run back into the ruby, or long lines overshoot the column on iPad.
 
 Key CSS rules that must not be removed:
 - `.row { break-inside: avoid; overflow-wrap: break-word; }` — keeps chord+lyric pairs in one CSS column; `overflow-wrap` handles single words wider than the column width
+- `.row.lyric-row { overflow-wrap: normal; }` + `.lyric-rest { overflow-wrap: break-word; }` — rows with chords must not use break-word: Chromium (Android) applies it inside `<ruby>` bases and splits words at the line end ("Werk|e"). The plain lyric text between chords (`span.lyric-rest`, injected by SongRenderer) keeps break-word for over-long words
 - `.row <wbr> between rubies` — injected by SongRenderer JS; without these, Safari/WebKit treats adjacent ruby elements as an unbreakable run and lyric lines overflow into the next CSS column instead of wrapping
 - `ruby { white-space: pre-wrap; }` — **do not remove**; removing it causes Safari/WebKit to stop rendering `<rt>` chord annotations entirely (chords disappear). The `<wbr>` elements sit outside ruby so `pre-wrap` does not suppress the break opportunities they provide.
 - `.paragraph { break-inside: avoid; }` — prevents whole sections from splitting mid-paragraph in normal layout

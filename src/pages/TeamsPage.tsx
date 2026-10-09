@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useTranslation, Trans } from 'react-i18next'
 import { Plus, Users, Crown, UserCheck } from 'lucide-react'
 import { db, generateId } from '@/db'
 import { firebaseConfigured } from '@/firebase'
@@ -11,6 +12,7 @@ import type { Team } from '@/types'
 
 export default function TeamsPage() {
   const { user } = useAuth()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -50,13 +52,12 @@ export default function TeamsPage() {
   if (!firebaseConfigured) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-6">
-        <h1 className="text-lg font-semibold mb-4">Teams</h1>
+        <h1 className="text-lg font-semibold mb-4">{t('nav.teams')}</h1>
         <div className="bg-surface-1 rounded-xl p-6 text-center text-ink-muted space-y-2">
           <Users size={32} className="text-ink-faint mx-auto mb-2" />
-          <p className="text-sm">Teams require Firebase to be configured.</p>
+          <p className="text-sm">{t('teams.needsFirebase')}</p>
           <p className="text-xs text-ink-faint">
-            Copy <code className="font-mono">.env.example</code> to{' '}
-            <code className="font-mono">.env.local</code> and add your Firebase config.
+            <Trans i18nKey="teams.needsFirebaseHint" components={{ code: <code className="font-mono" /> }} />
           </p>
         </div>
       </div>
@@ -66,33 +67,33 @@ export default function TeamsPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold flex-1">Teams</h1>
+        <h1 className="text-lg font-semibold flex-1">{t('nav.teams')}</h1>
         <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
           <Plus size={15} />
-          New Team
+          {t('teams.newTeam')}
         </Button>
       </div>
 
       {creating && (
         <div className="bg-surface-1 rounded-xl p-4 space-y-3 border border-chord/20">
-          <h2 className="text-sm font-medium">Create team</h2>
+          <h2 className="text-sm font-medium">{t('teams.createTeam')}</h2>
           <input
             autoFocus
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') createTeam(); if (e.key === 'Escape') setCreating(false) }}
-            placeholder="Team name…"
+            placeholder={t('teams.namePlaceholder')}
             className="w-full bg-surface-2 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-chord/50"
           />
           <input
             value={newDesc}
             onChange={e => setNewDesc(e.target.value)}
-            placeholder="Description (optional)"
+            placeholder={t('teams.descriptionPlaceholder')}
             className="w-full bg-surface-2 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-chord/50"
           />
           <div className="flex gap-2">
-            <Button variant="primary" size="sm" onClick={createTeam} disabled={!newName.trim()}>Create</Button>
-            <Button variant="ghost" size="sm" onClick={() => setCreating(false)}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={createTeam} disabled={!newName.trim()}>{t('setlist.create')}</Button>
+            <Button variant="ghost" size="sm" onClick={() => setCreating(false)}>{t('common.cancel')}</Button>
           </div>
         </div>
       )}
@@ -100,8 +101,8 @@ export default function TeamsPage() {
       {myTeams.length === 0 && !creating && (
         <div className="flex flex-col items-center justify-center py-20 text-ink-muted text-sm space-y-2">
           <Users size={32} className="text-ink-faint mb-2" />
-          <p>No teams yet.</p>
-          <p className="text-xs text-ink-faint">Create a team to share songs and setlists with your band.</p>
+          <p>{t('teams.empty')}</p>
+          <p className="text-xs text-ink-faint">{t('teams.emptyHint')}</p>
         </div>
       )}
 
@@ -115,6 +116,7 @@ export default function TeamsPage() {
 }
 
 function TeamRow({ team, userId, navigate }: { team: Team; userId: string; navigate: (p: string) => void }) {
+  const { t } = useTranslation()
   const isOwner = team.ownerId === userId
   const memberCount = team.members.length + 1 // +1 for owner
   const pendingInvites = team.invites.length
@@ -134,9 +136,9 @@ function TeamRow({ team, userId, navigate }: { team: Team; userId: string; navig
         </div>
         <div className="text-xs text-ink-muted flex items-center gap-2">
           <UserCheck size={11} />
-          <span>{memberCount} member{memberCount !== 1 ? 's' : ''}</span>
+          <span>{t('teams.memberCount', { count: memberCount })}</span>
           {pendingInvites > 0 && (
-            <span className="text-amber-400">{pendingInvites} pending invite{pendingInvites !== 1 ? 's' : ''}</span>
+            <span className="text-amber-400">{t('teams.pendingInvites', { count: pendingInvites })}</span>
           )}
           {team.description && (
             <span className="truncate text-ink-faint">{team.description}</span>

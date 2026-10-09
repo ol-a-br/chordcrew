@@ -1,4 +1,4 @@
-import ChordSheetJS, { Chord, Key } from 'chordsheetjs'
+import ChordSheetJS, { Chord } from 'chordsheetjs'
 import DOMPurify from 'dompurify'
 
 const { ChordProParser, HtmlDivFormatter, TextFormatter } = ChordSheetJS
@@ -312,9 +312,12 @@ export function expandRepeatSections(content: string): string {
 
 // ─── ChordPro lint: per-line brace / bracket mismatch detection ──────────────
 
+/** What is wrong with a line; the UI shows it via the i18n key `lint.<code>`. */
+export type ChordProLintCode = 'unclosedBrace' | 'unexpectedBrace' | 'unclosedBracket' | 'unexpectedBracket'
+
 export interface ChordProError {
   line: number
-  message: string
+  code: ChordProLintCode
   text: string
 }
 
@@ -327,15 +330,15 @@ export function lintChordPro(content: string): ChordProError[] {
     const opens  = (text.match(/\{/g) ?? []).length
     const closes = (text.match(/\}/g) ?? []).length
     if (opens > closes)
-      errors.push({ line: lineNum, message: 'Unclosed directive brace — add a closing }', text })
+      errors.push({ line: lineNum, code: 'unclosedBrace', text })
     else if (closes > opens)
-      errors.push({ line: lineNum, message: 'Unexpected } — no matching {', text })
+      errors.push({ line: lineNum, code: 'unexpectedBrace', text })
     const openBr  = (text.match(/\[/g) ?? []).length
     const closeBr = (text.match(/\]/g) ?? []).length
     if (openBr > closeBr)
-      errors.push({ line: lineNum, message: 'Unclosed chord bracket — add a closing ]', text })
+      errors.push({ line: lineNum, code: 'unclosedBracket', text })
     else if (closeBr > openBr)
-      errors.push({ line: lineNum, message: 'Unexpected ] — no matching [', text })
+      errors.push({ line: lineNum, code: 'unexpectedBracket', text })
   }
   return errors
 }
@@ -367,10 +370,9 @@ export function buildSearchText(
 
 // ─── Standard chord names (for validation hints) ─────────────────────────────
 
-// Includes the rare theoretical naturals (Cb, Fb, E#, B#) that show up when
-// transposing into keys with extreme flat/sharp signatures — e.g. transposing
-// a G major song down a half-step to Gb major respells the IV chord "Cmaj7"
-// as "Cbmaj7" (Gb major's key signature uses Cb, not B).
+// Includes the rare theoretical naturals (Cb, Fb, E#, B#) so songs whose
+// authors wrote them still render as chords. Transposition never produces
+// them (see transposeChordName).
 const ROOTS = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'E#', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B', 'B#', 'Cb', 'Fb']
 const QUALITIES = [
   '', 'm', 'maj7', 'm7', '7', 'sus', 'sus2', 'sus4', 'dim', 'aug',
@@ -414,17 +416,55 @@ export function isValidKey(key: string): boolean {
   return VALID_KEY_RE.test(key.trim())
 }
 
-// ─── Enharmonic preference by target key ─────────────────────────────────────
-// Both helpers below delegate the actual note-spelling decision to chordsheetjs's
-// own Key/Chord model (`.normalize(targetKey)`), which picks each note's letter
-// name from the target key's real diatonic scale (so e.g. transposing "C" down
-// a whole step in G major correctly yields "Cbmaj7" for a IV chord in Gb major,
-// while a plain natural target stays natural). We previously hand-rolled this
-// with a flat/sharp lookup table plus chordsheetjs's Chord.useModifier(), but
-// useModifier() forces *every* note (including already-natural ones) into an
-// accidental spelling of its neighbour — e.g. transposing "D" down 2 semitones
-// in A major produced "B#" instead of "C", and "Gsus2" produced "E#sus2" instead
-// of "Fsus2". Calling `.normalize()` with the real target Key avoids that bug.
+// ─── Enharmonic spelling for transposition ───────────────────────────────────
+// Transposed keys and chords are spelled here rather than by chordsheetjs.
+// Its Key.transpose() lands on theoretical keys (Eb +1 → "Fb", F# -1 → "E#",
+// C +3 → "D#") and its key-aware normalize() relies on a small, incomplete
+// enharmonics table — e.g. in a song in A, transposing down 3 semitones spelled
+// the G chord (now E) as "Fb", and Am in a song in G became "Gbm" instead of
+// "F#m". Chord charts never use those names.
+//
+// Rules: the target key always gets its common spelling (Db, Eb, Ab, Bb, C#m,
+// G#m, …; the tritone key follows the transpose direction: F#/D#m up, Gb/Ebm
+// down). Each transposed root and bass note is spelled by its scale degree in
+// that key, and the theoretical names Cb, Fb, E#, B# become B, E, F, C.
+
+const NATURAL_PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
+const LETTERS = 'CDEFGAB'
+const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+const FLAT_NAMES  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
+
+// Common key spelling per pitch class (C = 0); null = tritone, spelled by direction
+const MAJOR_KEY_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', null, 'G', 'Ab', 'A', 'Bb', 'B']
+const MINOR_KEY_NAMES = ['C', 'C#', 'D', null, 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B']
+
+// Letter steps above the tonic for each semitone interval: the diatonic degrees
+// plus the usual chromatic chords — in major #1 (C#dim passing chord in C), b3,
+// #4 (D/F#), b6, b7; in minor b2, #3 (A/C# in Am), #4, #6 (D/F#), #7 (E/G#).
+const MAJOR_STEPS = [0, 0, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6]
+const MINOR_STEPS = [0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6]
+
+const PRACTICAL_NAMES: Record<string, string> = { Cb: 'B', Fb: 'E', 'E#': 'F', 'B#': 'C' }
+
+const KEY_RE = /^([A-G][b#]?)(m(?:aj)?)?\s*$/
+const NOTE = '[A-G][b#]?'
+
+function pitchClass(note: string): number {
+  const offset = note.slice(1) === '#' ? 1 : note.slice(1) === 'b' ? -1 : 0
+  return (NATURAL_PC[note[0]] + offset + 12) % 12
+}
+
+/** Spell pitch class `pc` as a scale degree of the key `tonic` (major or minor). */
+function spellInKey(pc: number, tonic: string, minor: boolean): string {
+  const interval = (pc - pitchClass(tonic) + 12) % 12
+  const steps = (minor ? MINOR_STEPS : MAJOR_STEPS)[interval]
+  const letter = LETTERS[(LETTERS.indexOf(tonic[0]) + steps) % 7]
+  const offset = (pc - NATURAL_PC[letter] + 18) % 12 - 6   // -6..5
+  // A double accidental (e.g. C## as the leading tone of D#m) → nearest plain name
+  if (Math.abs(offset) > 1) return offset > 0 ? SHARP_NAMES[pc] : FLAT_NAMES[pc]
+  const name = letter + (offset === 1 ? '#' : offset === -1 ? 'b' : '')
+  return PRACTICAL_NAMES[name] ?? name
+}
 
 // ─── Transpose a key name by N semitones ──────────────────────────────────────
 // Only for simple key names (e.g. "G", "Am", "F#"). For full chord names with
@@ -432,24 +472,21 @@ export function isValidKey(key: string): boolean {
 
 export function transposeKey(key: string, semitones: number): string {
   if (!key || semitones === 0) return key
-  try {
-    const m = key.trim().match(/^([A-G][b#]?)(m(?:aj)?)?\s*$/)
-    if (!m) return key
-    const [, root, quality = ''] = m
-    const isMinor = quality === 'm'
-    const keyObj = Key.wrap(isMinor ? `${root}m` : root)
-    if (!keyObj) return key
-    const transposed = keyObj.transpose(semitones).toString()
-    return quality === 'maj' ? transposed + 'maj' : transposed
-  } catch {
-    return key
-  }
+  const m = key.trim().match(KEY_RE)
+  if (!m) return key
+  const [, root, quality = ''] = m
+  const minor = quality === 'm'
+  const pc = (pitchClass(root) + (semitones % 12) + 12) % 12
+  const tonic = (minor ? MINOR_KEY_NAMES : MAJOR_KEY_NAMES)[pc]
+    ?? (semitones > 0 ? SHARP_NAMES[pc] : FLAT_NAMES[pc])
+  return tonic + quality
 }
 
 // ─── Transpose any chord name (including quality suffixes) ───────────────────
-// originalKey (the song's declared {key}) is used to pick correct enharmonic
-// spelling via chordsheetjs's key-aware normalize(); without it we fall back to
-// chordsheetjs's raw transpose() spelling, which is still correct for naturals.
+// originalKey (the song's declared {key}) determines the target key whose
+// scale the transposed root and bass are spelled in (see above). Without a
+// usable key, notes are spelled with sharps going up and flats going down.
+// The quality suffix is kept exactly as written.
 
 export function transposeChordName(
   chordName: string,
@@ -458,12 +495,18 @@ export function transposeChordName(
 ): string {
   if (!chordName || semitones === 0) return chordName
   try {
-    const chord = Chord.parse(chordName)
-    if (!chord) return chordName
-    let transposed = chord.transpose(semitones)
-    const targetKey = originalKey ? (Key.wrap(originalKey)?.transpose(semitones) ?? null) : null
-    if (targetKey) transposed = transposed.normalize(targetKey, { normalizeSuffix: false })
-    return transposed.toString()
+    if (!Chord.parse(chordName)) return chordName
+    const m = chordName.match(new RegExp(`^(${NOTE})(.*?)(?:/(${NOTE}))?$`))
+    // Notation the speller doesn't handle (e.g. ♯/♭ symbols) → chordsheetjs as before
+    if (!m) return Chord.parse(chordName)!.transpose(semitones).toString()
+    const [, root, suffix, bass] = m
+    const target = transposeKey(originalKey.trim(), semitones).match(KEY_RE)
+    const spell = (note: string) => {
+      const pc = (pitchClass(note) + (semitones % 12) + 12) % 12
+      if (target) return spellInKey(pc, target[1], target[2] === 'm')
+      return semitones > 0 ? SHARP_NAMES[pc] : FLAT_NAMES[pc]
+    }
+    return spell(root) + suffix + (bass ? '/' + spell(bass) : '')
   } catch {
     return chordName
   }

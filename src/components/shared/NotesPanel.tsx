@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { getSongNote, saveSongNote } from '@/db'
 import { syncNote, deleteNoteFromCloud } from '@/sync/firestoreSync'
 
@@ -28,6 +29,7 @@ interface NotesPanelProps {
 const AUTOSAVE_DELAY = 800
 
 export function NotesPanel({ songId, userId, teamId, onClose, performanceMode }: NotesPanelProps) {
+  const { t } = useTranslation()
   const [content, setContent] = useState('')
   const [saved, setSaved] = useState(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -82,13 +84,13 @@ export function NotesPanel({ songId, userId, teamId, onClose, performanceMode }:
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-surface-3">
-          <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">My Notes</span>
+          <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">{t('notes.title')}</span>
           <div className="flex items-center gap-2">
-            {!saved && <span className="text-[10px] text-ink-faint">saving…</span>}
+            {!saved && <span className="text-[10px] text-ink-faint">{t('notes.saving')}</span>}
             <button
               onClick={onClose}
               className="text-ink-faint hover:text-ink transition-colors"
-              title="Hide notes"
+              title={t('notes.hide')}
             >
               <X size={14} />
             </button>
@@ -96,7 +98,7 @@ export function NotesPanel({ songId, userId, teamId, onClose, performanceMode }:
         </div>
         <textarea
           className="flex-1 bg-transparent text-sm text-ink placeholder-ink-faint resize-none p-3 focus:outline-none leading-relaxed"
-          placeholder="Your private notes…"
+          placeholder={t('notes.placeholderShort')}
           value={content}
           onChange={e => handleChange(e.target.value)}
           autoFocus
@@ -108,13 +110,13 @@ export function NotesPanel({ songId, userId, teamId, onClose, performanceMode }:
   return (
     <div className="flex flex-col rounded-xl border border-surface-3 bg-surface-1 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-surface-3">
-        <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">My Notes</span>
+        <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">{t('notes.title')}</span>
         <div className="flex items-center gap-2">
-          {!saved && <span className="text-[10px] text-ink-faint">saving…</span>}
+          {!saved && <span className="text-[10px] text-ink-faint">{t('notes.saving')}</span>}
           <button
             onClick={onClose}
             className="text-ink-faint hover:text-ink transition-colors"
-            title="Hide notes"
+            title={t('notes.hide')}
           >
             <X size={14} />
           </button>
@@ -122,7 +124,7 @@ export function NotesPanel({ songId, userId, teamId, onClose, performanceMode }:
       </div>
       <textarea
         className="bg-transparent text-sm text-ink placeholder-ink-faint resize-none p-3 focus:outline-none leading-relaxed min-h-[120px]"
-        placeholder="Your private notes for this song…"
+        placeholder={t('notes.placeholder')}
         value={content}
         onChange={e => handleChange(e.target.value)}
       />

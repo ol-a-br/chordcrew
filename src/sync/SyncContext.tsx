@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db'
+import i18n from '@/i18n'
 import { firebaseConfigured } from '@/firebase'
 import { syncNow as doSync, checkForCloudUpdates } from './firestoreSync'
 import { useAuth } from '@/auth/AuthContext'
@@ -106,7 +107,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       setHasCloudUpdates(false)
       localStorage.setItem('chordcrew-last-sync', String(now))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sync failed')
+      setError(err instanceof Error ? err.message : i18n.t('sync.failed'))
     } finally {
       setSyncing(false)
     }

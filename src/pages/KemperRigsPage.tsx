@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useTranslation, Trans } from 'react-i18next'
 import { ArrowRight, Lock } from 'lucide-react'
 import { db, getSettings, getTeamRole, markPending, upsertSongVersions } from '@/db'
 import { extractMeta, setDirective } from '@/utils/chordpro'
@@ -24,14 +25,15 @@ interface Row {
   bookTitle: string
   rigValue: string            // raw directive value ('' = none)
   rig: KemperRig | null       // parsed; null when missing or invalid
-  lockedReason: string | null // why this song can't be edited here
+  lockedReason: string | null // i18n key: why this song can't be edited here
 }
 
+// label = i18n key
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: 'all',     label: 'All' },
-  { value: 'set',     label: 'Rig set' },
-  { value: 'missing', label: 'No rig' },
-  { value: 'invalid', label: 'Invalid' },
+  { value: 'all',     label: 'kemper.filterAll' },
+  { value: 'set',     label: 'kemper.filterSet' },
+  { value: 'missing', label: 'kemper.filterMissing' },
+  { value: 'invalid', label: 'kemper.filterInvalid' },
 ]
 
 /** Sort key: valid rigs (programs, then performance.slot), then invalid values, then songs without a rig. */
@@ -66,6 +68,7 @@ async function writeSongMeta(songId: string, patch: { rig?: string; tempo?: stri
 export default function KemperRigsPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { t } = useTranslation()
   const songs = useLiveQuery(() => db.songs.toArray(), [])
   const books = useLiveQuery(() => db.books.toArray(), [])
   const teams = useLiveQuery(() => db.teams.toArray(), [])
@@ -96,9 +99,9 @@ export default function KemperRigsPage() {
         rigValue,
         rig: parseKemperRig(rigValue),
         // ChurchTools songs are rebuilt from ChurchTools on every CT sync — a rig would be lost
-        lockedReason: song.ctSongId || book?.sourceType === 'churchtools' ? 'ChurchTools song — content comes from ChurchTools'
-          : book?.readOnly ? 'Read-only book'
-          : book?.sharedTeamId && role === 'reader' ? 'You are a reader in this team'
+        lockedReason: song.ctSongId || book?.sourceType === 'churchtools' ? 'kemper.lockedCt'
+          : book?.readOnly ? 'kemper.lockedReadOnly'
+          : book?.sharedTeamId && role === 'reader' ? 'kemper.lockedReader'
           : null,
       }
     })
@@ -148,7 +151,7 @@ export default function KemperRigsPage() {
     }
     setBusy(false)
     setConfirming(false)
-    setResult(`Updated ${n} song${n === 1 ? '' : 's'}: ${from.trim()} → ${to.trim() || '(no rig)'}`)
+    setResult(t('kemper.updated', { count: n, from: from.trim(), to: to.trim() || t('kemper.noRigParen') }))
     setFrom('')
     setTo('')
   }
@@ -163,36 +166,36 @@ export default function KemperRigsPage() {
     if (e.key === 'Escape') { e.currentTarget.value = original; e.currentTarget.blur() }
   }
 
-  if (!songs || !books) return <div className="p-8 text-ink-muted">Loading…</div>
+  if (!songs || !books) return <div className="p-8 text-ink-muted">{t('common.loading')}</div>
 
   const inputClass = 'bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-sm outline-none focus:border-chord/50 placeholder:text-ink-faint/40'
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">Kemper rigs</h1>
+        <h1 className="text-xl font-semibold">{t('kemper.title')}</h1>
         <p className="text-sm text-ink-muted mt-1">
-          The rig (<code className="font-mono">{'{x_kemper_rig}'}</code>) and tempo of every song. Edit a cell and
-          press Enter; Esc cancels. {counts.set} of {rows.length} songs have a rig
-          {counts.invalid > 0 && <>, <span className="text-red-400">{counts.invalid} invalid</span></>}.
+          <Trans i18nKey="kemper.intro" components={{ code: <code className="font-mono" /> }} />{' '}
+          {t('kemper.rigCount', { count: rows.length, set: counts.set })}
+          {counts.invalid > 0 && <>, <span className="text-red-400">{t('kemper.invalidCount', { count: counts.invalid })}</span></>}.
         </p>
       </div>
 
       {settings && (!settings.midiEnabled || !settings.midiSendRig) && (
         <p className="text-xs text-amber-400 bg-amber-400/10 rounded-lg px-3 py-2">
-          {!settings.midiEnabled ? 'MIDI out is off on this device' : '“Send rig change” is off on this device'} — these
-          rigs are not sent right now. <Link to="/settings" className="underline hover:text-amber-300">Settings</Link>
+          {!settings.midiEnabled ? t('kemper.midiOff') : t('kemper.sendRigOff')} — {t('kemper.notSent')}{' '}
+          <Link to="/settings" className="underline hover:text-amber-300">{t('nav.settings')}</Link>
         </p>
       )}
 
       {/* Bulk replace */}
       <section className="bg-surface-1 rounded-xl px-4 py-3 space-y-2">
-        <h2 className="text-xs text-ink-faint uppercase tracking-wider">Replace rig</h2>
+        <h2 className="text-xs text-ink-faint uppercase tracking-wider">{t('kemper.replaceTitle')}</h2>
         <div className="flex items-center gap-2 flex-wrap text-sm">
           <label className="flex items-center gap-1.5">
-            <span className="text-ink-muted">From</span>
+            <span className="text-ink-muted">{t('kemper.from')}</span>
             <input
-              aria-label="Replace rig from"
+              aria-label={t('kemper.replaceFrom')}
               value={from}
               onChange={e => { setFrom(e.target.value); setConfirming(false); setResult(null) }}
               placeholder="6.*"
@@ -201,9 +204,9 @@ export default function KemperRigsPage() {
           </label>
           <ArrowRight size={14} className="text-ink-faint" />
           <label className="flex items-center gap-1.5">
-            <span className="text-ink-muted">To</span>
+            <span className="text-ink-muted">{t('kemper.to')}</span>
             <input
-              aria-label="Replace rig to"
+              aria-label={t('kemper.replaceTo')}
               value={to}
               onChange={e => { setTo(e.target.value); setConfirming(false); setResult(null) }}
               placeholder="8.*"
@@ -218,10 +221,10 @@ export default function KemperRigsPage() {
                   disabled={busy}
                   className="px-3 py-1 text-xs rounded-lg bg-chord text-surface-0 font-medium hover:bg-chord-light disabled:opacity-50"
                 >
-                  {busy ? 'Updating…' : `Yes, update ${matches.length} song${matches.length === 1 ? '' : 's'}`}
+                  {busy ? t('kemper.updating') : t('kemper.confirmUpdate', { count: matches.length })}
                 </button>
                 <button onClick={() => setConfirming(false)} className="px-2 py-1 text-xs text-ink-muted hover:text-ink">
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </>
             ) : (
@@ -230,30 +233,28 @@ export default function KemperRigsPage() {
                 disabled={matches.length === 0}
                 className="px-3 py-1 text-xs rounded-lg border border-surface-3 bg-surface-2 text-ink hover:border-chord/50 disabled:opacity-40 disabled:hover:border-surface-3"
               >
-                {matches.length === 0 ? 'No matching songs' : `Replace in ${matches.length} song${matches.length === 1 ? '' : 's'}…`}
+                {matches.length === 0 ? t('kemper.noMatches') : t('kemper.replaceIn', { count: matches.length })}
               </button>
             )
           )}
         </div>
-        {remapError && <p className="text-xs text-red-400">{remapError}</p>}
+        {remapError && <p className="text-xs text-red-400">{t(`kemper.remapError.${remapError}`)}</p>}
         {result && <p className="text-xs text-green-400">{result}</p>}
         <p className="text-xs text-ink-faint">
-          A rig (<code className="font-mono">6.2</code>, <code className="font-mono">17</code>) or a whole performance
-          (<code className="font-mono">6.*</code> → <code className="font-mono">8.*</code> keeps each song's slot). Leave To
-          empty to remove the rig. Applies to the songs listed below — narrow it with the filters.
+          <Trans i18nKey="kemper.replaceHint" components={{ code: <code className="font-mono" /> }} />
         </p>
       </section>
 
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
-        <SearchInput value={query} onChange={setQuery} placeholder="Search title, artist or rig…" className="flex-1 min-w-[12rem]" />
+        <SearchInput value={query} onChange={setQuery} placeholder={t('kemper.searchPlaceholder')} className="flex-1 min-w-[12rem]" />
         <select
-          aria-label="Book"
+          aria-label={t('kemper.book')}
           value={bookId}
           onChange={e => setBookId(e.target.value)}
           className="bg-surface-2 text-sm rounded-lg px-3 py-2 border border-surface-3 focus:outline-none max-w-[12rem]"
         >
-          <option value="">All books</option>
+          <option value="">{t('setlistDetail.allBooks')}</option>
           {books.slice().sort((a, b) => a.title.localeCompare(b.title)).map(b => (
             <option key={b.id} value={b.id}>{b.title}</option>
           ))}
@@ -265,7 +266,7 @@ export default function KemperRigsPage() {
               onClick={() => setStatus(f.value)}
               className={`px-3 py-1.5 text-sm ${status === f.value ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:text-ink'}`}
             >
-              {f.label}
+              {t(f.label)}
             </button>
           ))}
         </div>
@@ -277,12 +278,12 @@ export default function KemperRigsPage() {
           <thead>
             <tr className="text-left text-xs text-ink-faint uppercase tracking-wider border-b border-surface-3">
               <th className="px-3 py-2 font-normal">
-                <button onClick={() => setSortBy('title')} className={`uppercase tracking-wider ${sortBy === 'title' ? 'text-chord' : 'hover:text-ink'}`}>Song</button>
+                <button onClick={() => setSortBy('title')} className={`uppercase tracking-wider ${sortBy === 'title' ? 'text-chord' : 'hover:text-ink'}`}>{t('kemper.colSong')}</button>
               </th>
-              <th className="px-3 py-2 font-normal hidden md:table-cell">Book</th>
-              <th className="px-3 py-2 font-normal w-24">Tempo</th>
+              <th className="px-3 py-2 font-normal hidden md:table-cell">{t('kemper.book')}</th>
+              <th className="px-3 py-2 font-normal w-24">{t('editor.fieldTempo')}</th>
               <th className="px-3 py-2 font-normal w-56">
-                <button onClick={() => setSortBy('rig')} className={`uppercase tracking-wider ${sortBy === 'rig' ? 'text-chord' : 'hover:text-ink'}`}>Rig</button>
+                <button onClick={() => setSortBy('rig')} className={`uppercase tracking-wider ${sortBy === 'rig' ? 'text-chord' : 'hover:text-ink'}`}>{t('editor.fieldRig')}</button>
               </th>
             </tr>
           </thead>
@@ -302,7 +303,7 @@ export default function KemperRigsPage() {
                   <td className="px-3 py-1.5">
                     {row.lockedReason ? <span className="text-ink-muted">{tempo}</span> : (
                       <input
-                        aria-label={`Tempo of ${row.song.title}`}
+                        aria-label={t('kemper.tempoOf', { title: row.song.title })}
                         type="number"
                         defaultValue={tempo}
                         key={`tempo-${row.song.id}-${tempo}`}
@@ -315,12 +316,12 @@ export default function KemperRigsPage() {
                   <td className="px-3 py-1.5">
                     <div className="flex items-center gap-2">
                       {row.lockedReason ? (
-                        <span className="flex items-center gap-1 text-ink-muted" title={row.lockedReason}>
+                        <span className="flex items-center gap-1 text-ink-muted" title={t(row.lockedReason)}>
                           <Lock size={11} className="text-ink-faint" />{row.rigValue}
                         </span>
                       ) : (
                         <input
-                          aria-label={`Rig of ${row.song.title}`}
+                          aria-label={t('kemper.rigOf', { title: row.song.title })}
                           defaultValue={row.rigValue}
                           key={`rig-${row.song.id}-${row.rigValue}`}
                           placeholder="—"
@@ -331,11 +332,11 @@ export default function KemperRigsPage() {
                       )}
                       {row.rigValue && (
                         <span className={`text-xs whitespace-nowrap ${row.rig ? 'text-ink-faint' : 'text-red-400'}`}>
-                          {row.rig ? formatKemperRig(row.rig) : 'invalid'}
+                          {row.rig ? formatKemperRig(row.rig) : t('editor.rigInvalid')}
                         </span>
                       )}
                       {next !== null && (
-                        <span className="text-xs text-chord whitespace-nowrap">→ {next || 'no rig'}</span>
+                        <span className="text-xs text-chord whitespace-nowrap">→ {next || t('kemper.noRig')}</span>
                       )}
                     </div>
                   </td>
@@ -343,7 +344,7 @@ export default function KemperRigsPage() {
               )
             })}
             {visible.length === 0 && (
-              <tr><td colSpan={4} className="px-3 py-6 text-center text-ink-muted">No songs match.</td></tr>
+              <tr><td colSpan={4} className="px-3 py-6 text-center text-ink-muted">{t('kemper.noSongsMatch')}</td></tr>
             )}
           </tbody>
         </table>

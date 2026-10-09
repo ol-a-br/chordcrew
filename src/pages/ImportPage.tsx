@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Download } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { ChordsWikiImporter } from '@/components/import/ChordsWikiImporter'
 import { ChordProFileImporter } from '@/components/import/ChordProFileImporter'
 import { OpenSongImporter } from '@/components/import/OpenSongImporter'
@@ -10,6 +11,7 @@ import type { ChordsWikiExport, ChordsWikiBook, ChordsWikiSetlist } from '@/type
 
 function ExportSection() {
   const { user } = useAuth()
+  const { t } = useTranslation()
   const [exporting, setExporting] = useState(false)
 
   const handleExport = async () => {
@@ -128,15 +130,14 @@ function ExportSection() {
   return (
     <div className="space-y-3">
       <div>
-        <h2 className="text-base font-semibold text-ink">Export library</h2>
+        <h2 className="text-base font-semibold text-ink">{t('import.exportTitle')}</h2>
         <p className="text-xs text-ink-muted mt-0.5">
-          Download all songs, books, setlists, and metadata as a JSON file.
-          Compatible with the chords.wiki import format.
+          {t('import.exportHint')}
         </p>
       </div>
       <Button variant="secondary" onClick={handleExport} disabled={exporting}>
         <Download size={15} className="mr-1.5" />
-        {exporting ? 'Preparing…' : 'Download library backup'}
+        {exporting ? t('import.preparing') : t('import.downloadBackup')}
       </Button>
     </div>
   )

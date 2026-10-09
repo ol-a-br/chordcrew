@@ -122,6 +122,17 @@
   page-break-inside: avoid; /* legacy */
   overflow-wrap: break-word;
 }
+/* Chord+lyric rows (marked by SongRenderer): Chromium (Android) applies the
+   row's overflow-wrap:break-word inside <ruby> bases and splits words at the
+   line end ("Werk|e") even when a normal break point exists earlier on the
+   line. So these rows wrap normally; the plain lyric text between chords
+   (span.lyric-rest) keeps break-word for single words wider than the column. */
+.chordpro-output .row.lyric-row {
+  overflow-wrap: normal;
+}
+.chordpro-output .lyric-rest {
+  overflow-wrap: break-word;
+}
 
 /* Native ruby elements carry one lyric run with its chord annotation above.
    ruby-align:start left-aligns the chord to the start of the base text,

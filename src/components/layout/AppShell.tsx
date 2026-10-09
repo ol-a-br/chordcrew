@@ -26,6 +26,7 @@ const STALE_MS = 60 * 60 * 1000  // 1 hour — fallback when cloud check fails
 /** Compact sync status dot shown in the sidebar user section. */
 function SyncBadge() {
   const { status, pendingCount, lastSync, syncNow } = useSync()
+  const { t } = useTranslation()
 
   if (status === 'unconfigured') return null
 
@@ -40,13 +41,13 @@ function SyncBadge() {
     'bg-green-500'
 
   const label =
-    status === 'syncing'           ? 'Syncing…' :
-    status === 'offline'           ? 'Offline' :
-    status === 'error'             ? 'Sync error' :
-    status === 'updates-available' ? 'Updates available' :
-    status === 'pending'           ? `${pendingCount} unsynced` :
-    isStale                        ? 'Sync recommended' :
-    'Synced'
+    status === 'syncing'           ? t('library.ctSyncing') :
+    status === 'offline'           ? t('sync.status.offline') :
+    status === 'error'             ? t('settings.syncError') :
+    status === 'updates-available' ? t('sync.badge.updates') :
+    status === 'pending'           ? t('sync.badge.unsynced', { count: pendingCount }) :
+    isStale                        ? t('sync.badge.recommended') :
+    t('sync.badge.synced')
 
   const canSync = status !== 'syncing' && status !== 'offline'
 
@@ -54,7 +55,7 @@ function SyncBadge() {
     <button
       onClick={canSync ? syncNow : undefined}
       disabled={!canSync}
-      title={canSync ? `${label} — click to sync` : label}
+      title={canSync ? t('sync.badge.clickToSync', { label }) : label}
       className="flex items-center gap-1.5 text-xs text-ink-faint hover:text-ink-muted transition-colors disabled:cursor-default px-1 py-0.5"
     >
       {status === 'syncing'
@@ -134,7 +135,7 @@ export function AppShell() {
               )}
             >
               <Users size={17} />
-              Teams
+              {t('nav.teams')}
             </NavLink>
           )}
           <div className="pt-2 border-t border-surface-3/50 mt-1">

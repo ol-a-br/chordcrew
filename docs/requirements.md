@@ -196,6 +196,7 @@
 | I18N-02 | German UI (Deutsch) — full translation. | done |
 | I18N-03 | Language switcher in Settings. | done |
 | I18N-04 | Song content is language-agnostic (ChordPro format). | done |
+| I18N-05 | Static localization only: every UI text comes from `src/i18n/<lang>.json` (no hardcoded UI strings, enforced by `src/i18n/i18n.test.ts`); nothing is translated at runtime. Browser machine translation is disabled (`translate="no"` + `notranslate` meta) — it rewrote chords ("Am" → "Bin") and crashed React. Adding a language = new JSON file + one entry in `LANGUAGES` (`src/i18n/index.ts`). | done |
 
 ---
 

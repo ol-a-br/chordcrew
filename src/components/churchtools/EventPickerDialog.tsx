@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation, Trans } from 'react-i18next'
 import { Calendar, Upload, X, CheckCircle2, AlertCircle, Loader2, ChevronRight, Lock } from 'lucide-react'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import {
@@ -18,6 +19,7 @@ interface Props {
 type Phase = 'events' | 'loading-preview' | 'preview' | 'uploading' | 'done'
 
 export function EventPickerDialog({ setlist, songs, onClose }: Props) {
+  const { t } = useTranslation()
   const { baseUrl, token, categoryId, categories } = useChurchTools()
   const [phase, setPhase] = useState<Phase>('events')
   const [events, setEvents] = useState<CTEvent[]>([])
@@ -45,8 +47,8 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
   useEffect(() => {
     ctGetEvents(baseUrl, token, lookupDate)
       .then(setEvents)
-      .catch(e => setEventsError(e instanceof Error ? e.message : 'Failed to load events'))
-  }, [baseUrl, token, lookupDate])
+      .catch(e => setEventsError(e instanceof Error ? e.message : t('ct.loadEventsFailed')))
+  }, [baseUrl, token, lookupDate, t])
 
   const selectEvent = async (event: CTEvent) => {
     setSelectedEvent(event)
@@ -86,7 +88,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
       setPreviews(preview)
       setPhase('preview')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load preview')
+      setError(e instanceof Error ? e.message : t('ct.loadPreviewFailed'))
       setPhase('preview')
     }
   }
@@ -137,7 +139,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
         uploadResults.push({
           localTitle: song.title,
           status: 'error',
-          error: e instanceof Error ? e.message : 'Unknown error',
+          error: e instanceof Error ? e.message : t('ct.unknownError'),
         })
       }
     }
@@ -153,7 +155,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
           }
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to update agenda'
+        const msg = e instanceof Error ? e.message : t('ct.updateAgendaFailed')
         setError(msg)
       }
     }
@@ -191,7 +193,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
         <div className="flex items-center gap-3 px-5 py-4 border-b border-surface-3">
           <Calendar size={18} className="text-chord shrink-0" />
           <div className="flex-1 min-w-0">
-            <span className="font-semibold block truncate">Upload to ChurchTools event</span>
+            <span className="font-semibold block truncate">{t('setlistDetail.uploadChurchTools')}</span>
             {selectedEvent && (
               <span className="text-xs text-ink-muted">{selectedEvent.name}</span>
             )}
@@ -206,8 +208,8 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
           {phase === 'events' && (
             <>
               <p className="text-xs text-ink-faint">
-                Events on <span className="text-ink">{lookupDate}</span>
-                {!setlist.date && ' (today — set a date on the setlist to look up a specific day)'}
+                <Trans i18nKey="ct.eventsOn" values={{ date: lookupDate }} components={{ b: <span className="text-ink" /> }} />
+                {!setlist.date && ` ${t('ct.todayHint')}`}
               </p>
               {eventsError && (
                 <div className="flex items-start gap-2 text-red-400 text-sm">
@@ -216,7 +218,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
                 </div>
               )}
               {!eventsError && events.length === 0 && (
-                <p className="text-sm text-ink-muted">No events found for this date.</p>
+                <p className="text-sm text-ink-muted">{t('ct.noEvents')}</p>
               )}
               {events.map(ev => (
                 <button
@@ -240,7 +242,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
           {phase === 'loading-preview' && (
             <div className="flex items-center gap-2 text-ink-muted text-sm py-4">
               <Loader2 size={16} className="animate-spin" />
-              Checking agenda…
+              {t('ct.checkingAgenda')}
             </div>
           )}
 
@@ -257,11 +259,11 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
               {/* Section picker */}
               {sections.length > 0 && !error && (
                 <div>
-                  <p className="text-xs text-ink-faint uppercase tracking-wider mb-1.5">Target section</p>
+                  <p className="text-xs text-ink-faint uppercase tracking-wider mb-1.5">{t('ct.targetSection')}</p>
                   {isLocked ? (
                     <div className="flex items-center gap-2 text-amber-400 text-xs p-2 rounded-lg bg-amber-400/10 border border-amber-400/20">
                       <Lock size={13} className="shrink-0" />
-                      The agenda is locked. Unlock it in ChurchTools to upload.
+                      {t('ct.agendaLocked')}
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-2">
@@ -289,7 +291,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
               {toAdd.length > 0 && (
                 <div>
                   <p className="text-xs text-ink-faint uppercase tracking-wider mb-2">
-                    Will add to agenda ({toAdd.length})
+                    {t('ct.willAdd', { count: toAdd.length })}
                   </p>
                   <ul className="space-y-1">
                     {toAdd.map(p => (
@@ -297,7 +299,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
                         <span className="w-2 h-2 rounded-full bg-chord shrink-0" />
                         {p.localTitle}
                         {!p.ctSongId && (
-                          <span className="text-xs text-ink-faint">(will also create in CT)</span>
+                          <span className="text-xs text-ink-faint">{t('ct.willAlsoCreate')}</span>
                         )}
                       </li>
                     ))}
@@ -307,7 +309,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
               {toSkip.length > 0 && (
                 <div>
                   <p className="text-xs text-ink-faint uppercase tracking-wider mb-2">
-                    Already on agenda — will skip ({toSkip.length})
+                    {t('ct.alreadyOnAgenda', { count: toSkip.length })}
                   </p>
                   <ul className="space-y-1">
                     {toSkip.map(p => (
@@ -320,7 +322,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
                 </div>
               )}
               {toAdd.length === 0 && !error && (
-                <p className="text-sm text-ink-muted">All songs are already on the event agenda.</p>
+                <p className="text-sm text-ink-muted">{t('ct.allOnAgenda')}</p>
               )}
 
               {/* Set songs to Active option */}
@@ -333,7 +335,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
                       onChange={e => setActivateSongs(e.target.checked)}
                       className="rounded border-surface-3 bg-surface-2 text-chord focus:ring-chord/50"
                     />
-                    <span className="text-sm">Set songs to category in ChurchTools</span>
+                    <span className="text-sm">{t('ct.setCategory')}</span>
                   </label>
                   {activateSongs && (
                     <select
@@ -355,7 +357,7 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
           {phase === 'uploading' && (
             <div className="flex items-center gap-2 text-ink-muted text-sm py-4">
               <Loader2 size={16} className="animate-spin" />
-              Uploading to agenda…
+              {t('ct.uploadingAgenda')}
             </div>
           )}
 
@@ -375,8 +377,8 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
                   {r.status === 'error' && <AlertCircle size={15} className="text-red-400 shrink-0" />}
                   <span className={r.status === 'exists' ? 'text-ink-muted' : ''}>
                     {r.localTitle}
-                    {r.status === 'created' && <span className="text-xs text-green-400 ml-1">added</span>}
-                    {r.status === 'exists' && <span className="text-xs text-ink-faint ml-1">skipped</span>}
+                    {r.status === 'created' && <span className="text-xs text-green-400 ml-1">{t('ct.added')}</span>}
+                    {r.status === 'exists' && <span className="text-xs text-ink-faint ml-1">{t('ct.skipped')}</span>}
                     {r.status === 'error' && <span className="text-xs text-red-400 ml-1">{r.error}</span>}
                   </span>
                 </div>
@@ -384,11 +386,14 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
               {activateSongs && activatedCount > 0 && (
                 <div className="flex items-center gap-2 text-sm text-green-400 pt-2 border-t border-surface-3 mt-2">
                   <CheckCircle2 size={15} className="shrink-0" />
-                  {activatedCount} song{activatedCount !== 1 ? 's' : ''} set to "{categories.find(c => c.id === activateCategoryId)?.nameTranslated || categories.find(c => c.id === activateCategoryId)?.name}"
+                  {t('ct.categorySet', {
+                    count: activatedCount,
+                    category: categories.find(c => c.id === activateCategoryId)?.nameTranslated || categories.find(c => c.id === activateCategoryId)?.name,
+                  })}
                 </div>
               )}
               {activateSongs && activatedCount === 0 && (
-                <p className="text-xs text-ink-faint pt-2 border-t border-surface-3 mt-2">No songs needed category update.</p>
+                <p className="text-xs text-ink-faint pt-2 border-t border-surface-3 mt-2">{t('ct.noCategoryUpdate')}</p>
               )}
             </div>
           )}
@@ -397,13 +402,13 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-surface-3">
           {phase === 'done' || (phase === 'events' && eventsError) ? (
-            <Button variant="primary" size="sm" onClick={onClose}>Close</Button>
+            <Button variant="primary" size="sm" onClick={onClose}>{t('common.close')}</Button>
           ) : phase === 'preview' ? (
             <>
               <Button variant="ghost" size="sm" onClick={() => { setSelectedEvent(null); setAgenda(null); setSections([]); setPhase('events') }}>
-                Back
+                {t('ct.back')}
               </Button>
-              <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+              <Button variant="ghost" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
               <Button
                 variant="primary"
                 size="sm"
@@ -411,11 +416,11 @@ export function EventPickerDialog({ setlist, songs, onClose }: Props) {
                 disabled={toAdd.length === 0 || !!error || isLocked}
               >
                 <Upload size={14} />
-                {toAdd.length > 0 ? `Add ${toAdd.length} to agenda` : 'Nothing to add'}
+                {toAdd.length > 0 ? t('ct.addToAgenda', { count: toAdd.length }) : t('ct.nothingToAdd')}
               </Button>
             </>
           ) : phase === 'events' ? (
-            <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+            <Button variant="ghost" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
           ) : null}
         </div>
       </div>

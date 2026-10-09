@@ -171,7 +171,7 @@ export function ChordsWikiImporter() {
     try {
       const text = await file.text()
       const data: ChordsWikiExport = JSON.parse(text)
-      if (data.filetype !== 'library-backup') throw new Error('Not a chords.wiki library-backup file')
+      if (data.filetype !== 'library-backup') throw new Error(t('import.chordswiki.wrongFile'))
 
       pendingDataRef.current = data
 
@@ -236,7 +236,7 @@ export function ChordsWikiImporter() {
       {phase === 'conflict' && (
         <div className="bg-surface-2 border border-amber-500/30 rounded-xl p-4 space-y-3">
           <p className="text-sm font-medium text-amber-400">
-            {conflictTitles.length} song{conflictTitles.length !== 1 ? 's' : ''} already exist in your library
+            {t('import.alreadyExist', { count: conflictTitles.length })}
           </p>
           <ul className="text-xs text-ink-muted space-y-0.5 max-h-40 overflow-y-auto font-mono">
             {conflictTitles.map(t_ => <li key={t_} className="truncate">· {t_}</li>)}
@@ -246,16 +246,16 @@ export function ChordsWikiImporter() {
               onClick={() => doImport(pendingDataRef.current!, 'skip')}
               className="px-3 py-1.5 text-xs rounded-lg bg-surface-3 text-ink hover:bg-surface-3/80 transition-colors"
             >
-              Skip existing
+              {t('import.skipExisting')}
             </button>
             <button
               onClick={() => doImport(pendingDataRef.current!, 'overwrite')}
               className="px-3 py-1.5 text-xs rounded-lg bg-chord/15 text-chord hover:bg-chord/25 transition-colors"
             >
-              Overwrite existing
+              {t('import.overwriteExisting')}
             </button>
             <button onClick={reset} className="ml-auto text-xs text-ink-faint hover:text-ink">
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -276,10 +276,10 @@ export function ChordsWikiImporter() {
           </div>
           <div className="bg-surface-1 rounded-lg p-4 grid grid-cols-4 gap-4 text-center">
             {[
-              { label: t('import.books'),    value: result.books    },
-              { label: t('import.songs'),    value: result.songs    },
-              { label: t('import.setlists'), value: result.setlists },
-              { label: result.songsUpdated > 0 ? 'Updated' : 'Skipped',
+              { label: t('import.chordswiki.statBooks'),    value: result.books    },
+              { label: t('import.chordswiki.statSongs'),    value: result.songs    },
+              { label: t('import.chordswiki.statSetlists'), value: result.setlists },
+              { label: result.songsUpdated > 0 ? t('import.chordswiki.statUpdated') : t('import.chordswiki.statSkipped'),
                 value: result.songsUpdated > 0 ? result.songsUpdated : result.dupes,
                 dim: result.songsUpdated === 0 },
             ].map(({ label, value, dim }) => (
@@ -303,7 +303,7 @@ export function ChordsWikiImporter() {
           )}
 
           <Button variant="secondary" onClick={reset}>
-            Import another file
+            {t('import.chordswiki.importAnother')}
           </Button>
         </div>
       )}

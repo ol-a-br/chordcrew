@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useTranslation } from 'react-i18next'
 import { Pencil, ChevronUp, ChevronDown, AlignLeft, Star, Maximize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Printer, Share2, ExternalLink, Hash, Link2, StickyNote, X, Upload } from 'lucide-react'
 import { encodeSongShare, buildShareUrl, copyShareUrl } from '@/utils/share'
 import { db, generateId, markPending, getTeamRole, getSettings, saveSettings } from '@/db'
@@ -23,6 +24,7 @@ export default function ViewerPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { t } = useTranslation()
   const { isConfigured: ctConfigured } = useChurchTools()
   const [showCtUpload, setShowCtUpload] = useState(false)
   const [showSyncDialog, setShowSyncDialog] = useState(false)
@@ -129,19 +131,19 @@ export default function ViewerPage() {
     })
     const url = buildShareUrl(encoded)
     const ok = await copyShareUrl(url)
-    showToast(ok ? 'Read-only link copied!' : 'Could not copy link')
+    showToast(ok ? t('viewer.linkCopied') : t('viewer.linkCopyFailed'))
   }
 
   // Setlist navigation helpers (used by buttons AND keyboard)
   const goPrev = () => {
     if (!setlistId) return
     if (prevSongId) navigate(`/view/${prevSongId}?setlistId=${setlistId}&pos=${currentPos - 1}`)
-    else showToast('Beginning of setlist')
+    else showToast(t('viewer.setlistStart'))
   }
   const goNext = () => {
     if (!setlistId) return
     if (nextSongId) navigate(`/view/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`)
-    else showToast('End of setlist')
+    else showToast(t('viewer.setlistEnd'))
   }
 
   // Column stride: width of one CSS column (container / columns)
@@ -257,8 +259,8 @@ export default function ViewerPage() {
     if (existing) return existing.id
     const bookId = generateId()
     const book: Book = {
-      id: bookId, title: `${teamName} Songs`,
-      author: user?.displayName ?? 'Team',
+      id: bookId, title: t('library.teamBookName', { team: teamName }),
+      author: user?.displayName ?? t('library.teamFallback'),
       ownerId: user?.id ?? '',
       sharedTeamId: teamId,
       readOnly: false, shareable: true,
@@ -328,7 +330,7 @@ export default function ViewerPage() {
           <button
             onClick={() => navigate(`/setlists/${setlistId}`)}
             className="p-1.5 rounded text-ink-muted hover:text-ink"
-            title="Back to setlist"
+            title={t('viewer.backToSetlist')}
           >
             <X size={16} />
           </button>
@@ -344,7 +346,7 @@ export default function ViewerPage() {
           <button
             onClick={goPrev}
             className="p-1.5 rounded text-ink-muted hover:text-ink"
-            title="Previous song"
+            title={t('viewer.prevSong')}
           >
             <ChevronLeft size={16} />
           </button>
@@ -365,7 +367,7 @@ export default function ViewerPage() {
             <button
               onClick={goNext}
               className="p-1.5 rounded text-ink-muted hover:text-ink"
-              title="Next song"
+              title={t('viewer.nextSong')}
             >
               <ChevronRight size={16} />
             </button>
@@ -378,7 +380,7 @@ export default function ViewerPage() {
             <button
               onClick={() => setShowKeyDropdown(v => !v)}
               className="text-xs font-mono text-chord bg-chord/10 hover:bg-chord/20 px-2 py-1 rounded transition-colors"
-              title="Click to change key"
+              title={t('viewer.changeKey')}
             >
               𝄞 {transpose !== 0 ? `${effectiveKey} → ${transposedKey}` : effectiveKey}
             </button>
@@ -416,21 +418,21 @@ export default function ViewerPage() {
         )}
 
         {capo > 0 && (
-          <span className="text-xs font-mono text-ink-muted shrink-0" title="Capo helper">
-            Capo {capo}{soundingKey ? ` → ${soundingKey}` : ''}
+          <span className="text-xs font-mono text-ink-muted shrink-0" title={t('viewer.capoHelper')}>
+            {t('viewer.capo', { capo })}{soundingKey ? ` → ${soundingKey}` : ''}
           </span>
         )}
 
         {/* Transpose */}
         <div className="flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1">
-            <button onClick={() => applyTranspose(transpose - 1)} aria-label="Transpose down" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
+            <button onClick={() => applyTranspose(transpose - 1)} aria-label={t('viewer.transposeDown')} className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
               <ChevronDown size={16} />
             </button>
             <span className="text-xs font-mono w-8 text-center">
               {transpose > 0 ? `+${transpose}` : transpose === 0 ? '0' : transpose}
             </span>
-            <button onClick={() => applyTranspose(transpose + 1)} aria-label="Transpose up" className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
+            <button onClick={() => applyTranspose(transpose + 1)} aria-label={t('viewer.transposeUp')} className="p-1.5 hover:bg-surface-2 rounded text-ink-muted hover:text-ink">
               <ChevronUp size={16} />
             </button>
           </div>
@@ -461,7 +463,7 @@ export default function ViewerPage() {
         <button
           onClick={() => setLyricsOnly(l => !l)}
           className={`p-1.5 rounded ${lyricsOnly ? 'text-chord bg-chord/10' : 'text-ink-muted hover:bg-surface-2 hover:text-ink'}`}
-          title="Lyrics only"
+          title={t('song.lyricsOnly')}
         >
           <AlignLeft size={16} />
         </button>
@@ -493,7 +495,7 @@ export default function ViewerPage() {
           <button
             onClick={() => setShowNotes(v => !v)}
             className={`p-1.5 rounded ${showNotes ? 'text-chord bg-chord/10' : 'text-ink-muted hover:bg-surface-2 hover:text-ink'}`}
-            title="My notes"
+            title={t('viewer.myNotes')}
           >
             <StickyNote size={16} />
           </button>
@@ -506,7 +508,7 @@ export default function ViewerPage() {
             target="_blank"
             rel="noopener noreferrer"
             className="p-1.5 text-ink-muted hover:text-ink rounded shrink-0"
-            title="Open link"
+            title={t('viewer.openLink')}
           >
             <ExternalLink size={16} />
           </a>
@@ -519,7 +521,7 @@ export default function ViewerPage() {
             target="_blank"
             rel="noopener noreferrer"
             className="p-1.5 text-ink-muted hover:text-ink rounded shrink-0"
-            title={`CCLI #${derivedMeta.ccli} — open in SongSelect`}
+            title={t('viewer.ccliLink', { ccli: derivedMeta.ccli })}
           >
             <Hash size={16} />
           </a>
@@ -529,7 +531,7 @@ export default function ViewerPage() {
         <button
           onClick={handleShareReadOnly}
           className="p-1.5 text-ink-muted hover:text-ink rounded"
-          title="Copy read-only share link"
+          title={t('setlistDetail.shareLink')}
         >
           <Link2 size={16} />
         </button>
@@ -539,7 +541,7 @@ export default function ViewerPage() {
           <button
             onClick={() => setShowCtUpload(true)}
             className="p-1.5 text-ink-muted hover:text-ink rounded"
-            title="Upload to ChurchTools"
+            title={t('library.ctUpload')}
           >
             <Upload size={16} />
           </button>
@@ -549,7 +551,7 @@ export default function ViewerPage() {
         <button
           onClick={() => window.open(`/print/song/${song.id}?transpose=${transpose}&columns=${columns}`, '_blank')}
           className="p-1.5 text-ink-muted hover:text-ink rounded"
-          title="Print / Save as PDF"
+          title={t('viewer.print')}
         >
           <Printer size={16} />
         </button>
@@ -560,7 +562,7 @@ export default function ViewerPage() {
             <button
               onClick={() => setShowShareMenu(v => !v)}
               className="p-1.5 text-ink-muted hover:text-ink rounded"
-              title="Copy / Move to team"
+              title={t('viewer.copyMoveToTeam')}
             >
               <Share2 size={16} />
             </button>
@@ -575,13 +577,13 @@ export default function ViewerPage() {
                         onClick={() => copyToTeam(team.id, team.name)}
                         className="block w-full text-left px-2 py-1 text-xs text-ink hover:bg-surface-3 rounded"
                       >
-                        Copy here
+                        {t('viewer.copyHere')}
                       </button>
                       <button
                         onClick={() => moveToTeam(team.id, team.name)}
                         className="block w-full text-left px-2 py-1 text-xs text-ink hover:bg-surface-3 rounded"
                       >
-                        Move here
+                        {t('viewer.moveHere')}
                       </button>
                     </div>
                   ))}
@@ -594,7 +596,7 @@ export default function ViewerPage() {
         {/* Present mode */}
         <Button variant="primary" size="sm" onClick={() => navigate(`/perform/${song.id}${setlistId ? `?setlistId=${setlistId}&pos=${currentPos}` : ''}`)}>
           <Maximize2 size={14} />
-          Present
+          {t('setlist.present')}
         </Button>
       </div>
 

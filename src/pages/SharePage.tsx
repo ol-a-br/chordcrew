@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Music2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useTranslation, Trans } from 'react-i18next'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { decodeSongShare, decodeSetlistShare, fetchSetlistShare, type SharedSong, type SharedSetlist } from '@/utils/share'
 import { Button } from '@/components/shared/Button'
 
 export default function SharePage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [error, setError] = useState('')   // i18n key
   const [song, setSong] = useState<SharedSong | null>(null)
   const [setlist, setSetlist] = useState<SharedSetlist | null>(null)
   const [setlistPos, setSetlistPos] = useState(0)
@@ -22,13 +24,13 @@ export default function SharePage() {
       if (shareId) {
         const encoded = await fetchSetlistShare(shareId)
         if (!encoded) {
-          setError('Share link not found or expired.')
+          setError('share.notFound')
           setLoading(false)
           return
         }
         const l = await decodeSetlistShare(encoded)
         if (l) { setSetlist(l); setLoading(false); return }
-        setError('Could not decode share data.')
+        setError('share.decodeFailed')
         setLoading(false)
         return
       }
@@ -36,7 +38,7 @@ export default function SharePage() {
       // Fall back to hash-based sharing (single songs + old setlist links)
       const hash = window.location.hash.slice(1)
       if (!hash) {
-        setError('No share data in URL.')
+        setError('share.noData')
         setLoading(false)
         return
       }
@@ -44,7 +46,7 @@ export default function SharePage() {
       if (s) { setSong(s); setLoading(false); return }
       const l = await decodeSetlistShare(hash)
       if (l) { setSetlist(l); setLoading(false); return }
-      setError('Could not decode share link. It may be corrupted or expired.')
+      setError('share.corrupted')
       setLoading(false)
     }
     decode()
@@ -63,10 +65,10 @@ export default function SharePage() {
       <div className="min-h-screen bg-surface-0 flex items-center justify-center p-6">
         <div className="text-center space-y-4 max-w-sm">
           <Music2 size={48} className="text-ink-faint mx-auto" />
-          <h1 className="text-lg font-semibold">Share Link Error</h1>
-          <p className="text-sm text-ink-muted">{error}</p>
+          <h1 className="text-lg font-semibold">{t('share.errorTitle')}</h1>
+          <p className="text-sm text-ink-muted">{t(error)}</p>
           <Button variant="primary" onClick={() => navigate('/library')}>
-            Open ChordCrew
+            {t('share.openApp')}
           </Button>
         </div>
       </div>
@@ -84,14 +86,14 @@ export default function SharePage() {
               {song.artist}{song.key ? ` · ${song.key}` : ''}
             </p>
           </div>
-          <span className="text-xs text-ink-faint bg-surface-2 px-2 py-1 rounded">Read-only</span>
+          <span className="text-xs text-ink-faint bg-surface-2 px-2 py-1 rounded">{t('share.readOnly')}</span>
         </header>
         <div className="flex-1 overflow-y-auto px-6 py-5">
           <SongRenderer content={song.content} transposeOffset={0} columns={1} />
         </div>
         <footer className="px-4 py-3 border-t border-surface-3 bg-surface-1 text-center">
           <p className="text-xs text-ink-faint">
-            Shared via <span className="text-chord font-medium">ChordCrew</span>
+            <Trans i18nKey="share.sharedVia" components={{ b: <span className="text-chord font-medium" /> }} />
           </p>
         </footer>
       </div>
@@ -133,7 +135,7 @@ export default function SharePage() {
               <ChevronRight size={16} />
             </button>
           </div>
-          <span className="text-xs text-ink-faint bg-surface-2 px-2 py-1 rounded">Read-only</span>
+          <span className="text-xs text-ink-faint bg-surface-2 px-2 py-1 rounded">{t('share.readOnly')}</span>
         </header>
         <div className="flex-1 overflow-y-auto px-6 py-5">
           <SongRenderer
@@ -144,7 +146,7 @@ export default function SharePage() {
         </div>
         <footer className="px-4 py-3 border-t border-surface-3 bg-surface-1 text-center">
           <p className="text-xs text-ink-faint">
-            Shared via <span className="text-chord font-medium">ChordCrew</span>
+            <Trans i18nKey="share.sharedVia" components={{ b: <span className="text-chord font-medium" /> }} />
           </p>
         </footer>
       </div>

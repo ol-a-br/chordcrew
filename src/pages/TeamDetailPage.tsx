@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useTranslation } from 'react-i18next'
 import { onSnapshot, doc as fsDoc } from 'firebase/firestore'
 import { ArrowLeft, Crown, UserPlus, Trash2, ChevronDown, Link2, Share2, Mail, Copy, Check as CheckIcon, Pencil } from 'lucide-react'
 import { db, generateId } from '@/db'
@@ -18,16 +19,13 @@ function generateToken(): string {
   return btoa(String.fromCharCode(...arr)).replace(/[+/=]/g, c => ({ '+': '-', '/': '_', '=': '' }[c] ?? c))
 }
 
-const ROLE_LABELS: Record<TeamMemberRole, string> = {
-  owner:       'Owner',
-  contributor: 'Contributor',
-  reader:      'Reader',
-}
+const roleLabelKey = (role: TeamMemberRole) => `teams.roleLabel.${role}`
 
 export default function TeamDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { t } = useTranslation()
 
   const [editingInfo, setEditingInfo] = useState(false)
   const [editName, setEditName] = useState('')
@@ -61,8 +59,8 @@ export default function TeamDetailPage() {
     return unsub
   }, [id])
 
-  if (team === undefined) return <div className="p-8 text-ink-muted">Loading…</div>
-  if (!team) return <div className="p-8 text-ink-muted">Team not found.</div>
+  if (team === undefined) return <div className="p-8 text-ink-muted">{t('common.loading')}</div>
+  if (!team) return <div className="p-8 text-ink-muted">{t('teamDetail.notFound')}</div>
 
   const isOwner = team.ownerId === user?.id
   const myRole: TeamMemberRole = isOwner ? 'owner' :
@@ -96,10 +94,10 @@ export default function TeamDetailPage() {
 
   const handleInvite = async () => {
     const email = inviteEmail.trim().toLowerCase()
-    if (!email || !email.includes('@')) { setInviteError('Enter a valid email address.'); return }
-    if (team.ownerId === user?.id && email === user.email) { setInviteError('That\'s you.'); return }
-    if (team.members.some(m => m.email === email)) { setInviteError('Already a member.'); return }
-    if (team.invites.some(i => i.email === email)) { setInviteError('Already invited.'); return }
+    if (!email || !email.includes('@')) { setInviteError(t('teamDetail.invalidEmail')); return }
+    if (team.ownerId === user?.id && email === user.email) { setInviteError(t('teamDetail.thatsYou')); return }
+    if (team.members.some(m => m.email === email)) { setInviteError(t('teamDetail.alreadyMember')); return }
+    if (team.invites.some(i => i.email === email)) { setInviteError(t('teamDetail.alreadyInvited')); return }
 
     const invite: TeamInvite = { email, role: inviteRole, invitedAt: Date.now() }
     const updated: Team = {
@@ -156,31 +154,27 @@ export default function TeamDetailPage() {
   }
 
   const shareViaWhatsApp = (url: string) => {
-    const text = encodeURIComponent(
-      `Hey! I'd like to invite you to join my ChordCrew team "${team?.name}". Click the link to join:\n${url}`
-    )
+    const text = encodeURIComponent(t('teamDetail.whatsAppMessage', { team: team?.name, url }))
     window.open(`https://wa.me/?text=${text}`, '_blank')
   }
 
   const shareViaEmail = (url: string) => {
-    const subject = encodeURIComponent(`You're invited to join ${team?.name} on ChordCrew`)
-    const body = encodeURIComponent(
-      `Hi!\n\nI'd like to invite you to join my ChordCrew team "${team?.name}".\n\nChordCrew is a worship team chord & lyrics app — you can access and perform songs and setlists online and offline.\n\nClick this link to join:\n${url}\n\nSee you there!\n${user?.displayName}`
-    )
+    const subject = encodeURIComponent(t('teamDetail.emailSubject', { team: team?.name }))
+    const body = encodeURIComponent(t('teamDetail.emailBody', { team: team?.name, url, name: user?.displayName }))
     window.open(`mailto:?subject=${subject}&body=${body}`)
   }
 
   const shareViaNative = async (url: string) => {
     if (!navigator.share) return
     await navigator.share({
-      title: `Join ${team?.name} on ChordCrew`,
-      text: `I'd like to invite you to join my ChordCrew team "${team?.name}".`,
+      title: t('teamDetail.shareTitle', { team: team?.name }),
+      text: t('teamDetail.shareText', { team: team?.name }),
       url,
     })
   }
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!confirm('Remove this member from the team?')) return
+    if (!confirm(t('teamDetail.removeMemberConfirm'))) return
     const updated: Team = {
       ...team,
       members: team.members.filter(m => m.userId !== memberId),
@@ -199,7 +193,7 @@ export default function TeamDetailPage() {
   }
 
   const handleDeleteTeam = async () => {
-    if (!confirm(`Delete team "${team.name}"? This cannot be undone.`)) return
+    if (!confirm(t('teamDetail.deleteConfirm', { team: team.name }))) return
     await db.teams.delete(team.id)
     navigate('/teams')
   }
@@ -225,12 +219,12 @@ export default function TeamDetailPage() {
               value={editDesc}
               onChange={e => setEditDesc(e.target.value)}
               onKeyDown={e => { if (e.key === 'Escape') setEditingInfo(false) }}
-              placeholder="Description (optional)"
+              placeholder={t('teams.descriptionPlaceholder')}
               className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-1.5 text-xs text-ink-muted focus:outline-none focus:ring-1 focus:ring-chord/60"
             />
             <div className="flex gap-2">
-              <Button variant="primary" size="sm" onClick={saveInfo} disabled={!editName.trim()}>Save</Button>
-              <Button variant="ghost" size="sm" onClick={() => setEditingInfo(false)}>Cancel</Button>
+              <Button variant="primary" size="sm" onClick={saveInfo} disabled={!editName.trim()}>{t('common.save')}</Button>
+              <Button variant="ghost" size="sm" onClick={() => setEditingInfo(false)}>{t('common.cancel')}</Button>
             </div>
           </div>
         ) : (
@@ -241,7 +235,7 @@ export default function TeamDetailPage() {
                 <button
                   onClick={startEditInfo}
                   className="opacity-0 group-hover:opacity-100 transition-opacity text-ink-faint hover:text-ink p-0.5 shrink-0"
-                  title="Edit team info"
+                  title={t('teamDetail.editInfo')}
                 >
                   <Pencil size={13} />
                 </button>
@@ -255,11 +249,11 @@ export default function TeamDetailPage() {
           <div className="flex gap-2 shrink-0">
             <Button variant="primary" size="sm" onClick={() => setShowSharePanel(v => !v)}>
               <Share2 size={14} />
-              Share link
+              {t('teamDetail.shareLink')}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setShowInviteForm(v => !v)}>
               <UserPlus size={14} />
-              By email
+              {t('teamDetail.byEmail')}
             </Button>
           </div>
         )}
@@ -269,16 +263,16 @@ export default function TeamDetailPage() {
       {showSharePanel && isOwner && (
         <div className="bg-surface-1 rounded-xl p-4 space-y-4 border border-chord/20">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium">Invite via link</h2>
+            <h2 className="text-sm font-medium">{t('teamDetail.inviteViaLink')}</h2>
             <button onClick={() => setShowSharePanel(false)} className="text-ink-faint hover:text-ink text-xs">✕</button>
           </div>
           <p className="text-xs text-ink-muted">
-            Anyone with this link can join your team. The link is single-use — generate a new one for each person.
+            {t('teamDetail.linkHint')}
           </p>
 
           {!shareInvite ? (
             <div className="space-y-2">
-              <p className="text-xs text-ink-faint">Choose a role for the invitee:</p>
+              <p className="text-xs text-ink-faint">{t('teamDetail.chooseRole')}</p>
               <div className="flex gap-2">
                 <Button
                   variant="primary" size="sm"
@@ -286,7 +280,7 @@ export default function TeamDetailPage() {
                   disabled={generatingLink}
                   className="flex-1"
                 >
-                  Generate Contributor link
+                  {t('teamDetail.generateContributorLink')}
                 </Button>
                 <Button
                   variant="ghost" size="sm"
@@ -294,7 +288,7 @@ export default function TeamDetailPage() {
                   disabled={generatingLink}
                   className="flex-1"
                 >
-                  Generate Reader link
+                  {t('teamDetail.generateReaderLink')}
                 </Button>
               </div>
             </div>
@@ -310,7 +304,7 @@ export default function TeamDetailPage() {
                   className="shrink-0 text-xs flex items-center gap-1 text-chord hover:text-chord/80 transition-colors"
                 >
                   {linkCopied ? <CheckIcon size={13} /> : <Copy size={13} />}
-                  {linkCopied ? 'Copied!' : 'Copy'}
+                  {linkCopied ? t('setlistDetail.copied') : t('teamDetail.copy')}
                 </button>
               </div>
 
@@ -327,7 +321,7 @@ export default function TeamDetailPage() {
                   className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-surface-2 border border-surface-3 text-ink-muted text-xs hover:bg-surface-3 transition-colors"
                 >
                   <Mail size={14} />
-                  Email
+                  {t('teamDetail.email')}
                 </button>
                 {typeof navigator.share === 'function' && (
                   <button
@@ -335,7 +329,7 @@ export default function TeamDetailPage() {
                     className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-surface-2 border border-surface-3 text-ink-muted text-xs hover:bg-surface-3 transition-colors"
                   >
                     <Share2 size={14} />
-                    Share
+                    {t('teamDetail.share')}
                   </button>
                 )}
               </div>
@@ -344,7 +338,7 @@ export default function TeamDetailPage() {
                 onClick={() => setShareInvite(null)}
                 className="text-xs text-ink-faint hover:text-ink-muted w-full text-center py-1"
               >
-                Generate a different link
+                {t('teamDetail.differentLink')}
               </button>
             </div>
           )}
@@ -354,7 +348,7 @@ export default function TeamDetailPage() {
       {/* Invite form */}
       {showInviteForm && isOwner && (
         <div className="bg-surface-1 rounded-xl p-4 space-y-3 border border-chord/20">
-          <h2 className="text-sm font-medium">Invite by Google email</h2>
+          <h2 className="text-sm font-medium">{t('teamDetail.inviteByEmail')}</h2>
           <div className="flex gap-2">
             <input
               autoFocus
@@ -370,24 +364,24 @@ export default function TeamDetailPage() {
               onChange={e => setInviteRole(e.target.value as 'contributor' | 'reader')}
               className="bg-surface-2 text-sm rounded-lg px-2 py-2 border border-surface-3 focus:outline-none"
             >
-              <option value="contributor">Contributor</option>
-              <option value="reader">Reader</option>
+              <option value="contributor">{t('teams.roleLabel.contributor')}</option>
+              <option value="reader">{t('teams.roleLabel.reader')}</option>
             </select>
           </div>
           {inviteError && <p className="text-xs text-red-400">{inviteError}</p>}
           <div className="flex gap-2">
-            <Button variant="primary" size="sm" onClick={handleInvite}>Send Invite</Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowInviteForm(false)}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={handleInvite}>{t('teamDetail.sendInvite')}</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowInviteForm(false)}>{t('common.cancel')}</Button>
           </div>
           <p className="text-xs text-ink-faint">
-            The invitee will see a notification next time they open ChordCrew and can accept or decline.
+            {t('teamDetail.inviteHint')}
           </p>
         </div>
       )}
 
       {/* Members */}
       <section>
-        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Members</h2>
+        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">{t('teamDetail.members')}</h2>
         <div className="bg-surface-1 rounded-xl divide-y divide-surface-3">
           {/* Owner row */}
           <MemberRow
@@ -420,7 +414,7 @@ export default function TeamDetailPage() {
       {/* Pending invites */}
       {team.invites.length > 0 && (
         <section>
-          <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Pending Invites</h2>
+          <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">{t('teamDetail.pendingInvites')}</h2>
           <div className="bg-surface-1 rounded-xl divide-y divide-surface-3">
             {team.invites.map((invite, i) => (
               <div key={invite.token ?? invite.email ?? i} className="flex items-center gap-3 px-4 py-3">
@@ -428,18 +422,18 @@ export default function TeamDetailPage() {
                   {invite.token ? (
                     <div className="text-sm text-ink-muted flex items-center gap-1.5">
                       <Link2 size={12} className="shrink-0" />
-                      Link invite
+                      {t('teamDetail.linkInvite')}
                     </div>
                   ) : (
                     <div className="text-sm font-mono truncate">{invite.email}</div>
                   )}
-                  <div className="text-xs text-ink-faint">{ROLE_LABELS[invite.role]} · {new Date(invite.invitedAt).toLocaleDateString()}</div>
+                  <div className="text-xs text-ink-faint">{t(roleLabelKey(invite.role))} · {new Date(invite.invitedAt).toLocaleDateString()}</div>
                 </div>
                 {isOwner && (
                   <button
                     onClick={() => handleRevokeInvite(invite.email, invite.token)}
                     className="p-1.5 text-ink-faint hover:text-red-400 rounded"
-                    title="Revoke invite"
+                    title={t('teamDetail.revokeInvite')}
                   >
                     <Trash2 size={14} />
                   </button>
@@ -452,30 +446,30 @@ export default function TeamDetailPage() {
 
       {/* Role guide */}
       <section>
-        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Roles</h2>
+        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">{t('teamDetail.roles')}</h2>
         <div className="bg-surface-1 rounded-xl px-4 py-3 space-y-1.5 text-xs text-ink-muted">
-          <p><span className="text-ink font-medium">Owner</span> — full control: invite/remove members, change roles, delete team</p>
-          <p><span className="text-ink font-medium">Contributor</span> — add/edit/delete songs and setlists in the team</p>
-          <p><span className="text-ink font-medium">Reader</span> — view team songs and setlists; cannot modify</p>
+          {(['owner', 'contributor', 'reader'] as const).map(r => (
+            <p key={r}><span className="text-ink font-medium">{t(roleLabelKey(r))}</span> — {t(`teamDetail.roleInfo.${r}`)}</p>
+          ))}
         </div>
       </section>
 
       {/* My role (if not owner) */}
       {!isOwner && (
         <div className="text-xs text-ink-faint text-center">
-          Your role in this team: <span className="text-ink">{ROLE_LABELS[myRole]}</span>
+          {t('teamDetail.yourRole')} <span className="text-ink">{t(roleLabelKey(myRole))}</span>
         </div>
       )}
 
       {/* Danger zone */}
       {isOwner && (
         <section>
-          <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Danger zone</h2>
+          <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">{t('teamDetail.dangerZone')}</h2>
           <div className="bg-surface-1 rounded-xl px-4 py-3 space-y-3">
-            <p className="text-xs text-ink-muted">Deleting the team removes it from your local device. Other members keep their local copies until they sync.</p>
+            <p className="text-xs text-ink-muted">{t('teamDetail.deleteHint')}</p>
             <Button variant="danger" size="sm" onClick={handleDeleteTeam}>
               <Trash2 size={14} />
-              Delete Team
+              {t('teamDetail.deleteTeam')}
             </Button>
           </div>
         </section>
@@ -498,6 +492,7 @@ interface MemberRowProps {
 }
 
 function MemberRow({ displayName, email, role, isCurrentUser, canManage, onChangeRole, onRemove }: MemberRowProps) {
+  const { t } = useTranslation()
   const [showMenu, setShowMenu] = useState(false)
 
   return (
@@ -508,7 +503,7 @@ function MemberRow({ displayName, email, role, isCurrentUser, canManage, onChang
       <div className="flex-1 min-w-0">
         <div className="text-sm flex items-center gap-1.5">
           {displayName}
-          {isCurrentUser && <span className="text-xs text-ink-faint">(you)</span>}
+          {isCurrentUser && <span className="text-xs text-ink-faint">{t('teamDetail.you')}</span>}
           {role === 'owner' && <Crown size={11} className="text-chord shrink-0" />}
         </div>
         <div className="text-xs text-ink-faint truncate">{email}</div>
@@ -519,7 +514,7 @@ function MemberRow({ displayName, email, role, isCurrentUser, canManage, onChang
             onClick={() => setShowMenu(v => !v)}
             className="flex items-center gap-1 text-xs text-ink-muted hover:text-ink bg-surface-2 border border-surface-3 rounded px-2 py-1"
           >
-            {ROLE_LABELS[role]}
+            {t(roleLabelKey(role))}
             <ChevronDown size={11} />
           </button>
           {showMenu && (
@@ -532,7 +527,7 @@ function MemberRow({ displayName, email, role, isCurrentUser, canManage, onChang
                     onClick={() => { onChangeRole(r); setShowMenu(false) }}
                     className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-surface-3 ${role === r ? 'text-chord' : 'text-ink'}`}
                   >
-                    {ROLE_LABELS[r]}
+                    {t(roleLabelKey(r))}
                   </button>
                 ))}
                 <hr className="border-surface-3 my-1" />
@@ -540,14 +535,14 @@ function MemberRow({ displayName, email, role, isCurrentUser, canManage, onChang
                   onClick={() => { onRemove(); setShowMenu(false) }}
                   className="block w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-surface-3"
                 >
-                  Remove
+                  {t('teamDetail.remove')}
                 </button>
               </div>
             </>
           )}
         </div>
       ) : (
-        <span className="text-xs text-ink-faint px-2 py-1">{ROLE_LABELS[role]}</span>
+        <span className="text-xs text-ink-faint px-2 py-1">{t(roleLabelKey(role))}</span>
       )}
     </div>
   )

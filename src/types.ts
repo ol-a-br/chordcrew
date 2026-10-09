@@ -1,5 +1,7 @@
 // ─── Core entity types — mirrors the ChordCrew spec data model ───────────────
 
+import type { LanguageCode } from '@/i18n'
+
 export interface User {
   id: string
   email: string
@@ -166,7 +168,7 @@ export interface SyncState {
 // ─── UI / app state types ─────────────────────────────────────────────────────
 
 export interface AppSettings {
-  language: 'en' | 'de'
+  language: LanguageCode
   darkMode: boolean
   defaultColumnCount: number  // 1–5
   pedalKeyNext: string        // keydown event.key, default "ArrowRight"

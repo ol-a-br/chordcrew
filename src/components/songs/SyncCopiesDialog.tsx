@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react'
 import { GitCompare, X, ArrowRight, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { db, markPending, upsertSongVersions } from '@/db'
 import { isSongDiverged } from '@/utils/linkedSongs'
 import { Button } from '@/components/shared/Button'
@@ -13,27 +15,28 @@ interface Props {
   onClose: () => void
 }
 
-function relativeDate(ts: number): string {
+function relativeDate(ts: number, t: TFunction): string {
   const diff = Date.now() - ts
   const days = Math.floor(diff / 86_400_000)
-  if (days === 0) return 'today'
-  if (days === 1) return 'yesterday'
-  if (days < 30) return `${days} days ago`
-  const months = Math.floor(days / 30)
-  return months === 1 ? '1 month ago' : `${months} months ago`
+  if (days === 0) return t('syncCopies.updatedToday')
+  if (days === 1) return t('syncCopies.updatedYesterday')
+  if (days < 30) return t('syncCopies.updatedDaysAgo', { count: days })
+  return t('syncCopies.updatedMonthsAgo', { count: Math.floor(days / 30) })
 }
 
+// label = i18n key
 const DIFF_FIELDS: { label: string; get: (s: Song) => string }[] = [
-  { label: 'Title',    get: s => s.title },
-  { label: 'Artist',   get: s => s.artist ?? '' },
-  { label: 'Tags',     get: s => [...(s.tags ?? [])].sort().join(', ') },
-  { label: 'Tempo',    get: s => s.transcription.tempo ? `${s.transcription.tempo} BPM` : '—' },
-  { label: 'Capo',     get: s => s.transcription.capo ? `Capo ${s.transcription.capo}` : '—' },
-  { label: 'Chords',   get: s => s.transcription.content.replace(/\{[^}]*\}/g, '').replace(/\[[^\]]*\]/g, '…').slice(0, 80) },
+  { label: 'syncCopies.fieldTitle',  get: s => s.title },
+  { label: 'syncCopies.fieldArtist', get: s => s.artist ?? '' },
+  { label: 'syncCopies.fieldTags',   get: s => [...(s.tags ?? [])].sort().join(', ') },
+  { label: 'syncCopies.fieldTempo',  get: s => s.transcription.tempo ? `${s.transcription.tempo} BPM` : '—' },
+  { label: 'syncCopies.fieldCapo',   get: s => s.transcription.capo ? `Capo ${s.transcription.capo}` : '—' },
+  { label: 'syncCopies.fieldChords', get: s => s.transcription.content.replace(/\{[^}]*\}/g, '').replace(/\[[^\]]*\]/g, '…').slice(0, 80) },
 ]
 
 export function SyncCopiesDialog({ song, linkedSongs, books, onClose }: Props) {
   const { user } = useAuth()
+  const { t } = useTranslation()
   const bookMap = useMemo(() => new Map(books.map(b => [b.id, b.title])), [books])
 
   // Pick which pair to reconcile (when there are multiple linked copies)
@@ -88,7 +91,7 @@ export function SyncCopiesDialog({ song, linkedSongs, books, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-surface-3 shrink-0">
           <GitCompare size={18} className="text-amber-500 shrink-0" />
-          <span className="font-semibold text-sm flex-1">Sync Copies</span>
+          <span className="font-semibold text-sm flex-1">{t('syncCopies.title')}</span>
           <button onClick={onClose} className="text-ink-muted hover:text-ink p-1 rounded">
             <X size={16} />
           </button>
@@ -98,7 +101,7 @@ export function SyncCopiesDialog({ song, linkedSongs, books, onClose }: Props) {
           {/* Pair picker (when there are multiple linked copies) */}
           {linkedSongs.length > 1 && (
             <div>
-              <p className="text-xs text-ink-muted mb-1.5">Reconcile with:</p>
+              <p className="text-xs text-ink-muted mb-1.5">{t('syncCopies.reconcileWith')}</p>
               <div className="flex flex-wrap gap-2">
                 {linkedSongs.map(s => (
                   <button
@@ -110,7 +113,7 @@ export function SyncCopiesDialog({ song, linkedSongs, books, onClose }: Props) {
                         : 'border-surface-3 text-ink-muted hover:border-amber-500/30 hover:text-ink'
                     }`}
                   >
-                    {bookMap.get(s.bookId) ?? 'Unknown book'}
+                    {bookMap.get(s.bookId) ?? t('library.unknownBook')}
                     {isSongDiverged(song, s) && (
                       <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
                     )}
@@ -123,39 +126,38 @@ export function SyncCopiesDialog({ song, linkedSongs, books, onClose }: Props) {
           {/* Direction banner */}
           <div className="flex items-center gap-2 text-xs rounded-lg bg-surface-2 px-3 py-2.5">
             <div className="flex-1 min-w-0">
-              <p className="font-medium truncate">{bookMap.get(source.bookId) ?? 'Unknown book'}</p>
-              <p className="text-ink-muted">updated {relativeDate(source.updatedAt)}</p>
+              <p className="font-medium truncate">{bookMap.get(source.bookId) ?? t('library.unknownBook')}</p>
+              <p className="text-ink-muted">{relativeDate(source.updatedAt, t)}</p>
             </div>
             <ArrowRight size={14} className="text-amber-500 shrink-0" />
             <div className="flex-1 min-w-0 text-right">
-              <p className="font-medium truncate">{bookMap.get(target.bookId) ?? 'Unknown book'}</p>
-              <p className="text-ink-muted">updated {relativeDate(target.updatedAt)}</p>
+              <p className="font-medium truncate">{bookMap.get(target.bookId) ?? t('library.unknownBook')}</p>
+              <p className="text-ink-muted">{relativeDate(target.updatedAt, t)}</p>
             </div>
           </div>
 
           {!diverged && (
-            <p className="text-sm text-ink-muted text-center py-2">These copies are already in sync.</p>
+            <p className="text-sm text-ink-muted text-center py-2">{t('syncCopies.inSync')}</p>
           )}
 
           {/* Diff table */}
           {diverged && (
             <div className="space-y-1.5">
-              <p className="text-xs text-ink-muted uppercase tracking-wider">Changed fields</p>
+              <p className="text-xs text-ink-muted uppercase tracking-wider">{t('syncCopies.changedFields')}</p>
               {DIFF_FIELDS.map(({ label, get }) => {
                 const srcVal = get(source)
                 const tgtVal = get(target)
                 if (srcVal === tgtVal) return null
                 return (
                   <div key={label} className="rounded-lg bg-surface-2 px-3 py-2 text-xs">
-                    <p className="text-ink-faint mb-1">{label}</p>
+                    <p className="text-ink-faint mb-1">{t(label)}</p>
                     <p className="text-ink line-through opacity-50 truncate">{tgtVal || '—'}</p>
                     <p className="text-amber-400 truncate">{srcVal || '—'}</p>
                   </div>
                 )
               })}
               <p className="text-[11px] text-ink-faint pt-1">
-                Key is preserved per copy.
-                The overwritten version can be restored from the Editor's version history.
+                {t('syncCopies.keyPreserved')}
               </p>
             </div>
           )}
@@ -164,11 +166,11 @@ export function SyncCopiesDialog({ song, linkedSongs, books, onClose }: Props) {
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-surface-3 shrink-0">
           <Button variant="ghost" size="sm" onClick={onClose} disabled={syncing || done}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           {done ? (
             <span className="flex items-center gap-1.5 text-sm text-green-400">
-              <Check size={15} /> Synced
+              <Check size={15} /> {t('syncCopies.synced')}
             </span>
           ) : (
             <Button
@@ -177,7 +179,7 @@ export function SyncCopiesDialog({ song, linkedSongs, books, onClose }: Props) {
               onClick={handleSync}
               disabled={!diverged || syncing}
             >
-              {syncing ? 'Syncing…' : 'Sync now'}
+              {syncing ? t('library.ctSyncing') : t('syncCopies.syncNow')}
             </Button>
           )}
         </div>

@@ -1,12 +1,14 @@
 import { useEffect, useRef, useMemo } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useTranslation } from 'react-i18next'
 import { db } from '@/db'
 import { SongRenderer } from '@/components/viewer/SongRenderer'
 import { transposeKey } from '@/utils/chordpro'
 
 export default function PrintSongPage() {
   const { id } = useParams<{ id: string }>()
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const transpose = parseInt(searchParams.get('transpose') ?? '0', 10)
   const columns   = parseInt(searchParams.get('columns')   ?? '2', 10)
@@ -36,7 +38,7 @@ export default function PrintSongPage() {
         style={{ printColorAdjust: 'exact' } as React.CSSProperties}
         className="print:hidden fixed top-4 right-4 px-3 py-1.5 bg-gray-800 text-white rounded-lg text-sm z-50"
       >
-        Close
+        {t('common.close')}
       </button>
 
       {/* Song header */}
@@ -57,7 +59,7 @@ export default function PrintSongPage() {
             </span>
           )}
           {song.transcription.tempo > 0 && <span>♩ {song.transcription.tempo}</span>}
-          {song.transcription.capo > 0 && <span>Capo {song.transcription.capo}</span>}
+          {song.transcription.capo > 0 && <span>{t('viewer.capo', { capo: song.transcription.capo })}</span>}
           {song.transcription.timeSignature && song.transcription.timeSignature !== '4/4' && (
             <span>{song.transcription.timeSignature}</span>
           )}

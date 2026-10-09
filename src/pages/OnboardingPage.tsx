@@ -3,7 +3,7 @@ import { Music2, Globe, LogIn, BookOpen, ListMusic, Zap, ChevronRight, Check, Tr
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/auth/AuthContext'
 import { saveSettings } from '@/db'
-import i18n from '@/i18n'
+import i18n, { LANGUAGES, type LanguageCode } from '@/i18n'
 import { Button } from '@/components/shared/Button'
 
 type Step = 'language' | 'login' | 'tutorial'
@@ -53,7 +53,7 @@ export default function OnboardingPage() {
     if (signedIn && step === 'login') setStep('tutorial')
   }, [signedIn, step])
 
-  const selectLanguage = async (lang: 'en' | 'de') => {
+  const selectLanguage = async (lang: LanguageCode) => {
     await i18n.changeLanguage(lang)
     localStorage.setItem('chordcrew-lang', lang)
     await saveSettings({ language: lang })
@@ -107,23 +107,20 @@ export default function OnboardingPage() {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm text-ink-muted justify-center">
                 <Globe size={15} />
-                <span>Choose your language / Sprache wählen</span>
+                {/* Not chosen yet — ask in every available language */}
+                <span>{LANGUAGES.map(l => t('onboarding.chooseLanguage', { lng: l.code })).join(' / ')}</span>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => selectLanguage('en')}
-                  className="flex flex-col items-center gap-2 p-4 bg-surface-1 border border-surface-3 hover:border-chord/40 hover:bg-chord/5 rounded-xl transition-colors"
-                >
-                  <span className="text-2xl">🇬🇧</span>
-                  <span className="text-sm font-medium">English</span>
-                </button>
-                <button
-                  onClick={() => selectLanguage('de')}
-                  className="flex flex-col items-center gap-2 p-4 bg-surface-1 border border-surface-3 hover:border-chord/40 hover:bg-chord/5 rounded-xl transition-colors"
-                >
-                  <span className="text-2xl">🇩🇪</span>
-                  <span className="text-sm font-medium">Deutsch</span>
-                </button>
+                {LANGUAGES.map(l => (
+                  <button
+                    key={l.code}
+                    onClick={() => selectLanguage(l.code)}
+                    className="flex flex-col items-center gap-2 p-4 bg-surface-1 border border-surface-3 hover:border-chord/40 hover:bg-chord/5 rounded-xl transition-colors"
+                  >
+                    <span className="text-2xl">{l.flag}</span>
+                    <span className="text-sm font-medium">{l.name}</span>
+                  </button>
+                ))}
               </div>
             </div>
           </div>

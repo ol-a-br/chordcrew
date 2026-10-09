@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import i18n from '@/i18n'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Plus, Star, BookOpen, ChevronRight, Music, Tag, Users,
@@ -25,27 +26,14 @@ import type { Song, Book } from '@/types'
 
 type SortKey = 'title' | 'artist' | 'updatedAt' | 'savedAt' | 'accessedAt'
 
+// i18n keys of the sort options
 const SORT_LABELS: Record<SortKey, string> = {
-  title:      'Title',
-  artist:     'Artist',
-  updatedAt:  'Last edited',
-  savedAt:    'Date created',
-  accessedAt: 'Recently opened',
+  title:      'library.sortTitle',
+  artist:     'library.sortArtist',
+  updatedAt:  'library.sortUpdated',
+  savedAt:    'library.sortCreated',
+  accessedAt: 'library.sortAccessed',
 }
-
-const EMPTY_CHORDPRO = `{title:New Song}
-{subtitle:Artist Name}
-{key:G}
-{tempo:120}
-{time:4/4}
-
-[Verse 1]
-[G]Your lyrics [C]here
-[G]Second line [D]here
-
-[Chorus]
-[G]Chorus [C]lyrics [D]go [G]here
-`
 
 export default function LibraryPage() {
   const { t } = useTranslation()
@@ -259,7 +247,7 @@ export default function LibraryPage() {
         const team = myTeams.find(t => t.id === activeTeamId)
         bookId = generateId()
         await db.books.add({
-          id: bookId, title: `${team?.name ?? 'Team'} Songs`,
+          id: bookId, title: t('library.teamBookName', { team: team?.name ?? t('library.teamFallback') }),
           author: user.displayName, ownerId: user.id,
           sharedTeamId: activeTeamId,
           readOnly: false, shareable: true,
@@ -274,15 +262,17 @@ export default function LibraryPage() {
     }
 
     const id = generateId()
+    const title = t('library.newSong')
+    const content = t('library.newSongTemplate', { title })
     await db.songs.add({
       id, bookId,
-      title: 'New Song', artist: '',
+      title, artist: '',
       tags: [],
-      searchText: buildSearchText('New Song', '', [], EMPTY_CHORDPRO),
+      searchText: buildSearchText(title, '', [], content),
       isFavorite: false,
       savedAt: Date.now(), updatedAt: Date.now(),
       transcription: {
-        content: EMPTY_CHORDPRO,
+        content,
         key: 'G', capo: 0, tempo: 120,
         timeSignature: '4/4', duration: 0,
         chordNotation: 'standard',
@@ -327,10 +317,10 @@ export default function LibraryPage() {
 
   const bulkDelete = async () => {
     const count = selectedIds.size
-    if (!confirm(`Delete ${count} song${count !== 1 ? 's' : ''}? This cannot be undone.`)) return
+    if (!confirm(t('library.bulkDeleteConfirm', { count }))) return
     await deleteSongs(sortedSongs.filter(s => selectedIds.has(s.id)))
     exitSelectMode()
-    showBulkToast(`Deleted ${count} song${count !== 1 ? 's' : ''}`)
+    showBulkToast(t('library.bulkDeleted', { count }))
   }
 
   const deleteSongs = async (songs: Song[]) => {
@@ -359,8 +349,8 @@ export default function LibraryPage() {
     if (existing) return existing.id
     const bookId = generateId()
     await db.books.add({
-      id: bookId, title: `${teamName} Songs`,
-      author: user?.displayName ?? 'Team',
+      id: bookId, title: t('library.teamBookName', { team: teamName }),
+      author: user?.displayName ?? t('library.teamFallback'),
       ownerId: user?.id ?? '',
       sharedTeamId: teamId,
       readOnly: false, shareable: true,
@@ -396,7 +386,7 @@ export default function LibraryPage() {
     // Navigate to the target context
     if (targetType === 'team') handleTeamClick(targetId)
     else handleNavClick(targetId)
-    showBulkToast(`Copied ${songs.length} song${songs.length !== 1 ? 's' : ''} to ${targetLabel}`)
+    showBulkToast(t('library.bulkCopied', { count: songs.length, target: targetLabel }))
   }
 
   const bulkMoveTo = async (targetId: string, targetType: 'book' | 'team', targetLabel: string) => {
@@ -413,7 +403,7 @@ export default function LibraryPage() {
     exitSelectMode()
     if (targetType === 'team') handleTeamClick(targetId)
     else handleNavClick(targetId)
-    showBulkToast(`Moved ${songs.length} song${songs.length !== 1 ? 's' : ''} to ${targetLabel}`)
+    showBulkToast(t('library.bulkMoved', { count: songs.length, target: targetLabel }))
   }
 
   // ─── Bulk tag ─────────────────────────────────────────────────────────────────
@@ -435,7 +425,7 @@ export default function LibraryPage() {
     }
     setBulkTagInput('')
     setShowTagMenu(false)
-    showBulkToast(`Tagged ${songs.length} song${songs.length !== 1 ? 's' : ''} with "${normalized}"`)
+    showBulkToast(t('library.bulkTagged', { count: songs.length, tag: normalized }))
   }
 
   // ─── CT bulk ops ─────────────────────────────────────────────────────────────
@@ -454,7 +444,7 @@ export default function LibraryPage() {
       ctSongMap = new Map(all.map(s => [s.id, s]))
     } catch {
       exitSelectMode()
-      showBulkToast('Failed to load CT songs — check connection')
+      showBulkToast(t('library.ctLoadFailed'))
       return
     }
 
@@ -473,8 +463,8 @@ export default function LibraryPage() {
     exitSelectMode()
     showBulkToast(
       updated > 0
-        ? `Set category "${categoryName}" on ${updated} CT song${updated !== 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} skipped` : ''}`
-        : `Category change failed — check CT permissions`
+        ? t('library.ctCategorySet', { count: updated, category: categoryName }) + (skipped > 0 ? t('library.ctSkipped', { count: skipped }) : '')
+        : t('library.ctCategoryFailed')
     )
   }
 
@@ -492,8 +482,8 @@ export default function LibraryPage() {
     exitSelectMode()
     showBulkToast(
       pushed > 0
-        ? `Pushed CCLI to ${pushed} CT song${pushed !== 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} skipped` : ''}`
-        : `No CCLI matches found for selected songs`
+        ? t('library.ctCcliPushed', { count: pushed }) + (skipped > 0 ? t('library.ctSkipped', { count: skipped }) : '')
+        : t('library.ctNoCcliMatches')
     )
   }
 
@@ -525,7 +515,7 @@ export default function LibraryPage() {
       ctSongMap = new Map(all.map(s => [s.id, s]))
     } catch {
       exitSelectMode()
-      showBulkToast('Failed to load CT songs — check connection')
+      showBulkToast(t('library.ctLoadFailed'))
       return
     }
 
@@ -555,8 +545,8 @@ export default function LibraryPage() {
     exitSelectMode()
     showBulkToast(
       updated > 0
-        ? `Updated ${updated} CT song${updated !== 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} skipped` : ''}`
-        : `No changes needed — ${skipped} songs had no local match or already matched`
+        ? t('library.ctUpdated', { count: updated }) + (skipped > 0 ? t('library.ctSkipped', { count: skipped }) : '')
+        : t('library.ctNoChanges', { count: skipped })
     )
   }
 
@@ -612,7 +602,7 @@ export default function LibraryPage() {
       setDeletingBook(book)  // DeleteBookDialog asks whether to delete the songs too
       return
     }
-    if (!confirm(`Delete book "${book.title}"?`)) return
+    if (!confirm(t('library.deleteBookConfirm', { book: book.title }))) return
     await removeBook(book.id)
   }
 
@@ -632,8 +622,8 @@ export default function LibraryPage() {
     }
     await removeBook(book.id)
     showBulkToast(deleteBookSongs
-      ? `Deleted "${book.title}" and ${songs.length} song${songs.length !== 1 ? 's' : ''}`
-      : `Deleted "${book.title}"`)
+      ? t('library.bookDeletedWithSongs', { book: book.title, count: songs.length })
+      : t('library.bookDeleted', { book: book.title }))
   }
 
   const removeBook = async (bookId: string) => {
@@ -692,7 +682,7 @@ export default function LibraryPage() {
             <span className="text-[11px] text-ink-faint uppercase tracking-wider flex-1">{t('library.books')}</span>
             <button
               onClick={openNewBook}
-              title="New book"
+              title={t('library.newBook')}
               className="text-ink-faint hover:text-ink-muted transition-colors p-0.5"
             >
               <Plus size={13} />
@@ -746,7 +736,7 @@ export default function LibraryPage() {
                   if (e.key === 'Escape') { setShowNewBook(false); setNewBookName('') }
                 }}
                 onBlur={() => { if (!newBookName.trim()) { setShowNewBook(false) } }}
-                placeholder="Book name…"
+                placeholder={t('library.bookNamePlaceholder')}
                 className="w-full bg-surface-2 border border-chord/40 rounded-md px-2 py-1 text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-1 focus:ring-chord/60"
               />
             </div>
@@ -775,7 +765,7 @@ export default function LibraryPage() {
 
         {myTeams.length > 0 && (
           <>
-            <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">Teams</div>
+            <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">{t('setlist.teams')}</div>
             {myTeams.map(team => {
               const teamSongCount = allSongs?.filter(s => bookTeamMap[s.bookId] === team.id).length ?? 0
               return (
@@ -787,7 +777,7 @@ export default function LibraryPage() {
 
         {allTags.length > 0 && (
           <>
-            <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">Tags</div>
+            <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">{t('song.tags')}</div>
             {allTags.map(tag => (
               <NavItem key={tag} label={tag} icon={<Tag size={14} />} active={activeTag === tag} onClick={() => handleTagClick(tag)} count={allSongs?.filter(s => s.tags.some(t => t.toLowerCase() === tag)).length} />
             ))}
@@ -796,7 +786,7 @@ export default function LibraryPage() {
 
         {allKeys.length > 0 && (
           <>
-            <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">Key</div>
+            <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">{t('song.key')}</div>
             {allKeys.map(key => (
               <NavItem
                 key={key}
@@ -875,11 +865,11 @@ export default function LibraryPage() {
           {selectMode ? (
             <>
               <span className="text-sm font-medium flex-1">
-                {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Tap songs to select'}
+                {selectedIds.size > 0 ? t('setlist.selectedCount', { count: selectedIds.size }) : t('library.tapToSelect')}
               </span>
               {selectedIds.size < sortedSongs.length && (
                 <button onClick={selectAll} className="text-xs text-chord hover:text-chord/80 shrink-0">
-                  Select all
+                  {t('setlist.selectAll')}
                 </button>
               )}
               {selectedIds.size > 0 && (
@@ -891,13 +881,13 @@ export default function LibraryPage() {
                       className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-ink-muted hover:bg-surface-2 hover:text-ink transition-colors border border-surface-3"
                     >
                       <Tag size={14} />
-                      Tag
+                      {t('library.tag')}
                     </button>
                     {showTagMenu && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setShowTagMenu(false)} />
                         <div className="absolute left-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl p-3 min-w-[200px] space-y-2">
-                          <div className="text-[11px] text-ink-faint uppercase tracking-wider">Add tag to {selectedIds.size} song{selectedIds.size !== 1 ? 's' : ''}</div>
+                          <div className="text-[11px] text-ink-faint uppercase tracking-wider">{t('library.addTagTo', { count: selectedIds.size })}</div>
                           <div className="flex gap-1.5">
                             <input
                               autoFocus
@@ -907,7 +897,7 @@ export default function LibraryPage() {
                                 if (e.key === 'Enter') bulkAddTag(bulkTagInput)
                                 if (e.key === 'Escape') setShowTagMenu(false)
                               }}
-                              placeholder="New tag…"
+                              placeholder={t('library.newTagPlaceholder')}
                               className="flex-1 bg-surface-3 rounded px-2 py-1 text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-1 focus:ring-chord/50"
                             />
                             <button
@@ -915,12 +905,12 @@ export default function LibraryPage() {
                               disabled={!bulkTagInput.trim()}
                               className="px-2 py-1 rounded bg-chord/15 text-chord text-xs disabled:opacity-40 hover:bg-chord/25 transition-colors"
                             >
-                              Add
+                              {t('library.add')}
                             </button>
                           </div>
                           {allTags.length > 0 && (
                             <>
-                              <div className="text-[11px] text-ink-faint">Existing tags</div>
+                              <div className="text-[11px] text-ink-faint">{t('library.existingTags')}</div>
                               <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
                                 {allTags.map(tag => (
                                   <button
@@ -942,10 +932,10 @@ export default function LibraryPage() {
                   <button
                     onClick={bulkDelete}
                     className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-400/10 transition-colors shrink-0"
-                    title="Delete selected songs"
+                    title={t('library.deleteSelected')}
                   >
                     <Trash2 size={14} />
-                    Delete
+                    {t('common.delete')}
                   </button>
                   {/* Organize (copy/move) */}
                   {showOrganizeButton && (
@@ -955,7 +945,7 @@ export default function LibraryPage() {
                         className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-ink-muted hover:bg-surface-2 hover:text-ink transition-colors border border-surface-3"
                       >
                         <FolderInput size={14} />
-                        Organize
+                        {t('setlist.organize')}
                       </button>
                       {showOrganizeMenu && (
                         <>
@@ -963,7 +953,7 @@ export default function LibraryPage() {
                           <div className="absolute right-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl py-1 min-w-[200px]">
                             {organizeTargets.length > 0 ? (
                               <>
-                                <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">Copy to</div>
+                                <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">{t('setlist.copyTo')}</div>
                                 {organizeTargets.map(target => (
                                   <button
                                     key={`copy-${target.id}`}
@@ -975,7 +965,7 @@ export default function LibraryPage() {
                                   </button>
                                 ))}
                                 <hr className="border-surface-3 my-1" />
-                                <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">Move to</div>
+                                <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">{t('setlist.moveTo')}</div>
                                 {organizeTargets.map(target => (
                                   <button
                                     key={`move-${target.id}`}
@@ -988,7 +978,7 @@ export default function LibraryPage() {
                                 ))}
                               </>
                             ) : (
-                              <p className="px-3 py-2 text-xs text-ink-faint">No other books or teams available</p>
+                              <p className="px-3 py-2 text-xs text-ink-faint">{t('library.noOrganizeTargets')}</p>
                             )}
                             {/* CT-specific bulk ops — only when viewing a CT book */}
                             {activeBookIsCT && ctConfigured && (
@@ -1001,7 +991,7 @@ export default function LibraryPage() {
                                   className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
                                 >
                                   <FolderInput size={11} />
-                                  Set category…
+                                  {t('library.ctSetCategory')}
                                   <ChevronRight size={11} className={`ml-auto transition-transform ${showCtCategoryMenu ? 'rotate-90' : ''}`} />
                                 </button>
                                 {showCtCategoryMenu && ctCategories.length > 0 && (
@@ -1023,7 +1013,7 @@ export default function LibraryPage() {
                                   className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
                                 >
                                   <Hash size={11} />
-                                  Push CCLI to ChurchTools
+                                  {t('library.ctPushCcli')}
                                 </button>
                                 {/* Fill from local songs */}
                                 <button
@@ -1031,7 +1021,7 @@ export default function LibraryPage() {
                                   className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-ink hover:bg-surface-3"
                                 >
                                   <RefreshCw size={11} />
-                                  Fill from local songs
+                                  {t('library.ctFillFromLocal')}
                                 </button>
                               </>
                             )}
@@ -1049,7 +1039,7 @@ export default function LibraryPage() {
                                   className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-chord hover:bg-surface-3"
                                 >
                                   <Upload size={11} />
-                                  Upload to ChurchTools
+                                  {t('library.ctUpload')}
                                 </button>
                               </>
                             )}
@@ -1060,7 +1050,7 @@ export default function LibraryPage() {
                   )}
                 </>
               )}
-              <Button variant="ghost" size="sm" onClick={toggleSelectMode}>Cancel</Button>
+              <Button variant="ghost" size="sm" onClick={toggleSelectMode}>{t('common.cancel')}</Button>
             </>
           ) : (
             <>
@@ -1077,7 +1067,7 @@ export default function LibraryPage() {
                 className="bg-surface-2 text-xs text-ink-muted rounded-lg px-2 py-2 border border-surface-3 focus:outline-none focus:ring-1 focus:ring-chord/50 cursor-pointer"
               >
                 {(Object.keys(SORT_LABELS) as SortKey[]).map(k => (
-                  <option key={k} value={k}>{SORT_LABELS[k]}</option>
+                  <option key={k} value={k}>{t(SORT_LABELS[k])}</option>
                 ))}
               </select>
 
@@ -1086,7 +1076,7 @@ export default function LibraryPage() {
                 <button
                   onClick={toggleSelectMode}
                   className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-surface-2"
-                  title="Select songs"
+                  title={t('library.selectSongs')}
                 >
                   <CheckSquare size={16} />
                 </button>
@@ -1095,7 +1085,7 @@ export default function LibraryPage() {
               {activeBookIsCT ? (
                 <Button variant="ghost" size="sm" onClick={syncCtBook} disabled={ctSyncing}>
                   <RefreshCw size={14} className={ctSyncing ? 'animate-spin' : ''} />
-                  {ctSyncing ? 'Syncing…' : 'Sync CT'}
+                  {ctSyncing ? t('library.ctSyncing') : t('library.ctSync')}
                 </Button>
               ) : !isActiveReadOnly && (
                 <Button variant="primary" size="sm" onClick={createSong}>
@@ -1123,13 +1113,13 @@ export default function LibraryPage() {
               <Music size={32} className="text-ink-faint mb-2" />
               {activeTeamId && !isActiveReadOnly ? (
                 <>
-                  <p>No team songs yet.</p>
-                  <p className="text-xs text-ink-faint">Add a new song, or use select mode to copy songs here.</p>
+                  <p>{t('library.noTeamSongs')}</p>
+                  <p className="text-xs text-ink-faint">{t('library.noTeamSongsHint')}</p>
                 </>
               ) : activeTeamId && isActiveReadOnly ? (
                 <>
-                  <p>No team songs yet.</p>
-                  <p className="text-xs text-ink-faint">Team owners and contributors can add songs.</p>
+                  <p>{t('library.noTeamSongs')}</p>
+                  <p className="text-xs text-ink-faint">{t('library.noTeamSongsReaderHint')}</p>
                 </>
               ) : (
                 <>
@@ -1225,6 +1215,7 @@ function SongRow({
   selected?: boolean
   onToggleSelect?: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <li
       className={`flex items-center gap-3 px-4 py-3 border-b border-surface-3/50 cursor-pointer group transition-colors
@@ -1243,7 +1234,7 @@ function SongRow({
         <div className="text-xs text-ink-muted truncate">{song.artist || '—'}</div>
         {showMeta && (
           <div className="text-xs text-amber-600 truncate">
-            {book?.title ?? (song.ctSongId != null ? 'ChurchTools' : 'Unknown book')} · {new Date(song.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+            {book?.title ?? (song.ctSongId != null ? 'ChurchTools' : t('library.unknownBook'))} · {new Date(song.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
           </div>
         )}
       </div>
@@ -1264,7 +1255,7 @@ function SongRow({
               .flatMap(id => {
                 const linked = songMap?.get(id)
                 if (!linked) return []
-                const name = bookMap?.[linked.bookId]?.title ?? (linked.ctSongId != null ? 'ChurchTools' : 'Unknown book')
+                const name = bookMap?.[linked.bookId]?.title ?? (linked.ctSongId != null ? 'ChurchTools' : t('library.unknownBook'))
                 return [name]
               })}
             onClick={onSyncClick}
@@ -1275,7 +1266,7 @@ function SongRow({
           <button
             className="text-ink-faint hover:text-ink opacity-0 group-hover:opacity-100 p-1"
             onClick={e => { e.stopPropagation(); navigate(`/editor/${song.id}`) }}
-            title="Edit"
+            title={t('common.edit')}
           >
             <ChevronRight size={16} />
           </button>
@@ -1328,6 +1319,7 @@ function BookNavItem({ book, active, count, onClick, onRename, onDelete }: {
   onRename: () => void
   onDelete: () => void
 }) {
+  const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
   return (
     <div
@@ -1349,7 +1341,7 @@ function BookNavItem({ book, active, count, onClick, onRename, onDelete }: {
               role="button"
               onClick={e => { e.stopPropagation(); onRename() }}
               className="p-0.5 rounded hover:text-ink-muted text-ink-faint"
-              title="Rename book"
+              title={t('library.renameBook')}
             >
               <Pencil size={11} />
             </span>
@@ -1357,7 +1349,7 @@ function BookNavItem({ book, active, count, onClick, onRename, onDelete }: {
               role="button"
               onClick={e => { e.stopPropagation(); onDelete() }}
               className="p-0.5 rounded hover:text-red-400 text-ink-faint"
-              title="Delete book"
+              title={t('library.deleteBook')}
             >
               <Trash2 size={11} />
             </span>
@@ -1376,6 +1368,7 @@ function CtBookNavItem({ book, active, count, onClick, onSync, syncing }: {
   onSync: () => void
   syncing: boolean
 }) {
+  const { t } = useTranslation()
   return (
     <div className="relative group/ct">
       <button
@@ -1392,7 +1385,7 @@ function CtBookNavItem({ book, active, count, onClick, onSync, syncing }: {
           role="button"
           onClick={e => { e.stopPropagation(); onSync() }}
           className={`hidden group-hover/ct:inline-flex p-0.5 rounded transition-colors ${syncing ? 'text-chord' : 'text-ink-faint hover:text-ink-muted'}`}
-          title="Sync from ChurchTools"
+          title={t('library.ctSyncBook')}
         >
           <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
         </span>
@@ -1409,35 +1402,36 @@ function DeleteBookDialog({ book, songCount, moveToTitle, onDeleteSongs, onKeepS
   onKeepSongs: () => void
   onClose: () => void
 }) {
-  const songs = `${songCount} song${songCount !== 1 ? 's' : ''}`
+  const { t } = useTranslation()
+  const songs = t('setlist.songCount', { count: songCount })
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
       <div
         role="dialog"
-        aria-label={`Delete book "${book.title}"`}
+        aria-label={t('library.deleteBookLabel', { book: book.title })}
         className="bg-surface-1 border border-surface-3 rounded-2xl w-full max-w-sm shadow-2xl"
         onClick={e => e.stopPropagation()}
         onKeyDown={e => { if (e.key === 'Escape') onClose() }}
       >
         <div className="flex items-center gap-3 px-5 py-4 border-b border-surface-3">
           <Trash2 size={16} className="text-red-400 shrink-0" />
-          <span className="font-semibold text-sm flex-1 truncate">Delete book "{book.title}"?</span>
+          <span className="font-semibold text-sm flex-1 truncate">{t('library.deleteBookConfirm', { book: book.title })}</span>
           <button onClick={onClose} className="text-ink-muted hover:text-ink p-1 rounded">
             <X size={16} />
           </button>
         </div>
         <div className="px-5 py-4 space-y-4">
           <p className="text-sm text-ink-muted">
-            This book contains {songs}. Should they be deleted too?
+            {t('library.bookContains', { songs })}
           </p>
           <div className="flex flex-col gap-2">
             <Button variant="danger" onClick={onDeleteSongs}>
-              Delete book and {songs}
+              {t('library.deleteBookAndSongs', { songs })}
             </Button>
             <Button variant="secondary" onClick={onKeepSongs} autoFocus>
-              {moveToTitle ? `Keep songs (move to "${moveToTitle}")` : 'Keep songs (move to a new book)'}
+              {moveToTitle ? t('library.keepSongsMoveTo', { book: moveToTitle }) : t('library.keepSongsNewBook')}
             </Button>
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button variant="ghost" onClick={onClose}>{t('common.cancel')}</Button>
           </div>
         </div>
       </div>
@@ -1448,7 +1442,7 @@ function DeleteBookDialog({ book, songCount, moveToTitle, onDeleteSongs, onKeepS
 async function createFallbackBook(ownerId: string, displayName: string): Promise<string> {
   const id = generateId()
   await db.books.add({
-    id, title: `${displayName}'s Songs`,
+    id, title: i18n.t('library.personalBookName', { name: displayName }),
     author: displayName, ownerId,
     readOnly: false, shareable: true,
     createdAt: Date.now(), updatedAt: Date.now(),
@@ -1462,7 +1456,7 @@ async function ensureDefaultBook(ownerId: string, displayName: string): Promise<
   if (existing[0]) return existing[0].id
   const id = generateId()
   await db.books.add({
-    id, title: `${displayName}'s Songs`,
+    id, title: i18n.t('library.personalBookName', { name: displayName }),
     author: displayName, ownerId,
     readOnly: false, shareable: true,
     createdAt: Date.now(), updatedAt: Date.now(),

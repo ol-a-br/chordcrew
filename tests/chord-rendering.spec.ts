@@ -131,16 +131,17 @@ test.describe('Chord rendering — capo directive must not alter chords', () => 
     expect(html).not.toMatch(/>F</)
   })
 
-  test('transposing into an extreme key (G -> Gb) still renders a real chord, not grey text', async ({ page }) => {
+  test('transposing into an extreme key (G -> Gb) renders a practical, real chord', async ({ page }) => {
     await openViewer(page, songId)
-    // G major -> Gb major is one semitone down; Gb major's key signature
-    // respells the IV chord "Cmaj7" as "Cbmaj7".
+    // G major -> Gb major is one semitone down. The IV chord "Cmaj7" lands on
+    // B: chord charts write "Bmaj7", never the theoretical "Cbmaj7".
     await page.getByRole('button', { name: 'Transpose down' }).click()
     await page.waitForTimeout(200)
 
-    const info = await chordInfo(page, 'Cbmaj7')
-    expect(info, '"Cbmaj7" must appear verbatim after transposing G -> Gb').not.toBeNull()
-    expect(info!.isAnnotation, 'Cbmaj7 must not fall back to chord-annotation styling').toBe(false)
+    const info = await chordInfo(page, 'Bmaj7')
+    expect(info, '"Bmaj7" must appear after transposing G -> Gb').not.toBeNull()
+    expect(info!.isAnnotation, 'Bmaj7 must not fall back to chord-annotation styling').toBe(false)
+    expect(await page.locator('.chordpro-output').innerHTML()).not.toContain('Cb')
   })
 })
 
@@ -179,23 +180,21 @@ test.describe('Chord rendering — chord-only rows must have visible spacing', (
     const { songId } = await seedSong(page, CAPO_SONG, 'Capo Chord Test 3')
     await openViewer(page, songId)
 
-    // Find the verse row by one of its lyric words (ruby DOM order interleaves
-    // rt/chord text between base/lyric text nodes, so checking row.textContent
-    // for the full phrase is unreliable — check the base text nodes directly).
+    // Find the verse row by its lyrics. Ruby DOM order interleaves rt/chord
+    // text with the lyrics, so read each row's text with the rt elements
+    // removed (a ruby's base holds only the first word(s) of a lyric run; the
+    // rest follows the ruby as plain text).
     const result = await page.evaluate(() => {
-      const row = Array.from(document.querySelectorAll('.row'))
-        .find(r => Array.from(r.querySelectorAll('ruby')).some(ruby => {
-          const base = Array.from(ruby.childNodes).find(n => n.nodeType === Node.TEXT_NODE)
-          return base?.textContent?.includes('Line one')
-        }))
+      const lyricsOf = (r: Element) => {
+        const clone = r.cloneNode(true) as HTMLElement
+        clone.querySelectorAll('rt').forEach(rt => rt.remove())
+        return clone.textContent ?? ''
+      }
+      const row = Array.from(document.querySelectorAll('.row')).find(r => lyricsOf(r).includes('Line one'))
       if (!row) return { found: false }
       const rubies = Array.from(row.querySelectorAll('ruby'))
-      const baseTexts = rubies.map(r => {
-        const base = Array.from(r.childNodes).find(n => n.nodeType === Node.TEXT_NODE)
-        return base?.textContent ?? ''
-      })
       const marginRights = rubies.map(r => (r as HTMLElement).style.marginRight)
-      return { found: true, joinedLyrics: baseTexts.join(''), marginRights }
+      return { found: true, joinedLyrics: lyricsOf(row), marginRights }
     })
 
     expect(result.found, 'verse row with "Line one" not found').toBe(true)
@@ -204,4 +203,48 @@ test.describe('Chord rendering — chord-only rows must have visible spacing', (
     // to a row that has real lyrics.
     expect(result.marginRights?.every(m => m === '')).toBe(true)
   })
+})
+
+// ─── Words are never split mid-word at a line end ────────────────────────────
+// Chromium (Android) applied the row's overflow-wrap:break-word inside <ruby>
+// bases and broke words like "Werk|e" or "Herr|," at the line end although a
+// normal break point existed earlier on the line.
+
+const WRAP_SONG = `{title: Wrap Test}
+{key: A}
+
+{start_of_verse: Strophe 1}
+[A]Großer Gott, wir [D]loben dich, [E]Herr, wir [A]preisen deine Stärke
+{end_of_verse}
+
+{start_of_chorus: Refrain}
+[F#m]Vor dir neigt die [D]Erde sich und [E]bewundert deine [A]Werke
+[G]I will praise you Lord [Em7]a long [D/F#]time [G]ago and ever more my friend
+{end_of_chorus}
+`
+
+test.describe('Chord rendering — line wrapping', () => {
+  for (const width of [420, 560, 712]) {
+    test(`no word is split mid-word at a line end (${width}px)`, async ({ page }) => {
+      await waitForApp(page)
+      const { songId } = await seedSong(page, WRAP_SONG, 'Wrap Test')
+      await page.setViewportSize({ width, height: 900 })
+      await openViewer(page, songId)
+
+      const split = await page.evaluate(() => {
+        const found: string[] = []
+        document.querySelectorAll('.chordpro-output ruby').forEach(ruby => {
+          const base = Array.from(ruby.childNodes).find(n => n.nodeType === Node.TEXT_NODE)
+          const word = base?.textContent?.trim() ?? ''
+          if (!word || /\s/.test(word)) return
+          const range = document.createRange()
+          range.selectNodeContents(base!)
+          const lines = new Set(Array.from(range.getClientRects()).map(r => Math.round(r.top)))
+          if (lines.size > 1) found.push(word)
+        })
+        return found
+      })
+      expect(split, 'words split across two lines').toEqual([])
+    })
+  }
 })
