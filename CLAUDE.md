@@ -109,6 +109,7 @@ src/
     auth/LoginPage.tsx
     layout/AppShell.tsx           # Sidebar nav + mobile top bar + SyncBadge + TeamInviteNotification
     shared/Button.tsx
+    shared/ErrorBoundary.tsx      # Wraps the whole app: recovery screen + Reload instead of a blank page on any crash
     editor/ChordProEditor.tsx     # CodeMirror 6 with ChordPro syntax highlight
     viewer/SongRenderer.tsx       # dangerouslySetInnerHTML chordsheetjs output
     import/ChordsWikiImporter.tsx # chords.wiki JSON importer

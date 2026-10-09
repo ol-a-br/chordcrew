@@ -1,5 +1,7 @@
 {
-  "app": { "name": "ChordCrew" },
+  "app": {
+    "name": "ChordCrew"
+  },
   "nav": {
     "library": "Library",
     "setlists": "Setlists",
@@ -142,5 +144,11 @@
     "error": "Something went wrong",
     "yes": "Yes",
     "no": "No"
+  },
+  "crash": {
+    "title": "Something went wrong",
+    "message": "ChordCrew hit an unexpected error. Your songs and setlists are safe — reload to continue where you were.",
+    "reload": "Reload",
+    "toLibrary": "Go to library"
   }
 }

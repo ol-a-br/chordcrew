@@ -1,5 +1,7 @@
 {
-  "app": { "name": "ChordCrew" },
+  "app": {
+    "name": "ChordCrew"
+  },
   "nav": {
     "library": "Bibliothek",
     "setlists": "Setlisten",
@@ -142,5 +144,11 @@
     "error": "Etwas ist schiefgelaufen",
     "yes": "Ja",
     "no": "Nein"
+  },
+  "crash": {
+    "title": "Etwas ist schiefgelaufen",
+    "message": "ChordCrew ist auf einen unerwarteten Fehler gestoßen. Deine Songs und Setlisten sind sicher — lade neu, um dort weiterzumachen, wo du warst.",
+    "reload": "Neu laden",
+    "toLibrary": "Zur Bibliothek"
   }
 }
