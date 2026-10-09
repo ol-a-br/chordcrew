@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { Music2, Users, Check, AlertCircle } from 'lucide-react'
+import { useTranslation, Trans } from 'react-i18next'
 import { firebaseConfigured } from '@/firebase'
 import { useAuth } from '@/auth/AuthContext'
 import { db } from '@/db'
@@ -28,6 +29,7 @@ export default function TeamJoinPage() {
   const token = searchParams.get('token') ?? ''
   const navigate = useNavigate()
   const { user, signInWithGoogle } = useAuth()
+  const { t } = useTranslation()
 
   const [status, setStatus] = useState<Status>('loading')
   const [team, setTeam] = useState<InvitePreview | null>(null)
@@ -97,31 +99,33 @@ export default function TeamJoinPage() {
         {(status === 'loading' || status === 'joining') && (
           <div className="text-center text-ink-muted text-sm flex items-center justify-center gap-2">
             <div className="w-4 h-4 border-2 border-chord border-t-transparent rounded-full animate-spin" />
-            {status === 'joining' ? 'Joining team…' : 'Loading…'}
+            {status === 'joining' ? t('join.joining') : t('common.loading')}
           </div>
         )}
 
         {status === 'no-firebase' && (
           <div className="bg-surface-1 rounded-xl p-5 text-center space-y-2">
             <AlertCircle size={24} className="text-amber-400 mx-auto" />
-            <p className="text-sm text-ink-muted">Invite links require Firebase to be configured.</p>
+            <p className="text-sm text-ink-muted">{t('join.needsFirebase')}</p>
           </div>
         )}
 
         {status === 'invalid' && (
           <div className="bg-surface-1 rounded-xl p-5 text-center space-y-3">
             <AlertCircle size={24} className="text-red-400 mx-auto" />
-            <p className="text-sm font-medium">This invite link is no longer valid.</p>
-            <p className="text-xs text-ink-muted">It may have been revoked or already used. Ask the team owner to send a new invite.</p>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/')}>Go to ChordCrew</Button>
+            <p className="text-sm font-medium">{t('join.invalid')}</p>
+            <p className="text-xs text-ink-muted">{t('join.invalidHint')}</p>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/')}>{t('join.goToApp')}</Button>
           </div>
         )}
 
         {status === 'already-member' && team && (
           <div className="bg-surface-1 rounded-xl p-5 text-center space-y-3">
             <Check size={24} className="text-green-400 mx-auto" />
-            <p className="text-sm font-medium">You're already in <span className="text-chord">{team.teamName}</span>.</p>
-            <Button variant="primary" size="sm" onClick={() => navigate('/library')}>Open Library</Button>
+            <p className="text-sm font-medium">
+              <Trans i18nKey="join.alreadyMember" values={{ team: team.teamName }} components={{ b: <span className="text-chord" /> }} />
+            </p>
+            <Button variant="primary" size="sm" onClick={() => navigate('/library')}>{t('join.openLibrary')}</Button>
           </div>
         )}
 
@@ -132,20 +136,20 @@ export default function TeamJoinPage() {
                 <Users size={20} className="text-chord" />
               </div>
               <div>
-                <p className="text-xs text-ink-faint">You're invited to join</p>
+                <p className="text-xs text-ink-faint">{t('join.invitedToJoin')}</p>
                 <p className="font-semibold">{team.teamName}</p>
                 {team.description && <p className="text-xs text-ink-muted">{team.description}</p>}
               </div>
             </div>
 
             <div className="text-xs text-ink-muted space-y-1">
-              <p>Invited by <span className="text-ink">{team.ownerDisplayName}</span></p>
-              <p>{team.memberCount} member{team.memberCount !== 1 ? 's' : ''}</p>
+              <p><Trans i18nKey="join.invitedBy" values={{ name: team.ownerDisplayName }} components={{ b: <span className="text-ink" /> }} /></p>
+              <p>{t('teams.memberCount', { count: team.memberCount })}</p>
             </div>
 
             {status === 'needs-login' && (
               <div className="space-y-2">
-                <p className="text-xs text-ink-muted">Sign in with Google to join this team.</p>
+                <p className="text-xs text-ink-muted">{t('join.signInToJoin')}</p>
                 <Button
                   variant="primary"
                   className="w-full"
@@ -153,7 +157,7 @@ export default function TeamJoinPage() {
                   disabled={signingIn}
                 >
                   <GoogleIcon />
-                  {signingIn ? 'Signing in…' : 'Sign in with Google'}
+                  {signingIn ? t('join.signingIn') : t('auth.signIn')}
                 </Button>
               </div>
             )}
@@ -161,14 +165,14 @@ export default function TeamJoinPage() {
             {status === 'ready' && (
               <Button variant="primary" className="w-full" onClick={handleJoin}>
                 <Users size={15} />
-                Join team
+                {t('join.join')}
               </Button>
             )}
 
             {status === 'joined' && (
               <div className="flex items-center gap-2 text-green-400 text-sm justify-center">
                 <Check size={16} />
-                Joined! Redirecting…
+                {t('join.joined')}
               </div>
             )}
           </div>
