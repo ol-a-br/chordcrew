@@ -792,5 +792,128 @@
     "signInRequired": "Sign in to ChordCrew to use ChurchTools.",
     "verifyFailed": "Verification failed",
     "proxyUnreachable": "Could not reach the proxy — make sure the app is deployed or the Functions emulator is running."
+  },
+  "help": {
+    "title": "Help & Documentation",
+    "subtitle": "Getting started, ChordPro format, import guides, and more.",
+    "start": {
+      "title": "Getting Started",
+      "intro": "ChordCrew is an offline-first PWA for managing ChordPro songs and setlists. All data is stored on your device — no internet required during worship.",
+      "step1": "Go to <b>Library</b> to see your songs. Tap <b>+</b> (top-right) to create a new song.",
+      "step2": "Use the <b>Editor</b> to write ChordPro content. The right panel previews the rendering live.",
+      "step3": "Open a song in <b>Viewer</b> to transpose, change columns, or enter Performance mode.",
+      "step4": "Build a <b>Setlist</b> and present it in full-screen mode with pedal navigation.",
+      "install": "To install as a PWA, use \"Add to Home Screen\" in your browser (Safari on iOS, Chrome on Android / desktop)."
+    },
+    "chordpro": {
+      "title": "ChordPro Format",
+      "intro": "ChordPro places chords inline above lyrics using square brackets.",
+      "example": "{title: Amazing Grace}\n{artist: John Newton}\n{key: G}\n{tempo: 72}\n\n{start_of_verse: Verse 1}\n[G]Amazing [C]grace, how [G]sweet the sound\n[G]That saved a [D]wretch like [G]me\n{end_of_verse}\n\n{start_of_chorus: Chorus}\n[G]My chains are [C]gone, I've been set [G]free\n{end_of_chorus}",
+      "directivesTitle": "Useful directives:",
+      "directives": {
+        "title": "Song title",
+        "artist": "Artist / songwriter",
+        "key": "Key shown in toolbar",
+        "tempo": "BPM shown in toolbar",
+        "capo": "Capo hint shown in Viewer",
+        "time": "Time signature",
+        "ccli": "CCLI number (links to SongSelect)",
+        "copyright": "Copyright line",
+        "url": "External link (YouTube, etc.)",
+        "comment": "Italic comment/note line",
+        "part": "Section (chords.wiki extension)"
+      }
+    },
+    "chordswiki": {
+      "title": "Migrating from chords.wiki",
+      "intro": "Export your library from chords.wiki: <b>Settings → Export → Library backup (JSON)</b>.",
+      "step1": "In ChordCrew, go to <b>Import</b>.",
+      "step2": "Drop the <mono>.json</mono> file onto the upload area (or click to browse).",
+      "step3": "If songs already exist you can <em>Skip</em> or <em>Overwrite</em> them.",
+      "step4": "Books, songs, and setlists are all imported in one step.",
+      "flagged": "Songs with filename-style titles (e.g. <code>my_song.cho</code>) are flagged in the import summary for cleanup."
+    },
+    "opensong": {
+      "title": "Migrating from OpenSong",
+      "intro": "OpenSong stores songs as XML files (no extension). ChordCrew can import them directly.",
+      "step1": "Go to <b>Import → OpenSong</b> tab.",
+      "step2": "Select one or more OpenSong XML files (multi-select is supported).",
+      "step3": "ChordCrew converts positional chord alignment to ChordPro inline format.",
+      "step4": "Key, tempo, time signature, CCLI, and copyright are extracted automatically — including when they appear as inline text in the lyrics (<code>Key - G | Tempo - 72</code>).",
+      "sections": "Section types are mapped: <code>V</code> → Verse, <code>C</code> → Chorus, <code>B</code> → Bridge, <code>P</code> → Pre-Chorus, <code>T</code> → Tag."
+    },
+    "performance": {
+      "title": "Performance Mode & Pedal Navigation",
+      "intro": "Enter Performance mode from any song's Viewer toolbar (↕ icon). The screen stays on and all sync is disabled.",
+      "arrows": "<b>Arrow Right / Left</b> — advance / go back one column",
+      "longRight": "<b>Long-press Right</b> — skip to next song in setlist",
+      "longLeft": "<b>Long-press Left</b> — back to start of current song",
+      "tap": "<b>Tap left/right half</b> — same as arrow keys (touch)",
+      "pedal": "Compatible pedal: <b>PageFlip Cicada V7</b> in Mode 2 (emits Left/Right Arrow). Reassign pedal keys in <b>Settings → Pedal</b>.",
+      "setlist": "In a setlist, reaching the last column of a song advances to the next song automatically."
+    },
+    "midi": {
+      "title": "MIDI: Kemper Rig & Tempo",
+      "intro": "ChordCrew can switch your <b>Kemper Profiler</b> to the right rig and tempo whenever you open a song (Viewer or Performance mode) — e.g. via a <b>CME WIDI Master</b> Bluetooth adapter plugged into the Kemper's MIDI In.",
+      "step1": "Connect the MIDI adapter to your device (macOS: Audio MIDI Setup → Bluetooth; Android: a BLE-MIDI connector app; iPad/iPhone: inside the Web MIDI Browser app — see below).",
+      "step2": "In <b>Settings → MIDI</b>, switch on <em>Send MIDI on song change</em>, allow MIDI access, pick the output and use <em>Test</em>.",
+      "step3": "Give each song a rig — the editor shows a <b>Rig</b> field once MIDI is on:",
+      "example": "{tempo: 72}          ← tempo, as before\n{x_kemper_rig: 17}   ← Program Change 17 (Browser Mode assignment)\n{x_kemper_rig: 6.2}  ← Performance 6, Slot 2 (Performance Mode)",
+      "allRigs": "<b>All rigs at once</b>: Settings → MIDI → <em>Edit the rigs of all songs</em> opens a table of every song's rig and tempo. After reorganising performances on the Kemper, use <em>Replace rig</em>: e.g. <mono>6.*</mono> → <mono>8.*</mono> moves every song from performance 6 to 8 (keeping the slot), <mono>6.2</mono> → <mono>8.3</mono> changes one rig.",
+      "switches": "<b>Rig & tempo switches</b>: turn off <em>Send rig change</em> to keep one rig for every song (the songs' rig settings are ignored); turn off <em>Send tempo</em> to leave the tempo alone. <em>Exact</em> sets the BPM directly; <em>Tap</em> sends four tap-tempo presses instead. The Kemper's MIDI channel is Omni by default, so channel 1 works.",
+      "slots": "<b>Switching slots during a song</b>: a slot with its own stored tempo replaces the song tempo when you step on it. To keep the song tempo, switch <em>Tempo Enable</em> off in the Rig settings of those slots on the Kemper and store the performance.",
+      "ipad": "<b>iPad/iPhone</b>: Safari has no Web MIDI. Install the free <b>Web MIDI Browser</b> app, connect the WIDI there and open chordcrew.app in it — the WIDI is listed as output <em>\"Bluetooth\"</em>. The app keeps its own copy of your library, so sync first. Elsewhere use Chrome or Edge (Android, macOS, Windows)."
+    },
+    "teams": {
+      "title": "Teams & Shared Libraries",
+      "intro": "Teams let you share songs and setlists with your worship band. Requires Google Sign-In.",
+      "step1": "Go to <b>Teams</b> and create a team.",
+      "step2": "Invite members by their Google email address.",
+      "step3": "They accept via the notification banner at the top of the screen.",
+      "rolesTitle": "Roles:",
+      "owner": "<b>Owner</b> — full admin: invite, remove, change roles, edit everything",
+      "contributor": "<b>Contributor</b> — add and edit songs / setlists",
+      "reader": "<b>Reader</b> — view and transpose; cannot edit",
+      "share": "To share your personal songs: select songs in Library → <b>Organize → Copy/Move to team</b>."
+    },
+    "sync": {
+      "title": "Sync & Backup",
+      "intro": "Sync is <b>manual only</b> — tap the sync badge in the sidebar or <b>Settings → Sync Now</b>.",
+      "green": "Green — synced",
+      "yellow": "Yellow — unsynced changes or updates available",
+      "red": "Red — sync error",
+      "grey": "Grey — offline",
+      "backup": "To back up your library: go to <b>Import → Export</b> to download a chords.wiki-compatible JSON file. Re-import it on any device."
+    },
+    "curation": {
+      "title": "Library Curation",
+      "intro": "The <b>Curation</b> page (sidebar) helps you keep your library tidy.",
+      "duplicates": "<b>Duplicates</b> — finds songs with identical or very similar titles (≥ 75% word overlap). Click <em>Edit</em> to open the song.",
+      "errors": "<b>Parse Errors</b> — scans all songs for unclosed braces or brackets. Click <em>Fix →</em> to jump to the editor.",
+      "export": "<b>Export CSV</b> — downloads all song metadata (title, artist, key, tempo, tags, CCLI, copyright, book) as a CSV file."
+    },
+    "troubleshooting": {
+      "title": "Troubleshooting",
+      "blank": {
+        "problem": "Song renders blank or shows \"Parse Error\"",
+        "solution": "Open the song in the Editor — the Preview panel highlights parse errors with line numbers. Use <em>Fix →</em> to jump to the problem line."
+      },
+      "orange": {
+        "problem": "Chords show in orange in the editor",
+        "solution": "Orange underline = unknown chord name. Check the spelling — ChordCrew only recognises standard notation (A–G, no German H)."
+      },
+      "importFails": {
+        "problem": "Import fails with \"Not a chords.wiki library-backup file\"",
+        "solution": "Make sure you exported the full <em>library backup</em> (not individual song exports) from chords.wiki."
+      },
+      "syncGrey": {
+        "problem": "Sync button is greyed out",
+        "solution": "The app is offline or Firebase is not configured. Sync requires an internet connection and a valid Firebase project."
+      },
+      "wakeLock": {
+        "problem": "Wake lock not working in Performance mode",
+        "solution": "Wake Lock API requires the page to be served over HTTPS. It is also not supported in Firefox."
+      }
+    }
   }
 }

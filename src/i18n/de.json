@@ -792,5 +792,128 @@
     "signInRequired": "Melde dich bei ChordCrew an, um ChurchTools zu nutzen.",
     "verifyFailed": "Prüfung fehlgeschlagen",
     "proxyUnreachable": "Der Proxy ist nicht erreichbar — ist die App deployt bzw. läuft der Functions-Emulator?"
+  },
+  "help": {
+    "title": "Hilfe & Dokumentation",
+    "subtitle": "Erste Schritte, ChordPro-Format, Import-Anleitungen und mehr.",
+    "start": {
+      "title": "Erste Schritte",
+      "intro": "ChordCrew ist eine Offline-first-PWA zur Verwaltung von ChordPro-Songs und Setlisten. Alle Daten liegen auf deinem Gerät — im Gottesdienst ist kein Internet nötig.",
+      "step1": "In der <b>Bibliothek</b> siehst du deine Songs. Tippe auf <b>+</b> (oben rechts), um einen neuen Song anzulegen.",
+      "step2": "Im <b>Editor</b> schreibst du ChordPro-Inhalte. Rechts siehst du live eine Vorschau.",
+      "step3": "Öffne einen Song in der <b>Ansicht</b>, um zu transponieren, die Spaltenzahl zu ändern oder in den Performance-Modus zu wechseln.",
+      "step4": "Stelle eine <b>Setliste</b> zusammen und präsentiere sie im Vollbild mit Pedal-Navigation.",
+      "install": "Zum Installieren als PWA nutze „Zum Home-Bildschirm“ in deinem Browser (Safari unter iOS, Chrome unter Android / am Computer)."
+    },
+    "chordpro": {
+      "title": "ChordPro-Format",
+      "intro": "ChordPro setzt Akkorde in eckigen Klammern direkt in den Liedtext; angezeigt werden sie über dem Text.",
+      "example": "{title: Amazing Grace}\n{artist: John Newton}\n{key: G}\n{tempo: 72}\n\n{start_of_verse: Strophe 1}\n[G]Amazing [C]grace, how [G]sweet the sound\n[G]That saved a [D]wretch like [G]me\n{end_of_verse}\n\n{start_of_chorus: Refrain}\n[G]My chains are [C]gone, I've been set [G]free\n{end_of_chorus}",
+      "directivesTitle": "Nützliche Direktiven:",
+      "directives": {
+        "title": "Songtitel",
+        "artist": "Künstler / Songwriter",
+        "key": "Tonart in der Werkzeugleiste",
+        "tempo": "BPM in der Werkzeugleiste",
+        "capo": "Capo-Hinweis in der Ansicht",
+        "time": "Taktart",
+        "ccli": "CCLI-Nummer (verlinkt zu SongSelect)",
+        "copyright": "Copyright-Zeile",
+        "url": "Externer Link (YouTube usw.)",
+        "comment": "Kursive Kommentar-/Hinweiszeile",
+        "part": "Abschnitt (chords.wiki-Erweiterung)"
+      }
+    },
+    "chordswiki": {
+      "title": "Umstieg von chords.wiki",
+      "intro": "Exportiere deine Bibliothek in chords.wiki: <b>Settings → Export → Library backup (JSON)</b>.",
+      "step1": "Gehe in ChordCrew auf <b>Importieren</b>.",
+      "step2": "Ziehe die <mono>.json</mono>-Datei auf die Upload-Fläche (oder klicke zum Durchsuchen).",
+      "step3": "Gibt es Songs schon, kannst du sie <em>überspringen</em> oder <em>überschreiben</em>.",
+      "step4": "Bücher, Songs und Setlisten werden in einem Schritt importiert.",
+      "flagged": "Songs mit dateinamen-ähnlichen Titeln (z. B. <code>my_song.cho</code>) werden in der Import-Übersicht zum Aufräumen markiert."
+    },
+    "opensong": {
+      "title": "Umstieg von OpenSong",
+      "intro": "OpenSong speichert Songs als XML-Dateien (ohne Dateiendung). ChordCrew kann sie direkt importieren.",
+      "step1": "Gehe auf <b>Importieren → OpenSong</b>.",
+      "step2": "Wähle eine oder mehrere OpenSong-XML-Dateien aus (Mehrfachauswahl möglich).",
+      "step3": "ChordCrew wandelt die Akkorde über dem Text ins ChordPro-Inline-Format um.",
+      "step4": "Tonart, Tempo, Taktart, CCLI und Copyright werden automatisch übernommen — auch wenn sie als Text im Liedtext stehen (<code>Key - G | Tempo - 72</code>).",
+      "sections": "Abschnittstypen werden zugeordnet: <code>V</code> → Strophe, <code>C</code> → Refrain, <code>B</code> → Bridge, <code>P</code> → Pre-Chorus, <code>T</code> → Tag."
+    },
+    "performance": {
+      "title": "Performance-Modus & Pedal-Navigation",
+      "intro": "Den Performance-Modus startest du über die Werkzeugleiste eines Songs in der Ansicht (↕-Symbol). Der Bildschirm bleibt an, und jede Synchronisation ist abgeschaltet.",
+      "arrows": "<b>Pfeil rechts / links</b> — eine Spalte vor / zurück",
+      "longRight": "<b>Pfeil rechts lang drücken</b> — zum nächsten Song der Setliste",
+      "longLeft": "<b>Pfeil links lang drücken</b> — zurück an den Anfang des aktuellen Songs",
+      "tap": "<b>Linke/rechte Bildschirmhälfte antippen</b> — wie die Pfeiltasten (Touch)",
+      "pedal": "Passendes Pedal: <b>PageFlip Cicada V7</b> im Modus 2 (sendet Pfeil links/rechts). Die Pedaltasten lassen sich unter <b>Einstellungen → Bluetooth-Pedal</b> neu belegen.",
+      "setlist": "In einer Setliste geht es nach der letzten Spalte eines Songs automatisch zum nächsten Song."
+    },
+    "midi": {
+      "title": "MIDI: Kemper-Rig & Tempo",
+      "intro": "ChordCrew kann deinen <b>Kemper Profiler</b> beim Öffnen eines Songs (Ansicht oder Performance-Modus) auf das passende Rig und Tempo umschalten — z. B. über einen <b>CME-WIDI-Master</b>-Bluetooth-Adapter am MIDI-In des Kemper.",
+      "step1": "Verbinde den MIDI-Adapter mit deinem Gerät (macOS: Audio-MIDI-Setup → Bluetooth; Android: eine BLE-MIDI-Verbindungs-App; iPad/iPhone: in der App „Web MIDI Browser“ — siehe unten).",
+      "step2": "Schalte unter <b>Einstellungen → MIDI</b> <em>MIDI beim Songwechsel senden</em> ein, erlaube den MIDI-Zugriff, wähle den Ausgang und nutze <em>Test</em>.",
+      "step3": "Gib jedem Song ein Rig — sobald MIDI an ist, zeigt der Editor ein Feld <b>Rig</b>:",
+      "example": "{tempo: 72}          ← Tempo, wie bisher\n{x_kemper_rig: 17}   ← Program Change 17 (Zuordnung im Browser Mode)\n{x_kemper_rig: 6.2}  ← Performance 6, Slot 2 (Performance Mode)",
+      "allRigs": "<b>Alle Rigs auf einmal</b>: Einstellungen → MIDI → <em>Rigs aller Songs bearbeiten</em> öffnet eine Tabelle mit Rig und Tempo aller Songs. Hast du die Performances am Kemper umsortiert, nutze <em>Rig ersetzen</em>: z. B. verschiebt <mono>6.*</mono> → <mono>8.*</mono> alle Songs von Performance 6 nach 8 (der Slot bleibt), <mono>6.2</mono> → <mono>8.3</mono> ändert ein einzelnes Rig.",
+      "switches": "<b>Schalter für Rig & Tempo</b>: Schalte <em>Rig-Wechsel senden</em> aus, um für alle Songs dasselbe Rig zu behalten (die Rigs der Songs werden ignoriert); schalte <em>Tempo senden</em> aus, um das Tempo nicht zu ändern. <em>Exakt</em> setzt die BPM direkt; <em>Tap</em> sendet stattdessen vier Tap-Tempo-Impulse. Der MIDI-Kanal des Kemper steht ab Werk auf Omni, Kanal 1 funktioniert also.",
+      "slots": "<b>Slot-Wechsel während eines Songs</b>: Ein Slot mit eigenem gespeichertem Tempo ersetzt beim Umschalten das Song-Tempo. Um das Song-Tempo zu behalten, schalte am Kemper in den Rig-Einstellungen dieser Slots <em>Tempo Enable</em> aus und speichere die Performance.",
+      "ipad": "<b>iPad/iPhone</b>: Safari hat kein Web MIDI. Installiere die kostenlose App <b>Web MIDI Browser</b>, verbinde dort den WIDI und öffne darin chordcrew.app — der WIDI erscheint als Ausgang <em>„Bluetooth“</em>. Die App hat eine eigene Kopie deiner Bibliothek, synchronisiere also vorher. Sonst Chrome oder Edge verwenden (Android, macOS, Windows)."
+    },
+    "teams": {
+      "title": "Teams & gemeinsame Bibliotheken",
+      "intro": "Mit Teams teilst du Songs und Setlisten mit deiner Worship-Band. Dafür ist eine Google-Anmeldung nötig.",
+      "step1": "Gehe auf <b>Teams</b> und erstelle ein Team.",
+      "step2": "Lade Mitglieder über ihre Google-E-Mail-Adresse ein.",
+      "step3": "Sie nehmen die Einladung über das Banner oben auf dem Bildschirm an.",
+      "rolesTitle": "Rollen:",
+      "owner": "<b>Besitzer</b> — volle Verwaltung: einladen, entfernen, Rollen ändern, alles bearbeiten",
+      "contributor": "<b>Mitwirkender</b> — Songs / Setlisten anlegen und bearbeiten",
+      "reader": "<b>Leser</b> — ansehen und transponieren; kein Bearbeiten",
+      "share": "Persönliche Songs teilen: Songs in der Bibliothek auswählen → <b>Organisieren → Kopieren nach / Verschieben nach</b> → Team."
+    },
+    "sync": {
+      "title": "Synchronisation & Backup",
+      "intro": "Synchronisiert wird <b>nur von Hand</b> — tippe auf das Sync-Symbol in der Seitenleiste oder auf <b>Einstellungen → Jetzt synchronisieren</b>.",
+      "green": "Grün — synchronisiert",
+      "yellow": "Gelb — nicht synchronisierte Änderungen oder neue Daten verfügbar",
+      "red": "Rot — Sync-Fehler",
+      "grey": "Grau — offline",
+      "backup": "Backup deiner Bibliothek: Unter <b>Importieren → Bibliothek exportieren</b> lädst du eine chords.wiki-kompatible JSON-Datei herunter. Du kannst sie auf jedem Gerät wieder importieren."
+    },
+    "curation": {
+      "title": "Bibliothek pflegen",
+      "intro": "Die Seite <b>Pflege</b> (Seitenleiste) hilft dir, deine Bibliothek aufgeräumt zu halten.",
+      "duplicates": "<b>Duplikate</b> — findet Songs mit gleichen oder sehr ähnlichen Titeln (≥ 75 % gleiche Wörter). <em>Bearbeiten</em> öffnet den Song.",
+      "errors": "<b>Formatfehler</b> — prüft alle Songs auf nicht geschlossene Klammern. <em>Beheben →</em> springt in den Editor.",
+      "export": "<b>Export</b> — lädt die Metadaten aller Songs (Titel, Künstler, Tonart, Tempo, Tags, CCLI, Copyright, Buch) als CSV-Datei herunter."
+    },
+    "troubleshooting": {
+      "title": "Problemlösung",
+      "blank": {
+        "problem": "Song bleibt leer oder zeigt „Parse Error“",
+        "solution": "Öffne den Song im Editor — die Vorschau markiert Formatfehler mit Zeilennummern. Mit <em>Beheben →</em> springst du zur betroffenen Zeile."
+      },
+      "orange": {
+        "problem": "Akkorde sind im Editor orange markiert",
+        "solution": "Orange Unterstreichung = unbekannter Akkordname. Prüfe die Schreibweise — ChordCrew kennt nur die Standardnotation (A–G, kein deutsches H)."
+      },
+      "importFails": {
+        "problem": "Import scheitert mit „Keine chords.wiki-Sicherungsdatei (library-backup)“",
+        "solution": "Exportiere in chords.wiki das komplette <em>Library backup</em> (keine einzelnen Songs)."
+      },
+      "syncGrey": {
+        "problem": "Sync-Button ist ausgegraut",
+        "solution": "Die App ist offline oder Firebase ist nicht konfiguriert. Für die Synchronisation braucht es eine Internetverbindung und ein gültiges Firebase-Projekt."
+      },
+      "wakeLock": {
+        "problem": "Bildschirm geht im Performance-Modus aus",
+        "solution": "Die Wake-Lock-API funktioniert nur, wenn die Seite über HTTPS geladen wird. In Firefox wird sie nicht unterstützt."
+      }
+    }
   }
 }
