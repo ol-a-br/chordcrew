@@ -70,6 +70,7 @@ Use targeted `Edit` calls on specific code sections rather than full-file `Write
 - Design tokens are fixed — do not change the surface/ink/chord colour palette or the Outfit + JetBrains Mono fonts.
 - MIT licence — do not add dependencies with incompatible licences.
 - Firestore rules are code — change `firestore.rules` (never the Firebase console), cover the change in `tests/firebase/`, and run `npm run test:firebase`. Any new collection needs an explicit rule; everything unlisted is denied.
+- UI text is **static localization only**: every user-visible string (buttons, labels, tooltips, placeholders, toasts, dialogs, help text) lives in `src/i18n/<lang>.json` and is read with `t()` / `<Trans>` — never hardcode it in a component. Add new keys to **every** language file (en + de). `src/i18n/i18n.test.ts` fails on hardcoded JSX text, missing keys and mismatched placeholders. Song content is never translated, and browser machine translation stays disabled (`translate="no"` in `index.html`). A new language = a new JSON file plus one entry in `LANGUAGES` (`src/i18n/index.ts`).
 - A Content-Security-Policy is set in `firebase.json` (production only — the Vite dev server has none). Loading anything from a new external origin (script, style, font, image, API, iframe) requires adding that origin to the CSP, or it will silently fail in production. Never add `'unsafe-eval'` or inline-script allowances.
 
 ## Design tokens (Tailwind)
@@ -95,7 +96,7 @@ src/
   auth/AuthContext.tsx             # Google login + local-mode fallback
   db/index.ts                     # Dexie schema + query helpers (getMyTeams, getTeamRole)
   firebase/index.ts               # Firebase init (graceful no-op if unconfigured)
-  i18n/{index,en,de}.ts/json      # react-i18next EN+DE
+  i18n/{index,en,de}.ts/json      # react-i18next EN+DE; LANGUAGES registry in index.ts; i18n.test.ts guards it
   hooks/useKeyboard.ts            # Pedal/keyboard nav hook
   midi/
     kemper.ts                     # Pure Kemper MIDI builders: rig (PC / Perf.Slot), NRPN tempo, tap tempo

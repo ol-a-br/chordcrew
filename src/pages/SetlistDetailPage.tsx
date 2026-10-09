@@ -630,7 +630,7 @@ export default function SetlistDetailPage() {
                 })()}
 
                 {song && song.transcription.tempo > 0 && (
-                  <span className="text-xs font-mono text-ink-muted shrink-0" title="Tempo">
+                  <span className="text-xs font-mono text-ink-muted shrink-0" title={t('editor.fieldTempo')}>
                     ♩ {song.transcription.tempo}
                   </span>
                 )}
