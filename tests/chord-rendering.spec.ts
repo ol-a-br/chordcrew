@@ -204,3 +204,47 @@ test.describe('Chord rendering — chord-only rows must have visible spacing', (
     expect(result.marginRights?.every(m => m === '')).toBe(true)
   })
 })
+
+// ─── Words are never split mid-word at a line end ────────────────────────────
+// Chromium (Android) applied the row's overflow-wrap:break-word inside <ruby>
+// bases and broke words like "Werk|e" or "Herr|," at the line end although a
+// normal break point existed earlier on the line.
+
+const WRAP_SONG = `{title: Wrap Test}
+{key: A}
+
+{start_of_verse: Strophe 1}
+[A]Großer Gott, wir [D]loben dich, [E]Herr, wir [A]preisen deine Stärke
+{end_of_verse}
+
+{start_of_chorus: Refrain}
+[F#m]Vor dir neigt die [D]Erde sich und [E]bewundert deine [A]Werke
+[G]I will praise you Lord [Em7]a long [D/F#]time [G]ago and ever more my friend
+{end_of_chorus}
+`
+
+test.describe('Chord rendering — line wrapping', () => {
+  for (const width of [420, 560, 712]) {
+    test(`no word is split mid-word at a line end (${width}px)`, async ({ page }) => {
+      await waitForApp(page)
+      const { songId } = await seedSong(page, WRAP_SONG, 'Wrap Test')
+      await page.setViewportSize({ width, height: 900 })
+      await openViewer(page, songId)
+
+      const split = await page.evaluate(() => {
+        const found: string[] = []
+        document.querySelectorAll('.chordpro-output ruby').forEach(ruby => {
+          const base = Array.from(ruby.childNodes).find(n => n.nodeType === Node.TEXT_NODE)
+          const word = base?.textContent?.trim() ?? ''
+          if (!word || /\s/.test(word)) return
+          const range = document.createRange()
+          range.selectNodeContents(base!)
+          const lines = new Set(Array.from(range.getClientRects()).map(r => Math.round(r.top)))
+          if (lines.size > 1) found.push(word)
+        })
+        return found
+      })
+      expect(split, 'words split across two lines').toEqual([])
+    })
+  }
+})

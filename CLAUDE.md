@@ -148,6 +148,7 @@ After `dangerouslySetInnerHTML` renders the `.column` divs from chordsheetjs, a 
 
 Key CSS rules that must not be removed:
 - `.row { break-inside: avoid; overflow-wrap: break-word; }` — keeps chord+lyric pairs in one CSS column; `overflow-wrap` handles single words wider than the column width
+- `.row.lyric-row { overflow-wrap: normal; }` + `.lyric-rest { overflow-wrap: break-word; }` — rows with chords must not use break-word: Chromium (Android) applies it inside `<ruby>` bases and splits words at the line end ("Werk|e"). The plain lyric text between chords (`span.lyric-rest`, injected by SongRenderer) keeps break-word for over-long words
 - `.row <wbr> between rubies` — injected by SongRenderer JS; without these, Safari/WebKit treats adjacent ruby elements as an unbreakable run and lyric lines overflow into the next CSS column instead of wrapping
 - `ruby { white-space: pre-wrap; }` — **do not remove**; removing it causes Safari/WebKit to stop rendering `<rt>` chord annotations entirely (chords disappear). The `<wbr>` elements sit outside ruby so `pre-wrap` does not suppress the break opportunities they provide.
 - `.paragraph { break-inside: avoid; }` — prevents whole sections from splitting mid-paragraph in normal layout

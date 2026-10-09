@@ -593,14 +593,14 @@ async function checkHorizontalOverflow(page: Page, tolerance = 6): Promise<{ ove
 
       // Plain lyric text following a ruby (the rest of a long run under one
       // chord): every wrapped line fragment must stay within the column too
-      row.childNodes.forEach((node) => {
-        if (node.nodeType !== Node.TEXT_NODE || !node.textContent?.trim()) return
+      row.querySelectorAll<HTMLElement>('.lyric-rest').forEach((span) => {
+        if (!span.textContent?.trim()) return
         const range = document.createRange()
-        range.selectNodeContents(node)
+        range.selectNodeContents(span)
         for (const rect of Array.from(range.getClientRects())) {
           const overflow = rect.right - outputRect.left - colRightEdge
           if (overflow > TOLERANCE) {
-            const text = node.textContent.trim().slice(0, 30)
+            const text = span.textContent.trim().slice(0, 30)
             overflowing.push(`"${text}" overflows col ${colIndex + 1} by ${Math.round(overflow)}px`)
             break
           }

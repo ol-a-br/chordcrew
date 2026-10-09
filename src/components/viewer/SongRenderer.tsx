@@ -396,6 +396,7 @@ export function SongRenderer({
     container.querySelectorAll<HTMLElement>('.row').forEach(row => {
       if (row.classList.contains('section-header-row')) return
       const cols = Array.from(row.querySelectorAll<HTMLElement>(':scope > .column'))
+      if (cols.length > 0) row.classList.add('lyric-row')   // see .lyric-row in index.css
       // Chord-only rows (e.g. an instrumental "[Em] [D] [Cmaj7]" line) have no
       // lyrics at all -- chordsheetjs drops the spaces between brackets, leaving
       // every column's lyrics empty. Browsers size a ruby's box to fit the wider
@@ -424,8 +425,11 @@ export function SongRenderer({
         col.replaceWith(ruby)
         let last: ChildNode = ruby
         if (rest) {
-          last = document.createTextNode(rest)
-          ruby.after(last)
+          const span = document.createElement('span')
+          span.className = 'lyric-rest'
+          span.textContent = rest
+          ruby.after(span)
+          last = span
         }
         if (idx < cols.length - 1) {
           last.after(document.createElement('wbr'))
