@@ -5,6 +5,7 @@ import { saveToken, loadToken, clearToken } from './credentials'
 import { syncCtSongs, type CtSyncResult } from './ctBookSync'
 import { useAuth } from '@/auth/AuthContext'
 import type { CTCategory } from './types'
+import i18n from '@/i18n'
 
 interface ChurchToolsContextValue {
   isConfigured: boolean
@@ -85,7 +86,7 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
       setCtSyncResult(result)
       setCtLastSync(Date.now())
     } catch (e) {
-      setCtSyncError(e instanceof Error ? e.message : 'Sync failed')
+      setCtSyncError(e instanceof Error ? e.message : i18n.t('sync.failed'))
     } finally {
       setCtSyncing(false)
     }
@@ -116,14 +117,14 @@ export function ChurchToolsProvider({ children }: { children: ReactNode }) {
         setCtSyncError(null)
         syncCtSongs(user.id, user.displayName, baseUrl, tok, categoryId)
           .then(result => { setCtSyncResult(result); setCtLastSync(Date.now()) })
-          .catch(e => { setCtSyncError(e instanceof Error ? e.message : 'Sync failed') })
+          .catch(e => { setCtSyncError(e instanceof Error ? e.message : i18n.t('sync.failed')) })
           .finally(() => setCtSyncing(false))
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Verification failed'
+      const msg = e instanceof Error ? e.message : i18n.t('ct.verifyFailed')
       setVerifyError(
         msg === 'Failed to fetch'
-          ? 'Could not reach the proxy — make sure the app is deployed or the Functions emulator is running.'
+          ? i18n.t('ct.proxyUnreachable')
           : msg,
       )
     } finally {

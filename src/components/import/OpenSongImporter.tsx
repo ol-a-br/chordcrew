@@ -16,6 +16,7 @@
 
 import { useState, useRef } from 'react'
 import { Upload, Check, AlertCircle, FileText } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { db, generateId, markPending } from '@/db'
 import { extractMeta, buildSearchText } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
@@ -307,6 +308,7 @@ type ImportPhase = 'idle' | 'scanning' | 'conflict' | 'importing' | 'done' | 'er
 
 export function OpenSongImporter() {
   const { user } = useAuth()
+  const { t } = useTranslation()
   const [phase,         setPhase]         = useState<ImportPhase>('idle')
   const [conflictTitles, setConflictTitles] = useState<string[]>([])
   const [countNew,      setCountNew]      = useState(0)
@@ -394,7 +396,7 @@ export function OpenSongImporter() {
       setCountNew(nNew); setCountUpdated(nUpdated); setCountSkip(nSkip)
       setPhase('done')
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Import failed')
+      setMessage(err instanceof Error ? err.message : t('import.failed'))
       setPhase('error')
     }
   }
@@ -443,10 +445,9 @@ export function OpenSongImporter() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-ink">Import OpenSong files</h2>
+        <h2 className="text-base font-semibold text-ink">{t('import.opensong.title')}</h2>
         <p className="text-xs text-ink-muted mt-0.5">
-          Accepts OpenSong XML files (no extension required). Songs are added to the "OpenSong" book.
-          Chords are converted to ChordPro format automatically.
+          {t('import.opensong.hint')}
         </p>
       </div>
 
@@ -460,9 +461,9 @@ export function OpenSongImporter() {
           <Upload size={28} className="text-ink-faint group-hover:text-chord transition-colors" />
           <div className="text-center">
             <p className="text-sm font-medium text-ink-muted">
-              {phase === 'scanning' ? 'Scanning…' : 'Drop OpenSong files here or click to browse'}
+              {phase === 'scanning' ? t('import.scanning') : t('import.opensong.drop')}
             </p>
-            <p className="text-xs text-ink-faint mt-0.5">Multiple files supported</p>
+            <p className="text-xs text-ink-faint mt-0.5">{t('import.multipleFiles')}</p>
           </div>
           <input ref={inputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
         </div>
@@ -471,26 +472,26 @@ export function OpenSongImporter() {
       {phase === 'conflict' && (
         <div className="bg-surface-2 border border-amber-500/30 rounded-xl p-4 space-y-3">
           <p className="text-sm font-medium text-amber-400">
-            {conflictTitles.length} song{conflictTitles.length !== 1 ? 's' : ''} already exist in your library
+            {t('import.alreadyExist', { count: conflictTitles.length })}
           </p>
           <ul className="text-xs text-ink-muted space-y-0.5 max-h-32 overflow-y-auto font-mono">
-            {conflictTitles.map(t => <li key={t} className="truncate">· {t}</li>)}
+            {conflictTitles.map(title => <li key={title} className="truncate">· {title}</li>)}
           </ul>
           <div className="flex gap-2 pt-1">
             <button
               onClick={() => doImport(pendingFilesRef.current, 'skip')}
               className="px-3 py-1.5 text-xs rounded-lg bg-surface-3 text-ink hover:bg-surface-3/80 transition-colors"
             >
-              Skip existing
+              {t('import.skipExisting')}
             </button>
             <button
               onClick={() => doImport(pendingFilesRef.current, 'overwrite')}
               className="px-3 py-1.5 text-xs rounded-lg bg-chord/15 text-chord hover:bg-chord/25 transition-colors"
             >
-              Overwrite existing
+              {t('import.overwriteExisting')}
             </button>
             <button onClick={reset} className="ml-auto text-xs text-ink-faint hover:text-ink">
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -499,7 +500,7 @@ export function OpenSongImporter() {
       {phase === 'importing' && (
         <div className="flex items-center gap-2 text-sm text-ink-muted">
           <div className="w-4 h-4 border-2 border-chord border-t-transparent rounded-full animate-spin shrink-0" />
-          Importing…
+          {t('import.importing')}
         </div>
       )}
 
@@ -508,19 +509,19 @@ export function OpenSongImporter() {
           <div className="flex items-center gap-2 text-sm text-green-400">
             <Check size={16} className="shrink-0" />
             <span>
-              {countNew > 0 && `${countNew} new song${countNew !== 1 ? 's' : ''} imported`}
+              {countNew > 0 && t('import.opensong.newImported', { count: countNew })}
               {countNew > 0 && countUpdated > 0 && ', '}
-              {countUpdated > 0 && `${countUpdated} song${countUpdated !== 1 ? 's' : ''} updated`}
-              {countNew === 0 && countUpdated === 0 && 'Done'}
+              {countUpdated > 0 && t('import.opensong.updated', { count: countUpdated })}
+              {countNew === 0 && countUpdated === 0 && t('import.opensong.done')}
             </span>
           </div>
           {countSkip > 0 && (
             <p className="text-xs text-ink-muted pl-6">
-              {countSkip} file{countSkip !== 1 ? 's' : ''} skipped
+              {t('import.opensong.filesSkipped', { count: countSkip })}
             </p>
           )}
           <button onClick={reset} className="text-xs text-ink-faint hover:text-ink underline">
-            Import more files
+            {t('import.opensong.importMore')}
           </button>
         </div>
       )}
@@ -529,10 +530,10 @@ export function OpenSongImporter() {
         <div className="space-y-2">
           <div className="flex items-start gap-2 text-sm text-red-400">
             <AlertCircle size={16} className="shrink-0 mt-0.5" />
-            {message || 'Import failed'}
+            {message || t('import.failed')}
           </div>
           <button onClick={reset} className="text-xs text-ink-faint hover:text-ink underline">
-            Try again
+            {t('import.tryAgain')}
           </button>
         </div>
       )}
@@ -540,8 +541,7 @@ export function OpenSongImporter() {
       {phase === 'idle' && (
         <div className="flex items-start gap-2 text-xs text-ink-faint">
           <FileText size={13} className="shrink-0 mt-0.5" />
-          Section types V (Verse), C (Chorus), B (Bridge), P (Pre-Chorus) are detected automatically.
-          Chords above lyrics are converted using positional alignment.
+          {t('import.opensong.sectionHint')}
         </div>
       )}
     </div>

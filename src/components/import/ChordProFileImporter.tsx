@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { Upload, FileText, Check, AlertCircle } from 'lucide-react'
+import { useTranslation, Trans } from 'react-i18next'
 import { db, generateId } from '@/db'
 import { extractMeta, buildSearchText } from '@/utils/chordpro'
 import { useAuth } from '@/auth/AuthContext'
@@ -30,6 +31,7 @@ async function ensureImportBook(ownerId: string, displayName: string): Promise<s
 
 export function ChordProFileImporter() {
   const { user } = useAuth()
+  const { t } = useTranslation()
   const [status, setStatus] = useState<'idle' | 'importing' | 'done' | 'error'>('idle')
   const [message, setMessage] = useState('')
   const [imported, setImported] = useState(0)
@@ -43,7 +45,7 @@ export function ChordProFileImporter() {
     )
     if (fileArr.length === 0) {
       setStatus('error')
-      setMessage('No supported files found (.cho, .chopro, .chordpro, .txt)')
+      setMessage(t('import.chordpro.noFiles'))
       return
     }
 
@@ -104,12 +106,12 @@ export function ChordProFileImporter() {
 
       setImported(count)
       if (dupeCount > 0) {
-        setMessage(`${dupeCount} duplicate${dupeCount > 1 ? 's' : ''} skipped`)
+        setMessage(t('import.duplicatesSkipped', { count: dupeCount }))
       }
       setStatus('done')
     } catch (err) {
       setStatus('error')
-      setMessage(err instanceof Error ? err.message : 'Import failed')
+      setMessage(err instanceof Error ? err.message : t('import.failed'))
     }
   }
 
@@ -128,12 +130,9 @@ export function ChordProFileImporter() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-ink">Import ChordPro files</h2>
+        <h2 className="text-base font-semibold text-ink">{t('import.chordpro.title')}</h2>
         <p className="text-xs text-ink-muted mt-0.5">
-          Accepts <code className="font-mono">.cho</code>,{' '}
-          <code className="font-mono">.chopro</code>,{' '}
-          <code className="font-mono">.chordpro</code>, and <code className="font-mono">.txt</code> files.
-          Songs are added to the "Imported" book.
+          <Trans i18nKey="import.chordpro.hint" components={{ code: <code className="font-mono" /> }} />
         </p>
       </div>
 
@@ -148,10 +147,10 @@ export function ChordProFileImporter() {
         <Upload size={28} className="text-ink-faint group-hover:text-chord transition-colors" />
         <div className="text-center">
           <p className="text-sm font-medium text-ink-muted">
-            Drop files here or click to browse
+            {t('import.chordpro.drop')}
           </p>
           <p className="text-xs text-ink-faint mt-0.5">
-            Multiple files supported
+            {t('import.multipleFiles')}
           </p>
         </div>
         <input
@@ -168,7 +167,7 @@ export function ChordProFileImporter() {
       {status === 'importing' && (
         <div className="flex items-center gap-2 text-sm text-ink-muted">
           <div className="w-4 h-4 border-2 border-chord border-t-transparent rounded-full animate-spin shrink-0" />
-          Importing…
+          {t('import.importing')}
         </div>
       )}
 
@@ -176,7 +175,7 @@ export function ChordProFileImporter() {
         <div className="flex items-center gap-2 text-sm text-green-400">
           <Check size={16} className="shrink-0" />
           <span>
-            Imported {imported} song{imported !== 1 ? 's' : ''} into the "Imported" book
+            {t('import.chordpro.done', { count: imported })}
             {message ? <span className="text-ink-muted ml-1">({message})</span> : ''}
           </span>
         </div>
@@ -185,15 +184,14 @@ export function ChordProFileImporter() {
       {status === 'error' && (
         <div className="flex items-start gap-2 text-sm text-red-400">
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
-          {message || 'Import failed'}
+          {message || t('import.failed')}
         </div>
       )}
 
       {status === 'idle' && (
         <div className="flex items-start gap-2 text-xs text-ink-faint">
           <FileText size={13} className="shrink-0 mt-0.5" />
-          Title and artist are read from <code className="font-mono">{'{title:}'}</code> and{' '}
-          <code className="font-mono">{'{artist:}'}</code> directives; falls back to the filename.
+          <span><Trans i18nKey="import.chordpro.metaHint" components={{ code: <code className="font-mono" /> }} /></span>
         </div>
       )}
     </div>
