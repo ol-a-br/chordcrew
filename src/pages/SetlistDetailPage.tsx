@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useTranslation, Trans } from 'react-i18next'
 import {
   ArrowLeft, Play, Music, Pencil, Check,
   GripVertical, Trash2, Plus, Copy,
@@ -21,6 +22,7 @@ export default function SetlistDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { t } = useTranslation()
 
   const { isConfigured: ctConfigured } = useChurchTools()
   const [showCtEvent, setShowCtEvent] = useState(false)
@@ -125,8 +127,8 @@ export default function SetlistDetailPage() {
     return hasFilter ? all : all.sort((a, b) => (b.accessedAt ?? 0) - (a.accessedAt ?? 0)).slice(0, 12)
   }, [editMode, searchQuery, filterBookId, filterTags.join(','), setlist?.sharedTeamId, showPersonalSongs])
 
-  if (setlist === undefined) return <div className="p-8 text-ink-muted">Loading…</div>
-  if (!setlist) return <div className="p-8 text-ink-muted">Setlist not found.</div>
+  if (setlist === undefined) return <div className="p-8 text-ink-muted">{t('common.loading')}</div>
+  if (!setlist) return <div className="p-8 text-ink-muted">{t('setlistDetail.notFound')}</div>
 
   const allItems = items ?? []
   const songItems = allItems.filter(i => i.type === 'song' && i.songId)
@@ -245,7 +247,7 @@ export default function SetlistDetailPage() {
   // ── Rename divider ────────────────────────────────────────────────────────────
 
   const handleDividerNameBlur = async (itemId: string, value: string) => {
-    const dividerName = value.trim() || 'Section'
+    const dividerName = value.trim() || t('setlistDetail.defaultDividerName')
     await db.setlistItems.update(itemId, { dividerName })
     await touchSetlist()
   }
@@ -324,7 +326,7 @@ export default function SetlistDetailPage() {
       setlistId: id,
       order: maxOrder + 1,
       type: 'divider',
-      dividerName: 'New Section',
+      dividerName: t('setlistDetail.newDividerName'),
       transposeOffset: 0,
     }
     await db.setlistItems.put(newItem)
@@ -394,7 +396,7 @@ export default function SetlistDetailPage() {
         <button
           onClick={() => navigate('/setlists')}
           className="p-1.5 text-ink-muted hover:text-ink rounded"
-          title="Back to setlists"
+          title={t('setlistDetail.back')}
         >
           <ArrowLeft size={18} />
         </button>
@@ -405,7 +407,7 @@ export default function SetlistDetailPage() {
             defaultValue={setlist.name}
             onBlur={handleSetlistNameBlur}
             onKeyDown={handleSetlistNameKeyDown}
-            aria-label="Setlist name"
+            aria-label={t('setlistDetail.nameLabel')}
           />
         ) : (
           <h1 className="text-lg font-semibold flex-1 truncate">{setlist.name}</h1>
@@ -418,7 +420,7 @@ export default function SetlistDetailPage() {
               ? 'text-chord bg-chord/10 hover:bg-chord/20'
               : 'text-ink-muted hover:text-ink'
           }`}
-          title={editMode ? 'Done editing' : 'Edit setlist'}
+          title={editMode ? t('setlistDetail.doneEditing') : t('setlistDetail.edit')}
         >
           {editMode ? <Check size={18} /> : <Pencil size={18} />}
         </button>
@@ -428,19 +430,19 @@ export default function SetlistDetailPage() {
             <button
               onClick={handleShareSetlist}
               className="p-1.5 text-ink-muted hover:text-ink rounded relative"
-              title="Copy read-only share link"
+              title={t('setlistDetail.shareLink')}
             >
               <Link2 size={17} />
               {shareCopied && (
                 <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-chord whitespace-nowrap">
-                  Copied!
+                  {t('setlistDetail.copied')}
                 </span>
               )}
             </button>
             <button
               onClick={handleExportCsv}
               className="p-1.5 text-ink-muted hover:text-ink rounded"
-              title="Export setlist as CSV"
+              title={t('setlistDetail.exportCsv')}
             >
               <FileDown size={17} />
             </button>
@@ -448,7 +450,7 @@ export default function SetlistDetailPage() {
               <button
                 onClick={() => setShowCtEvent(true)}
                 className="p-1.5 text-ink-muted hover:text-ink rounded"
-                title="Upload setlist to ChurchTools event"
+                title={t('setlistDetail.uploadChurchTools')}
               >
                 <Upload size={17} />
               </button>
@@ -456,13 +458,13 @@ export default function SetlistDetailPage() {
             <button
               onClick={() => window.open(`/print/setlist/${id}`, '_blank')}
               className="p-1.5 text-ink-muted hover:text-ink rounded"
-              title="Print setlist / Save as PDF"
+              title={t('setlistDetail.print')}
             >
               <Printer size={17} />
             </button>
             <Button variant="primary" size="sm" onClick={handlePresent}>
               <Play size={14} />
-              Present
+              {t('setlist.present')}
             </Button>
           </>
         )}
@@ -472,7 +474,7 @@ export default function SetlistDetailPage() {
       <div className="flex items-center gap-3 flex-wrap">
         {editMode && (
           <label className="flex items-center gap-1.5 text-xs">
-            <span className="text-ink-faint">Date</span>
+            <span className="text-ink-faint">{t('setlistDetail.date')}</span>
             <input
               type="date"
               defaultValue={setlist.date ?? ''}
@@ -487,7 +489,7 @@ export default function SetlistDetailPage() {
         )}
         {allItems.length > 0 && (
           <p className="text-xs text-ink-muted">
-            {songItems.length} song{songItems.length !== 1 ? 's' : ''}
+            {t('setlist.songCount', { count: songItems.length })}
           </p>
         )}
       </div>
@@ -496,12 +498,12 @@ export default function SetlistDetailPage() {
       {allItems.length === 0 && !editMode && (
         <div className="flex flex-col items-center justify-center py-20 text-ink-muted text-sm space-y-2">
           <Music size={32} className="text-ink-faint mb-2" />
-          <p>No songs in this setlist yet</p>
+          <p>{t('setlistDetail.empty')}</p>
           <button
             onClick={toggleEditMode}
             className="mt-3 text-chord hover:text-chord-light text-xs underline"
           >
-            Add songs
+            {t('setlistDetail.addSongs')}
           </button>
         </div>
       )}
@@ -542,7 +544,7 @@ export default function SetlistDetailPage() {
                     defaultValue={item.dividerName ?? ''}
                     onBlur={e => handleDividerNameBlur(item.id, e.currentTarget.value)}
                     onKeyDown={e => e.key === 'Enter' && e.currentTarget.blur()}
-                    aria-label="Divider name"
+                    aria-label={t('setlistDetail.dividerNameLabel')}
                   />
                 ) : (
                   <span className="flex-1 text-xs text-ink-muted uppercase tracking-wider font-semibold border-b border-surface-3 w-full py-0.5">
@@ -554,7 +556,7 @@ export default function SetlistDetailPage() {
                   <button
                     onClick={() => handleDelete(item.id)}
                     className="p-1 text-ink-faint hover:text-red-400 transition-colors shrink-0"
-                    title="Remove divider"
+                    title={t('setlistDetail.removeDivider')}
                   >
                     <Trash2 size={15} />
                   </button>
@@ -598,7 +600,7 @@ export default function SetlistDetailPage() {
 
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">
-                    {song?.title ?? 'Unknown song'}
+                    {song?.title ?? t('setlistDetail.unknownSong')}
                   </div>
                   {song?.artist && (
                     <div className="text-xs text-ink-muted truncate">{song.artist}</div>
@@ -609,7 +611,7 @@ export default function SetlistDetailPage() {
                 </div>
 
                 {isTeamSetlist && song && teamBookIds && !teamBookIds.has(song.bookId) && (
-                  <span title="Personal book — not visible to team members" className="shrink-0">
+                  <span title={t('setlistDetail.personalBookHint')} className="shrink-0">
                     <AlertTriangle size={14} className="text-amber-400" />
                   </span>
                 )}
@@ -637,7 +639,7 @@ export default function SetlistDetailPage() {
                   <button
                     onClick={e => { e.stopPropagation(); handleDelete(item.id) }}
                     className="p-1 text-ink-faint hover:text-red-400 transition-colors shrink-0"
-                    title="Remove song"
+                    title={t('setlistDetail.removeSong')}
                   >
                     <Trash2 size={15} />
                   </button>
@@ -673,7 +675,7 @@ export default function SetlistDetailPage() {
                         key={n}
                         onClick={e => { e.stopPropagation(); setItemColumns(item.id, item.columnCount === n ? undefined : n) }}
                         className={`px-1.5 py-0.5 text-xs ${item.columnCount === n ? 'bg-chord/20 text-chord' : 'text-ink-faint hover:text-ink'}`}
-                        title={`${n} column${n > 1 ? 's' : ''}`}
+                        title={t('setlistDetail.columns', { count: n })}
                       >
                         {n}
                       </button>
@@ -686,7 +688,7 @@ export default function SetlistDetailPage() {
                     defaultValue={item.notes ?? ''}
                     onBlur={e => setItemNotes(item.id, e.currentTarget.value)}
                     onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                    placeholder="notes…"
+                    placeholder={t('setlistDetail.notesPlaceholder')}
                     onClick={e => e.stopPropagation()}
                     className="flex-1 min-w-24 bg-surface-2 border border-surface-3 focus:border-chord/40 rounded px-2 py-0.5 text-xs text-ink placeholder:text-ink-faint outline-none"
                   />
@@ -706,19 +708,19 @@ export default function SetlistDetailPage() {
             className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink transition-colors"
           >
             <Plus size={15} />
-            Add Divider
+            {t('setlistDetail.addDivider')}
           </button>
 
           {/* Add song search + filters */}
           <div className="space-y-2">
-            <p className="text-xs font-medium text-ink-muted uppercase tracking-wider">Add Song</p>
+            <p className="text-xs font-medium text-ink-muted uppercase tracking-wider">{t('setlistDetail.addSong')}</p>
 
             {/* Search */}
             <SearchInput
               ref={searchInputRef}
               value={searchQuery}
               onChange={setSearchQuery}
-              placeholder="Search songs…"
+              placeholder={t('setlistDetail.searchSongs')}
               inputClassName="w-full bg-surface-2 border border-surface-3 focus:border-chord/60 rounded-lg pl-9 pr-8 py-2 text-sm text-ink placeholder:text-ink-faint outline-none"
             />
 
@@ -732,7 +734,7 @@ export default function SetlistDetailPage() {
                     onChange={e => setFilterBookId(e.target.value)}
                     className="w-full bg-surface-2 border border-surface-3 focus:border-chord/40 rounded-lg px-3 py-1.5 text-xs text-ink outline-none"
                   >
-                    <option value="">{isTeamSetlist ? 'All team books' : 'All books'}</option>
+                    <option value="">{isTeamSetlist ? t('setlistDetail.allTeamBooks') : t('setlistDetail.allBooks')}</option>
                     {availableBooksForFilter.map(b => (
                       <option key={b.id} value={b.id}>{b.title}</option>
                     ))}
@@ -763,7 +765,7 @@ export default function SetlistDetailPage() {
                         onClick={() => setFilterTags([])}
                         className="px-2 py-0.5 rounded-full text-xs text-ink-faint hover:text-ink border border-transparent hover:border-surface-3 transition-colors"
                       >
-                        clear
+                        {t('setlistDetail.clearTags')}
                       </button>
                     )}
                   </div>
@@ -783,7 +785,7 @@ export default function SetlistDetailPage() {
                       isPersonal ? 'opacity-50 hover:opacity-80' : 'hover:bg-surface-2'
                     }`}
                     onClick={() => isPersonal ? handleAddPersonalSong(song) : addSong(song.id)}
-                    title={isPersonal ? 'Personal book — click to copy to team' : undefined}
+                    title={isPersonal ? t('setlistDetail.personalBookCopyHint') : undefined}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{song.title}</div>
@@ -817,8 +819,8 @@ export default function SetlistDetailPage() {
               {(addPanelSongs ?? []).length === 0 && (
                 <li className="px-3 py-4 text-sm text-ink-faint text-center">
                   {searchQuery.trim() || filterBookId || filterTags.length > 0
-                    ? 'No songs match these filters'
-                    : 'No songs in library yet'}
+                    ? t('setlistDetail.noMatches')
+                    : t('setlistDetail.noSongsInLibrary')}
                 </li>
               )}
             </ul>
@@ -828,7 +830,7 @@ export default function SetlistDetailPage() {
                 onClick={() => setShowPersonalSongs(v => !v)}
                 className="text-xs text-ink-faint hover:text-ink transition-colors w-full text-center pt-1"
               >
-                {showPersonalSongs ? 'Hide personal songs' : 'Show personal songs…'}
+                {showPersonalSongs ? t('setlistDetail.hidePersonal') : t('setlistDetail.showPersonal')}
               </button>
             )}
           </div>
@@ -842,18 +844,26 @@ export default function SetlistDetailPage() {
             <div className="flex items-start gap-3">
               <Copy size={18} className="text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <h2 className="font-semibold text-sm">Personal song</h2>
+                <h2 className="font-semibold text-sm">{t('setlistDetail.personalSongTitle')}</h2>
                 <p className="text-sm text-ink-muted mt-1">
-                  <span className="text-ink font-medium">"{addSongDialog.song.title}"</span> is in your personal library and won't be visible to other team members.
+                  <Trans
+                    i18nKey="setlistDetail.personalSongText"
+                    values={{ title: addSongDialog.song.title }}
+                    components={{ b: <span className="text-ink font-medium" /> }}
+                  />
                 </p>
                 {addSongDialog.targetBook && (
                   <p className="text-xs text-ink-muted mt-2">
-                    Copy it to <span className="text-ink font-medium">"{addSongDialog.targetBook.title}"</span> to share it with the team.
+                    <Trans
+                      i18nKey="setlistDetail.copyItTo"
+                      values={{ book: addSongDialog.targetBook.title }}
+                      components={{ b: <span className="text-ink font-medium" /> }}
+                    />
                   </p>
                 )}
                 {!addSongDialog.targetBook && (
                   <p className="text-xs text-amber-400/80 mt-2">
-                    No team book found. Create one in the Library to share songs with the team.
+                    {t('setlistDetail.noTeamBook')}
                   </p>
                 )}
               </div>
@@ -864,20 +874,20 @@ export default function SetlistDetailPage() {
                   onClick={() => confirmAddPersonalSong(true)}
                   className="w-full px-4 py-2 bg-chord/20 text-chord rounded-lg text-sm font-medium hover:bg-chord/30 transition-colors"
                 >
-                  Copy to team & add to setlist
+                  {t('setlistDetail.copyAndAdd')}
                 </button>
               )}
               <button
                 onClick={() => confirmAddPersonalSong(false)}
                 className="w-full px-4 py-2 bg-surface-2 text-ink-muted rounded-lg text-sm hover:bg-surface-3 transition-colors"
               >
-                Add anyway <span className="text-ink-faint text-xs">(only you will see it)</span>
+                {t('setlistDetail.addAnyway')} <span className="text-ink-faint text-xs">{t('setlistDetail.onlyYou')}</span>
               </button>
               <button
                 onClick={() => setAddSongDialog(null)}
                 className="w-full px-4 py-2 text-ink-faint text-sm hover:text-ink transition-colors"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>

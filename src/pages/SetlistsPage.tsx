@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
+import { useTranslation, Trans } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Plus, ListMusic, Play, Calendar, Copy, Users, Lock,
@@ -100,12 +100,12 @@ export default function SetlistsPage() {
   // Organize targets: personal + contributor teams, minus current context
   const organizeTargets = useMemo(() => {
     const targets: Array<{ id: string | null; label: string }> = []
-    if (activeTeamId !== null) targets.push({ id: null, label: 'My Setlists' })
-    contributorTeams.forEach(t => {
-      if (t.id !== activeTeamId) targets.push({ id: t.id, label: t.name })
+    if (activeTeamId !== null) targets.push({ id: null, label: t('setlist.mySetlists') })
+    contributorTeams.forEach(team => {
+      if (team.id !== activeTeamId) targets.push({ id: team.id, label: team.name })
     })
     return targets
-  }, [contributorTeams, activeTeamId])
+  }, [contributorTeams, activeTeamId, t])
 
   const createSetlist = async () => {
     if (!user || !newName.trim()) return
@@ -156,7 +156,7 @@ export default function SetlistsPage() {
 
   const bulkDelete = async () => {
     const count = selectedIds.size
-    if (!confirm(`Delete ${count} setlist${count !== 1 ? 's' : ''} and all their songs? This cannot be undone.`)) return
+    if (!confirm(t('setlist.bulkDeleteConfirm', { count }))) return
     for (const id of selectedIds) {
       await db.setlistItems.where('setlistId').equals(id).delete()
       await db.syncStates.delete(`setlist:${id}`)
@@ -165,7 +165,7 @@ export default function SetlistsPage() {
     }
     await db.setlists.bulkDelete([...selectedIds])
     exitSelectMode()
-    showBulkToast(`Deleted ${count} setlist${count !== 1 ? 's' : ''}`)
+    showBulkToast(t('setlist.bulkDeleted', { count }))
   }
 
   const bulkCopyTo = async (targetTeamId: string | null, targetLabel: string, songIdMap = new Map<string, string>()) => {
@@ -177,7 +177,7 @@ export default function SetlistsPage() {
         ...setlist,
         id: newId,
         sharedTeamId: targetTeamId ?? undefined,
-        name: `${setlist.name} (copy)`,
+        name: t('setlist.copyName', { name: setlist.name }),
         createdAt: now,
         updatedAt: now,
         accessedAt: undefined,
@@ -197,7 +197,7 @@ export default function SetlistsPage() {
     }
     setActiveTeamId(targetTeamId)
     exitSelectMode()
-    showBulkToast(`Copied ${toCopy.length} setlist${toCopy.length !== 1 ? 's' : ''} to ${targetLabel}`)
+    showBulkToast(t('setlist.bulkCopied', { count: toCopy.length, target: targetLabel }))
   }
 
   const bulkMoveTo = async (targetTeamId: string | null, targetLabel: string, songIdMap = new Map<string, string>()) => {
@@ -217,7 +217,7 @@ export default function SetlistsPage() {
     }
     setActiveTeamId(targetTeamId)
     exitSelectMode()
-    showBulkToast(`Moved ${ids.length} setlist${ids.length !== 1 ? 's' : ''} to ${targetLabel}`)
+    showBulkToast(t('setlist.bulkMoved', { count: ids.length, target: targetLabel }))
   }
 
   const prepareOrganize = async (action: 'copy' | 'move', targetTeamId: string | null, targetLabel: string) => {
@@ -272,13 +272,13 @@ export default function SetlistsPage() {
       {myTeams.length > 0 && (
         <aside className="hidden md:flex flex-col w-52 border-r border-surface-3 bg-surface-1 py-3 px-2 gap-0.5 shrink-0 overflow-y-auto">
           <SetlistNavItem
-            label="My Setlists"
+            label={t('setlist.mySetlists')}
             icon={<ListMusic size={15} />}
             active={!activeTeamId}
             onClick={() => { setActiveTeamId(null); exitSelectMode() }}
             count={personalCount}
           />
-          <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">Teams</div>
+          <div className="px-2 pt-3 pb-1 text-[11px] text-ink-faint uppercase tracking-wider">{t('setlist.teams')}</div>
           {myTeams.map(team => (
             <SetlistNavItem
               key={team.id}
@@ -302,7 +302,7 @@ export default function SetlistsPage() {
               className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors
                 ${!activeTeamId ? 'bg-chord/20 text-chord' : 'bg-surface-2 text-ink-muted hover:text-ink'}`}
             >
-              My Setlists
+              {t('setlist.mySetlists')}
             </button>
             {myTeams.map(team => (
               <button
@@ -322,11 +322,11 @@ export default function SetlistsPage() {
           {selectMode ? (
             <>
               <span className="text-sm font-medium flex-1">
-                {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Tap setlists to select'}
+                {selectedIds.size > 0 ? t('setlist.selectedCount', { count: selectedIds.size }) : t('setlist.tapToSelect')}
               </span>
               {selectedIds.size < setlists.length && (
                 <button onClick={selectAll} className="text-xs text-chord hover:text-chord/80 shrink-0">
-                  Select all
+                  {t('setlist.selectAll')}
                 </button>
               )}
               {selectedIds.size > 0 && (
@@ -336,7 +336,7 @@ export default function SetlistsPage() {
                     className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-400/10 shrink-0"
                   >
                     <Trash2 size={14} />
-                    Delete
+                    {t('common.delete')}
                   </button>
                   {organizeTargets.length > 0 && (
                     <div className="relative shrink-0">
@@ -345,13 +345,13 @@ export default function SetlistsPage() {
                         className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-ink-muted hover:bg-surface-2 hover:text-ink border border-surface-3"
                       >
                         <FolderInput size={14} />
-                        Organize
+                        {t('setlist.organize')}
                       </button>
                       {showOrganizeMenu && (
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setShowOrganizeMenu(false)} />
                           <div className="absolute right-0 top-full mt-1 z-20 bg-surface-2 border border-surface-3 rounded-xl shadow-xl py-1 min-w-[200px]">
-                            <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">Copy to</div>
+                            <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">{t('setlist.copyTo')}</div>
                             {organizeTargets.map(target => (
                               <button
                                 key={`copy-${target.id}`}
@@ -363,7 +363,7 @@ export default function SetlistsPage() {
                               </button>
                             ))}
                             <hr className="border-surface-3 my-1" />
-                            <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">Move to</div>
+                            <div className="px-3 py-1 text-[11px] text-ink-faint uppercase tracking-wider">{t('setlist.moveTo')}</div>
                             {organizeTargets.map(target => (
                               <button
                                 key={`move-${target.id}`}
@@ -381,7 +381,7 @@ export default function SetlistsPage() {
                   )}
                 </>
               )}
-              <Button variant="ghost" size="sm" onClick={exitSelectMode}>Cancel</Button>
+              <Button variant="ghost" size="sm" onClick={exitSelectMode}>{t('common.cancel')}</Button>
             </>
           ) : (
             <>
@@ -393,16 +393,16 @@ export default function SetlistsPage() {
                 onChange={e => setSortBy(e.target.value as SetlistSort)}
                 className="bg-surface-2 text-xs text-ink-muted rounded-lg px-2 py-1.5 border border-surface-3 focus:outline-none cursor-pointer"
               >
-                <option value="updatedAt">Last edited</option>
-                <option value="name">Name</option>
-                <option value="createdAt">Date created</option>
-                <option value="accessedAt">Recently opened</option>
+                <option value="updatedAt">{t('setlist.sortUpdated')}</option>
+                <option value="name">{t('setlist.sortName')}</option>
+                <option value="createdAt">{t('setlist.sortCreated')}</option>
+                <option value="accessedAt">{t('setlist.sortAccessed')}</option>
               </select>
               {setlists.length > 0 && (
                 <button
                   onClick={toggleSelectMode}
                   className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-surface-2"
-                  title="Select setlists"
+                  title={t('setlist.selectSetlists')}
                 >
                   <CheckSquare size={16} />
                 </button>
@@ -416,7 +416,7 @@ export default function SetlistsPage() {
               {isReadOnly && (
                 <span className="text-xs text-ink-faint flex items-center gap-1">
                   <Lock size={12} />
-                  Read only
+                  {t('setlist.readOnly')}
                 </span>
               )}
             </>
@@ -431,11 +431,11 @@ export default function SetlistsPage() {
               value={newName}
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') createSetlist(); if (e.key === 'Escape') setCreating(false) }}
-              placeholder="Setlist name…"
+              placeholder={t('setlist.namePlaceholder')}
               className="flex-1 bg-surface-2 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-chord/50"
             />
-            <Button variant="primary" size="sm" onClick={createSetlist}>Create</Button>
-            <Button variant="ghost" size="sm" onClick={() => setCreating(false)}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={createSetlist}>{t('setlist.create')}</Button>
+            <Button variant="ghost" size="sm" onClick={() => setCreating(false)}>{t('common.cancel')}</Button>
           </div>
         )}
 
@@ -446,9 +446,9 @@ export default function SetlistsPage() {
               <ListMusic size={32} className="text-ink-faint mb-2" />
               {activeTeamId ? (
                 <>
-                  <p>No team setlists yet.</p>
+                  <p>{t('setlist.noTeamSetlists')}</p>
                   {!isReadOnly && (
-                    <p className="text-xs text-ink-faint">Create a setlist to share with the team.</p>
+                    <p className="text-xs text-ink-faint">{t('setlist.noTeamSetlistsHint')}</p>
                   )}
                 </>
               ) : (
@@ -488,17 +488,24 @@ export default function SetlistsPage() {
             <div className="flex items-start gap-3">
               <AlertTriangle size={20} className="text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <h2 className="font-semibold text-sm">Songs from personal books</h2>
+                <h2 className="font-semibold text-sm">{t('setlist.personalSongsTitle')}</h2>
                 <p className="text-xs text-ink-muted mt-1">
-                  {organizeDialog.affectedSongs.length} song{organizeDialog.affectedSongs.length !== 1 ? 's' : ''} in {organizeDialog.action === 'copy' ? 'the copied' : 'these'} setlist{selectedIds.size !== 1 ? 's' : ''} are stored in your personal library and won't be visible to team members.
+                  {t('setlist.personalSongs', {
+                    count: organizeDialog.affectedSongs.length,
+                    setlists: t(organizeDialog.action === 'copy' ? 'setlist.theCopiedSetlists' : 'setlist.theseSetlists', { count: selectedIds.size }),
+                  })}
                 </p>
                 {organizeDialog.targetBook ? (
                   <p className="text-xs text-ink-muted mt-2">
-                    Copy them to <span className="text-ink font-medium">"{organizeDialog.targetBook.title}"</span> to make them available to the team.
+                    <Trans
+                      i18nKey="setlist.copyThemTo"
+                      values={{ book: organizeDialog.targetBook.title }}
+                      components={{ b: <span className="text-ink font-medium" /> }}
+                    />
                   </p>
                 ) : (
                   <p className="text-xs text-amber-400/80 mt-2">
-                    No team book found for {organizeDialog.targetLabel}. Create a team book in the Library first to copy songs across.
+                    {t('setlist.noTeamBook', { team: organizeDialog.targetLabel })}
                   </p>
                 )}
               </div>
@@ -509,7 +516,7 @@ export default function SetlistsPage() {
                 <div key={s.id} className="text-xs text-ink-muted py-0.5 truncate">{s.title}</div>
               ))}
               {organizeDialog.affectedSongs.length > 6 && (
-                <div className="text-xs text-ink-faint py-0.5">…and {organizeDialog.affectedSongs.length - 6} more</div>
+                <div className="text-xs text-ink-faint py-0.5">{t('setlist.andMore', { count: organizeDialog.affectedSongs.length - 6 })}</div>
               )}
             </div>
 
@@ -519,20 +526,22 @@ export default function SetlistsPage() {
                   onClick={() => executeOrganize(true)}
                   className="w-full px-4 py-2 bg-chord/20 text-chord rounded-lg text-sm font-medium hover:bg-chord/30 transition-colors"
                 >
-                  Copy songs to "{organizeDialog.targetBook.title}"
+                  {t('setlist.copySongsTo', { book: organizeDialog.targetBook.title })}
                 </button>
               )}
               <button
                 onClick={() => executeOrganize(false)}
                 className="w-full px-4 py-2 bg-surface-2 text-ink-muted rounded-lg text-sm hover:bg-surface-3 transition-colors"
               >
-                {organizeDialog.targetBook ? 'Skip — keep songs in personal book' : `${organizeDialog.action === 'copy' ? 'Copy' : 'Move'} setlist anyway`}
+                {organizeDialog.targetBook
+                  ? t('setlist.skipKeepPersonal')
+                  : t(organizeDialog.action === 'copy' ? 'setlist.copyAnyway' : 'setlist.moveAnyway')}
               </button>
               <button
                 onClick={() => setOrganizeDialog(null)}
                 className="w-full px-4 py-2 text-ink-faint text-sm hover:text-ink transition-colors"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -551,6 +560,7 @@ function SetlistRow({
   selected?: boolean
   onToggleSelect?: () => void
 }) {
+  const { t } = useTranslation()
   const itemCount = useLiveQuery(
     () => db.setlistItems.where('setlistId').equals(setlist.id)
       .filter(i => i.type === 'song' && !!i.songId).count(),
@@ -564,7 +574,7 @@ function SetlistRow({
     await db.setlists.add({
       ...setlist,
       id: newId,
-      name: `${setlist.name} (copy)`,
+      name: t('setlist.copyName', { name: setlist.name }),
       createdAt: now,
       updatedAt: now,
       accessedAt: undefined,
@@ -596,7 +606,7 @@ function SetlistRow({
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm">{setlist.name}</div>
         <div className="flex items-center gap-2 text-xs text-ink-muted">
-          <span>{itemCount ?? 0} songs</span>
+          <span>{t('setlist.songCount', { count: itemCount ?? 0 })}</span>
           {setlist.date && (
             <>
               <Calendar size={10} className="shrink-0" />
@@ -614,14 +624,14 @@ function SetlistRow({
           <button
             className="p-1.5 text-ink-faint hover:text-ink rounded"
             onClick={handleDuplicate}
-            title="Duplicate setlist"
+            title={t('setlist.duplicate')}
           >
             <Copy size={14} />
           </button>
           <button
             className="p-1.5 bg-chord text-surface-0 rounded-lg"
             onClick={e => { e.stopPropagation(); navigate(`/setlists/${setlist.id}`) }}
-            title="Open setlist"
+            title={t('setlist.open')}
           >
             <Play size={14} />
           </button>
