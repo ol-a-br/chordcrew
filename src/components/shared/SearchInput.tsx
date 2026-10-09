@@ -1,6 +1,7 @@
 import { forwardRef, type InputHTMLAttributes } from 'react'
 import { Search, X } from 'lucide-react'
 import { clsx } from 'clsx'
+import { useTranslation } from 'react-i18next'
 
 interface SearchInputProps extends Pick<InputHTMLAttributes<HTMLInputElement>, 'autoFocus' | 'onKeyDown'> {
   value: string
@@ -18,6 +19,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
   { value, onChange, placeholder, className, inputClassName, iconSize = 15, autoFocus, onKeyDown },
   ref
 ) {
+  const { t } = useTranslation()
   return (
     <div className={clsx('relative', className)}>
       <Search size={iconSize} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
@@ -35,7 +37,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
         <button
           type="button"
           onClick={() => onChange('')}
-          aria-label="Clear search"
+          aria-label={t('common.clearSearch')}
           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-ink-faint hover:text-ink hover:bg-surface-3 rounded transition-colors"
         >
           <X size={13} />

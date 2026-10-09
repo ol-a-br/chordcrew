@@ -312,9 +312,12 @@ export function expandRepeatSections(content: string): string {
 
 // ─── ChordPro lint: per-line brace / bracket mismatch detection ──────────────
 
+/** What is wrong with a line; the UI shows it via the i18n key `lint.<code>`. */
+export type ChordProLintCode = 'unclosedBrace' | 'unexpectedBrace' | 'unclosedBracket' | 'unexpectedBracket'
+
 export interface ChordProError {
   line: number
-  message: string
+  code: ChordProLintCode
   text: string
 }
 
@@ -327,15 +330,15 @@ export function lintChordPro(content: string): ChordProError[] {
     const opens  = (text.match(/\{/g) ?? []).length
     const closes = (text.match(/\}/g) ?? []).length
     if (opens > closes)
-      errors.push({ line: lineNum, message: 'Unclosed directive brace — add a closing }', text })
+      errors.push({ line: lineNum, code: 'unclosedBrace', text })
     else if (closes > opens)
-      errors.push({ line: lineNum, message: 'Unexpected } — no matching {', text })
+      errors.push({ line: lineNum, code: 'unexpectedBrace', text })
     const openBr  = (text.match(/\[/g) ?? []).length
     const closeBr = (text.match(/\]/g) ?? []).length
     if (openBr > closeBr)
-      errors.push({ line: lineNum, message: 'Unclosed chord bracket — add a closing ]', text })
+      errors.push({ line: lineNum, code: 'unclosedBracket', text })
     else if (closeBr > openBr)
-      errors.push({ line: lineNum, message: 'Unexpected ] — no matching [', text })
+      errors.push({ line: lineNum, code: 'unexpectedBracket', text })
   }
   return errors
 }

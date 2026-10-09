@@ -1,4 +1,5 @@
 import { useMemo, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { renderToHtml, isKnownChord, expandRepeatSections, transposeKey, transposeChordName, extractMeta } from '@/utils/chordpro'
 
 // ─── Module-level render cache ────────────────────────────────────────────────
@@ -123,6 +124,7 @@ export function SongRenderer({
   songKey,
   tempo,
 }: SongRendererProps) {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Use module-level cache — cache hits are instant even after component remount
@@ -510,14 +512,14 @@ export function SongRenderer({
       <div className="mx-4 mt-3 mb-1 bg-red-900/20 border border-red-700/40 rounded-lg overflow-hidden text-sm">
         <div className="flex items-center gap-2 px-3 py-2 bg-red-900/30 text-red-300 font-medium">
           <AlertTriangle size={14} />
-          {errors.length} parse {errors.length === 1 ? 'error' : 'errors'}
+          {t('lint.errorCount', { count: errors.length })}
         </div>
         <ul className="divide-y divide-red-900/20">
           {errors.map((err, i) => (
             <li key={i} className="flex items-start gap-3 px-3 py-2">
-              <span className="text-red-400 font-mono text-xs shrink-0 mt-0.5">Line {err.line}</span>
+              <span className="text-red-400 font-mono text-xs shrink-0 mt-0.5">{t('lint.line', { line: err.line })}</span>
               <div className="flex-1 min-w-0">
-                <div className="text-red-200 text-xs">{err.message}</div>
+                <div className="text-red-200 text-xs">{t(`lint.${err.code}`)}</div>
                 <div className="text-red-400/70 font-mono text-xs truncate mt-0.5">{err.text}</div>
               </div>
               {onJumpToLine && (
@@ -525,7 +527,7 @@ export function SongRenderer({
                   onClick={() => onJumpToLine(err.line)}
                   className="shrink-0 text-xs text-chord hover:text-chord/80 transition-colors mt-0.5"
                 >
-                  Fix →
+                  {t('lint.fix')}
                 </button>
               )}
             </li>

@@ -16,19 +16,19 @@ import { SyncCopiesDialog } from '@/components/songs/SyncCopiesDialog'
 import { useAuth } from '@/auth/AuthContext'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import { ctDeleteSong, ctUpdateSong, ctUpdateArrangement } from '@/churchtools/api'
+import { useTranslation } from 'react-i18next'
 import type { Song, SongVersion } from '@/types'
 
 const AUTOSAVE_DELAY_MS = 1000
 const VERSION_INTERVAL_MS = 5 * 60 * 1000  // create a version at most every 5 min
 
-const RIG_FIELD_TITLE = 'Kemper rig sent on song change: program number (17) or Performance.Slot (6.2)'
-
 /** Shows how a {x_kemper_rig} value is read ("Perf 6 · Slot 2", "PC 17") or flags it as invalid. */
 function RigHint({ value }: { value: string }) {
+  const { t } = useTranslation()
   const rig = parseKemperRig(value)
   return (
     <span className={`text-[10px] whitespace-nowrap ${rig ? 'text-ink-faint' : 'text-red-400'}`}>
-      {rig ? formatKemperRig(rig) : 'invalid'}
+      {rig ? formatKemperRig(rig) : t('editor.rigInvalid')}
     </span>
   )
 }
@@ -36,6 +36,7 @@ function RigHint({ value }: { value: string }) {
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const setlistId = searchParams.get('setlistId')
   const setlistPos = searchParams.get('pos')
@@ -282,28 +283,28 @@ export default function EditorPage() {
     }
   }
 
-  if (!song) return <div className="p-8 text-ink-muted">Loading…</div>
+  if (!song) return <div className="p-8 text-ink-muted">{t('common.loading')}</div>
 
   // ── Delete: "deleted" phase shows undo banner instead of normal editor ──────
   if (deletePhase === 'deleted') {
     return (
       <div className="flex flex-col h-full items-center justify-center gap-4 text-center px-6">
-        <p className="text-ink-muted text-sm">Song deleted.</p>
+        <p className="text-ink-muted text-sm">{t('editor.deleted')}</p>
         <div className="flex gap-3">
           <button
             onClick={undoDelete}
             className="px-4 py-2 rounded-lg bg-chord/10 text-chord text-sm font-medium hover:bg-chord/20 transition-colors"
           >
-            Undo
+            {t('editor.undo')}
           </button>
           <button
             onClick={() => navigate('/library')}
             className="px-4 py-2 rounded-lg bg-surface-2 text-ink-muted text-sm hover:bg-surface-3 transition-colors"
           >
-            Go to Library
+            {t('editor.goToLibrary')}
           </button>
         </div>
-        <p className="text-xs text-ink-faint">Auto-redirecting to library in 5 s…</p>
+        <p className="text-xs text-ink-faint">{t('editor.autoRedirect')}</p>
       </div>
     )
   }
@@ -316,7 +317,7 @@ export default function EditorPage() {
         <button
           onClick={() => setlistId ? navigate(`/setlists/${setlistId}`) : navigate(-1)}
           className="text-ink-muted hover:text-ink"
-          title={setlistId ? 'Back to setlist' : 'Close'}
+          title={setlistId ? t('viewer.backToSetlist') : t('common.close')}
         >
           <X size={18} />
         </button>
@@ -325,9 +326,9 @@ export default function EditorPage() {
           {teamHasNotes && (
             <span
               className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-chord/10 text-chord border border-chord/20"
-              title="Team members have notes on this song"
+              title={t('editor.teamNotesHint')}
             >
-              notes
+              {t('editor.notesBadge')}
             </span>
           )}
         </div>
@@ -336,7 +337,7 @@ export default function EditorPage() {
             <button
               onClick={() => setShowPreview(p => !p)}
               className={`p-1.5 rounded ${showPreview ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
-              title="Toggle preview"
+              title={t('editor.togglePreview')}
             >
               <Eye size={17} />
             </button>
@@ -344,7 +345,7 @@ export default function EditorPage() {
               <button
                 onClick={() => setShowHistory(h => !h)}
                 className={`p-1.5 rounded ${showHistory ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
-                title="Version history"
+                title={t('editor.versionHistory')}
               >
                 <History size={17} />
               </button>
@@ -352,7 +353,7 @@ export default function EditorPage() {
           </>
         )}
         {isCTSong && (
-          <span className="text-xs px-2 py-0.5 rounded bg-chord/10 text-chord border border-chord/20 shrink-0" title="Managed by ChurchTools">
+          <span className="text-xs px-2 py-0.5 rounded bg-chord/10 text-chord border border-chord/20 shrink-0" title={t('editor.managedByCt')}>
             CT
           </span>
         )}
@@ -363,18 +364,18 @@ export default function EditorPage() {
         />
         {deletePhase === 'confirm' ? (
           <>
-            <span className="text-xs text-red-400 font-medium">Delete this song?</span>
+            <span className="text-xs text-red-400 font-medium">{t('editor.deleteConfirm')}</span>
             <button
               onClick={confirmDelete}
               className="px-2.5 py-1 rounded text-xs bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
             >
-              Delete
+              {t('common.delete')}
             </button>
             <button
               onClick={() => setDeletePhase('idle')}
               className="px-2.5 py-1 rounded text-xs text-ink-muted hover:text-ink transition-colors"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
           </>
         ) : (
@@ -382,13 +383,13 @@ export default function EditorPage() {
             <button
               onClick={() => setDeletePhase('confirm')}
               className="p-1.5 rounded text-ink-faint hover:text-red-400 transition-colors"
-              title="Delete song"
+              title={t('editor.deleteSong')}
             >
               <Trash2 size={15} />
             </button>
             <Button variant="ghost" size="sm" onClick={() => navigate(`/view/${song.id}${setlistId ? `?setlistId=${setlistId}&pos=${setlistPos ?? 0}` : ''}`)}>
               <RotateCcw size={14} />
-              View
+              {t('song.view')}
             </Button>
           </>
         )}
@@ -397,15 +398,15 @@ export default function EditorPage() {
       {/* Metadata bar — row 1: core song fields + expand toggle */}
       <div className="flex items-center gap-3 px-4 py-1.5 border-b border-surface-3 bg-surface-1 shrink-0 flex-wrap">
         {([
-          { label: 'Title',  directive: 'title',  value: derivedMeta.title  ?? '', width: 'w-36', type: 'text' },
-          { label: 'Artist', directive: 'artist', value: derivedMeta.artist ?? '', width: 'w-28', type: 'text' },
-          { label: 'Key',    directive: 'key',    value: derivedMeta.key    ?? song?.transcription.key ?? '', width: 'w-12', type: 'text' },
-          { label: 'Tempo',  directive: 'tempo',  value: derivedMeta.tempo  ? String(derivedMeta.tempo) : '', width: 'w-14', type: 'number' },
-          { label: 'Capo',   directive: 'capo',   value: derivedMeta.capo   ? String(derivedMeta.capo)  : '', width: 'w-12', type: 'number' },
-          { label: 'Time',   directive: 'time',   value: derivedMeta.time   ?? '', width: 'w-14', type: 'text' },
+          { label: t('editor.fieldTitle'),  directive: 'title',  value: derivedMeta.title  ?? '', width: 'w-36', type: 'text' },
+          { label: t('editor.fieldArtist'), directive: 'artist', value: derivedMeta.artist ?? '', width: 'w-28', type: 'text' },
+          { label: t('song.key'),    directive: 'key',    value: derivedMeta.key    ?? song?.transcription.key ?? '', width: 'w-12', type: 'text' },
+          { label: t('editor.fieldTempo'),  directive: 'tempo',  value: derivedMeta.tempo  ? String(derivedMeta.tempo) : '', width: 'w-14', type: 'number' },
+          { label: t('song.capo'),   directive: 'capo',   value: derivedMeta.capo   ? String(derivedMeta.capo)  : '', width: 'w-12', type: 'number' },
+          { label: t('song.timeSignature'),   directive: 'time',   value: derivedMeta.time   ?? '', width: 'w-14', type: 'text' },
           ...(midiEnabled ? [
-            { label: 'Rig', directive: 'x_kemper_rig', value: derivedMeta.kemperRig ?? '', width: 'w-14', type: 'text',
-              title: RIG_FIELD_TITLE, placeholder: '6.2' },
+            { label: t('editor.fieldRig'), directive: 'x_kemper_rig', value: derivedMeta.kemperRig ?? '', width: 'w-14', type: 'text',
+              title: t('editor.rigFieldHint'), placeholder: '6.2' },
           ] : []),
         ]).map(({ label, directive, value, width, type, title, placeholder }) => (
           <label key={directive} className="flex items-center gap-1 text-xs">
@@ -426,9 +427,9 @@ export default function EditorPage() {
                 type="button"
                 onClick={handleTap}
                 className="px-1.5 py-0.5 text-xs bg-surface-2 border border-surface-3 rounded text-ink-muted hover:text-ink hover:border-chord/40 active:bg-chord/10 transition-colors select-none"
-                title="Tap tempo"
+                title={t('editor.tapTempo')}
               >
-                Tap
+                {t('editor.tap')}
               </button>
             )}
           </label>
@@ -438,7 +439,7 @@ export default function EditorPage() {
         <button
           type="button"
           onClick={() => setShowExtraMeta(v => !v)}
-          title={showExtraMeta ? 'Hide CCLI / copyright / tags' : 'Show CCLI / copyright / tags'}
+          title={showExtraMeta ? t('editor.hideExtraMeta') : t('editor.showExtraMeta')}
           className="ml-auto relative p-1 text-ink-faint hover:text-ink rounded transition-colors"
         >
           <ChevronDown
@@ -473,13 +474,13 @@ export default function EditorPage() {
               href={`https://songselect.ccli.com/search/results?SearchText=${encodeURIComponent(derivedMeta.title ?? song?.title ?? '')}`}
               target="_blank"
               rel="noopener noreferrer"
-              title="Look up on SongSelect"
+              title={t('editor.lookUpSongSelect')}
               className="-ml-2 p-0.5 text-ink-faint hover:text-chord transition-colors"
             >
               <ExternalLink size={11} />
             </a>
             {([
-              { label: 'Copyright', directive: 'copyright', value: derivedMeta.copyright ?? '', width: 'w-64', type: 'text', placeholder: '© Year Author' },
+              { label: t('editor.fieldCopyright'), directive: 'copyright', value: derivedMeta.copyright ?? '', width: 'w-64', type: 'text', placeholder: t('editor.copyrightPlaceholder') },
               { label: 'URL',       directive: 'url',       value: derivedMeta.url       ?? '', width: 'w-64', type: 'url',  placeholder: 'https://…' },
             ] as const).map(({ label, directive, value, width, type, placeholder }) => (
               <label key={directive} className="flex items-center gap-1 text-xs">
@@ -498,13 +499,13 @@ export default function EditorPage() {
             {/* Kemper rig lives in row 1 while MIDI is on; here it stays editable on devices without MIDI */}
             {!midiEnabled && (
               <label className="flex items-center gap-1 text-xs">
-                <span className="text-ink-faint shrink-0">Rig</span>
+                <span className="text-ink-faint shrink-0">{t('editor.fieldRig')}</span>
                 <input
                   type="text"
                   defaultValue={derivedMeta.kemperRig ?? ''}
                   key={`x_kemper_rig-${song?.id}-${derivedMeta.kemperRig ?? ''}`}
                   placeholder="6.2"
-                  title={RIG_FIELD_TITLE}
+                  title={t('editor.rigFieldHint')}
                   onBlur={e => commitMetaField('x_kemper_rig', e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                   className="w-14 bg-surface-2 border border-surface-3 rounded px-1.5 py-0.5 text-ink text-xs outline-none focus:border-chord/50 placeholder:text-ink-faint/40"
@@ -527,7 +528,7 @@ export default function EditorPage() {
                   <button
                     onClick={() => removeTag(tag)}
                     className="text-ink-faint hover:text-ink leading-none"
-                    title="Remove tag"
+                    title={t('editor.removeTag')}
                   >
                     ✕
                   </button>
@@ -536,7 +537,7 @@ export default function EditorPage() {
               <input
                 ref={tagInputRef}
                 type="text"
-                placeholder={tags.length === 0 ? 'add tags (press Enter or ,)' : 'add tag…'}
+                placeholder={tags.length === 0 ? t('editor.addTagsPlaceholder') : t('editor.addTagPlaceholder')}
                 className="bg-transparent text-xs text-ink placeholder:text-ink-faint outline-none min-w-[100px] py-0.5"
                 onKeyDown={handleTagKeyDown}
                 onBlur={e => { if (e.target.value.trim()) { addTag(e.target.value); e.target.value = '' } }}
@@ -552,8 +553,8 @@ export default function EditorPage() {
           /* CT song: no ChordPro editor — lyrics are managed in ChurchTools */
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
             <Cloud size={32} className="text-ink-faint" />
-            <p className="text-sm text-ink-muted">Song content is managed in ChurchTools.</p>
-            <p className="text-xs text-ink-faint">Edit the fields above to update metadata. Changes are sent to ChurchTools on save.</p>
+            <p className="text-sm text-ink-muted">{t('editor.ctManagedTitle')}</p>
+            <p className="text-xs text-ink-faint">{t('editor.ctManagedHint')}</p>
           </div>
         ) : (
           <>
@@ -586,7 +587,7 @@ export default function EditorPage() {
             <div className="absolute inset-0 z-10" onClick={() => setShowHistory(false)} />
             <div className="absolute right-0 top-0 bottom-0 z-20 w-72 bg-surface-1 border-l border-surface-3 flex flex-col shadow-2xl">
               <div className="flex items-center justify-between px-4 py-3 border-b border-surface-3 shrink-0">
-                <span className="text-sm font-semibold text-ink">Version history</span>
+                <span className="text-sm font-semibold text-ink">{t('editor.versionHistory')}</span>
                 <button onClick={() => setShowHistory(false)} className="p-1 text-ink-muted hover:text-ink">
                   <X size={15} />
                 </button>
@@ -594,9 +595,9 @@ export default function EditorPage() {
               <div className="overflow-y-auto flex-1 p-3 space-y-2">
                 {[...versions].reverse().map((v, i) => {
                   const ago = Date.now() - v.savedAt
-                  const label = ago < 60000 ? 'just now'
-                    : ago < 3600000 ? `${Math.round(ago / 60000)} min ago`
-                    : ago < 86400000 ? `${Math.round(ago / 3600000)} h ago`
+                  const label = ago < 60000 ? t('editor.justNow')
+                    : ago < 3600000 ? t('editor.minutesAgo', { count: Math.round(ago / 60000) })
+                    : ago < 86400000 ? t('editor.hoursAgo', { count: Math.round(ago / 3600000) })
                     : new Date(v.savedAt).toLocaleDateString()
                   const preview = v.content.trim().split('\n').slice(0, 3).join(' ↵ ')
 
@@ -611,14 +612,14 @@ export default function EditorPage() {
                         onClick={() => restoreVersion(v.content)}
                         className="w-full text-xs px-2 py-1 bg-chord/10 text-chord hover:bg-chord/20 rounded transition-colors"
                       >
-                        Restore this version
+                        {t('editor.restoreVersion')}
                       </button>
                     </div>
                   )
                 })}
               </div>
               <p className="px-4 py-2 text-xs text-ink-faint border-t border-surface-3 shrink-0">
-                Restoring replaces the editor content. Changes are auto-saved.
+                {t('editor.restoreHint')}
               </p>
             </div>
           </>

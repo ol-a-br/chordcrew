@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Copy, Download, Trash2, GitCompare, Link2, Link2Off, Check } from 'lucide-react'
 import { db, markDeleted, linkSongs } from '@/db'
 import { deleteSongFromCloud } from '@/sync/firestoreSync'
@@ -185,6 +186,7 @@ type Tab = 'duplicates' | 'errors' | 'linked' | 'export'
 export default function CurationPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { t } = useTranslation()
   const [tab, setTab] = useState<Tab>('duplicates')
   const [errorFilter, setErrorFilter] = useState('')
   const [sameBookOnly, setSameBookOnly] = useState(false)
@@ -531,7 +533,7 @@ export default function CurationPage() {
                       <li key={i} className="flex items-start gap-3 px-4 py-2 text-xs">
                         <span className="text-red-400 font-mono shrink-0 mt-0.5">L{err.line}</span>
                         <div className="flex-1 min-w-0">
-                          <div className="text-red-200">{err.message}</div>
+                          <div className="text-red-200">{t(`lint.${err.code}`)}</div>
                           <div className="text-red-400/60 font-mono truncate mt-0.5">{err.text}</div>
                         </div>
                       </li>

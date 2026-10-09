@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useFontScale } from '@/hooks/useFontScale'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useTranslation } from 'react-i18next'
 import { X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlignLeft, ZoomIn, ZoomOut, List, Pencil, StickyNote } from 'lucide-react'
 import { db, getSettings, saveSettings, getSongNote, markPending } from '@/db'
 import { SongRenderer, prewarmSongCache, isSongCached, getCachedHtml } from '@/components/viewer/SongRenderer'
@@ -37,6 +38,7 @@ export default function PerformancePage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const song = useLiveQuery(() => id ? db.songs.get(id) : undefined, [id])
 
   const setlistId = searchParams.get('setlistId')
@@ -528,7 +530,7 @@ export default function PerformancePage() {
           <X size={20} />
         </button>
 
-        <button onClick={() => navigate(`/editor/${id}`)} className="text-ink-muted hover:text-ink p-1 shrink-0" title="Edit song">
+        <button onClick={() => navigate(`/editor/${id}`)} className="text-ink-muted hover:text-ink p-1 shrink-0" title={t('performance.editSong')}>
           <Pencil size={16} />
         </button>
 
@@ -543,7 +545,7 @@ export default function PerformancePage() {
               onClick={() => prevSongId && navigate(`/perform/${prevSongId}?setlistId=${setlistId}&pos=${currentPos - 1}`)}
               disabled={!prevSongId}
               className="p-0.5 text-ink-faint hover:text-ink disabled:opacity-30"
-              title="Previous song"
+              title={t('viewer.prevSong')}
             >
               <ChevronLeft size={14} />
             </button>
@@ -554,7 +556,7 @@ export default function PerformancePage() {
               onClick={() => nextSongId && navigate(`/perform/${nextSongId}?setlistId=${setlistId}&pos=${currentPos + 1}`)}
               disabled={!nextSongId}
               className="p-0.5 text-ink-faint hover:text-ink disabled:opacity-30"
-              title="Next song"
+              title={t('viewer.nextSong')}
             >
               <ChevronRight size={14} />
             </button>
@@ -567,7 +569,7 @@ export default function PerformancePage() {
             className={`relative p-1.5 rounded shrink-0 transition-colors ${
               metronome ? 'text-chord' : 'text-ink-muted hover:text-ink'
             }`}
-            title={`Metronome — ${song.transcription.tempo} BPM`}
+            title={t('performance.metronome', { bpm: song.transcription.tempo })}
           >
             ♩
             {metronome && metronomeMode !== 'sound' && (
@@ -637,7 +639,7 @@ export default function PerformancePage() {
           <button
             onClick={() => { setShowTray(t => !t); resetHideTimer() }}
             className={`p-1.5 rounded shrink-0 ${showTray ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
-            title="Song list"
+            title={t('performance.songList')}
           >
             <List size={15} />
           </button>
@@ -652,7 +654,7 @@ export default function PerformancePage() {
               resetHideTimer()
             }}
             className={`p-1.5 rounded shrink-0 ${showNotes ? 'text-chord' : 'text-ink-muted hover:text-ink'}`}
-            title="My notes"
+            title={t('viewer.myNotes')}
           >
             <StickyNote size={15} />
           </button>
@@ -733,8 +735,8 @@ export default function PerformancePage() {
                 : 'text-ink-muted bg-surface-2/60'
             }`}
             onClick={(e) => { e.stopPropagation(); toggleMetronome() }}
-            title={`Toggle metronome — ${song.transcription.tempo} BPM`}
-            aria-label={`Toggle metronome — ${song.transcription.tempo} BPM`}
+            title={t('performance.toggleMetronome', { bpm: song.transcription.tempo })}
+            aria-label={t('performance.toggleMetronome', { bpm: song.transcription.tempo })}
           >
             ♩
           </button>
@@ -812,7 +814,7 @@ export default function PerformancePage() {
           {/* Slide-up panel */}
           <div className="absolute bottom-0 inset-x-0 z-30 bg-surface-1 border-t border-surface-3 rounded-t-2xl max-h-[65vh] flex flex-col shadow-2xl">
             <div className="flex items-center justify-between px-4 py-3 border-b border-surface-3 shrink-0">
-              <span className="text-sm font-semibold text-ink">Setlist</span>
+              <span className="text-sm font-semibold text-ink">{t('performance.setlist')}</span>
               <button
                 onClick={() => setShowTray(false)}
                 className="p-1 text-ink-muted hover:text-ink"
@@ -856,7 +858,7 @@ export default function PerformancePage() {
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className={`text-sm font-medium truncate ${isCurrent ? 'text-chord' : 'text-ink'}`}>
-                        {songData?.title ?? 'Unknown'}
+                        {songData?.title ?? t('setlistDetail.unknownSong')}
                       </div>
                       {songData?.artist && (
                         <div className="text-xs text-ink-muted truncate">{songData.artist}</div>
