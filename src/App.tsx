@@ -7,6 +7,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/components/auth/LoginPage'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db'
+import { useTranslation } from 'react-i18next'
 
 // Lazy-load pages for better initial load performance
 const LibraryPage        = lazy(() => import('@/pages/LibraryPage'))
@@ -29,10 +30,11 @@ const SharePage          = lazy(() => import('@/pages/SharePage'))
 const KemperRigsPage     = lazy(() => import('@/pages/KemperRigsPage'))
 
 function PageLoader() {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center justify-center h-full text-ink-muted text-sm">
       <div className="w-5 h-5 border-2 border-chord border-t-transparent rounded-full animate-spin mr-2" />
-      Loading…
+      {t('common.loading')}
     </div>
   )
 }

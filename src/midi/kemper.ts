@@ -180,22 +180,25 @@ export function rigMatchesPattern(rig: KemperRig | null, pattern: KemperRigPatte
   return kemperRigValue(rig) === kemperRigValue(pattern.rig)
 }
 
+/** Why a from → to remap is invalid; the UI shows it via the i18n key `kemper.remapError.<code>`. */
+export type RigRemapError = 'invalidFrom' | 'invalidTo' | 'performanceOnly'
+
 /**
- * Builds the replacement for a from → to remap, or an error message.
+ * Builds the replacement for a from → to remap, or an error code.
  * `to` may be empty (remove the rig). "6.*" → "8.*" keeps each song's slot;
  * "6.*" → "17" puts every slot of performance 6 on one rig.
  */
 export function buildRigRemap(
   from: string,
   to: string,
-): { from: KemperRigPattern; replace: (rig: KemperRig) => string } | { error: string } {
+): { from: KemperRigPattern; replace: (rig: KemperRig) => string } | { error: RigRemapError } {
   const fromPattern = parseKemperRigPattern(from)
-  if (!fromPattern) return { error: 'From must be a rig (17, 6.2) or a whole performance (6.*)' }
+  if (!fromPattern) return { error: 'invalidFrom' }
   if (!to.trim()) return { from: fromPattern, replace: () => '' }
   const toPattern = parseKemperRigPattern(to)
-  if (!toPattern) return { error: 'To must be a rig (17, 6.2), a whole performance (8.*) or empty' }
+  if (!toPattern) return { error: 'invalidTo' }
   if (toPattern.kind === 'rig') return { from: fromPattern, replace: () => kemperRigValue(toPattern.rig) }
-  if (fromPattern.kind !== 'performance') return { error: 'A whole performance (8.*) can only replace a whole performance (6.*)' }
+  if (fromPattern.kind !== 'performance') return { error: 'performanceOnly' }
   return {
     from: fromPattern,
     replace: rig => rig.kind === 'performance' ? `${toPattern.performance}.${rig.slot}` : kemperRigValue(rig),

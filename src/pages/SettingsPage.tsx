@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useTranslation, Trans } from 'react-i18next'
 import { GitFork, RefreshCw, Download, CheckCircle2, Smartphone, Monitor, LogIn, LogOut, Church } from 'lucide-react'
 import { db, getSettings, saveSettings } from '@/db'
 import { useCaptureKey } from '@/hooks/useKeyboard'
@@ -7,6 +7,7 @@ import { Button } from '@/components/shared/Button'
 import { useSync } from '@/sync/SyncContext'
 import { useChurchTools } from '@/churchtools/ChurchToolsContext'
 import { MidiSettingsSection } from '@/components/midi/MidiSettingsSection'
+import { LANGUAGES, type LanguageCode } from '@/i18n'
 import type { AppSettings } from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 
@@ -86,16 +87,15 @@ export default function SettingsPage() {
 
       {/* Display */}
       <section>
-        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Display</h2>
+        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">{t('settings.display')}</h2>
         <div className="bg-surface-1 rounded-xl px-4 divide-y divide-surface-3">
           <Row label={t('settings.language')}>
             <select
               value={settings.language}
-              onChange={e => update({ language: e.target.value as 'en' | 'de' })}
+              onChange={e => update({ language: e.target.value as LanguageCode })}
               className="bg-surface-2 text-sm rounded-lg px-3 py-1.5 border border-surface-3 focus:outline-none"
             >
-              <option value="en">English</option>
-              <option value="de">Deutsch</option>
+              {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}
             </select>
           </Row>
 
@@ -113,19 +113,19 @@ export default function SettingsPage() {
             </div>
           </Row>
 
-          <Row label="Page navigation">
+          <Row label={t('settings.pageNavigation')}>
             <div className="flex gap-0 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
               <button
                 onClick={() => update({ continuousScroll: false })}
                 className={`px-3 py-1.5 text-sm ${!settings.continuousScroll ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:text-ink'}`}
               >
-                Flip
+                {t('settings.pageFlip')}
               </button>
               <button
                 onClick={() => update({ continuousScroll: true })}
                 className={`px-3 py-1.5 text-sm ${settings.continuousScroll ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:text-ink'}`}
               >
-                Scroll
+                {t('settings.pageScroll')}
               </button>
             </div>
           </Row>
@@ -134,22 +134,22 @@ export default function SettingsPage() {
 
       {/* Performance */}
       <section>
-        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Performance</h2>
+        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">{t('settings.performance')}</h2>
         <div className="bg-surface-1 rounded-xl px-4 divide-y divide-surface-3">
-          <Row label="Metronome">
+          <Row label={t('settings.metronome')}>
             <div className="flex gap-0 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
               {(['light', 'sound', 'both'] as const).map(mode => (
                 <button
                   key={mode}
                   onClick={() => update({ metronomeMode: mode })}
-                  className={`px-3 py-1.5 text-sm capitalize ${settings.metronomeMode === mode ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:text-ink'}`}
+                  className={`px-3 py-1.5 text-sm ${settings.metronomeMode === mode ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:text-ink'}`}
                 >
-                  {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  {t(`settings.metronomeMode.${mode}`)}
                 </button>
               ))}
             </div>
           </Row>
-          <Row label="Large metronome button">
+          <Row label={t('settings.metronomeLarge')}>
             <button
               role="switch"
               aria-checked={settings.metronomeLarge ?? false}
@@ -163,7 +163,7 @@ export default function SettingsPage() {
               }`} />
             </button>
           </Row>
-          <Row label="Notes auto-hide">
+          <Row label={t('settings.notesAutoHide')}>
             <div className="flex items-center gap-2">
               <input
                 type="range"
@@ -184,10 +184,9 @@ export default function SettingsPage() {
 
       {/* Pedal */}
       <section>
-        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-1">Bluetooth Pedal</h2>
+        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-1">{t('settings.pedal')}</h2>
         <p className="text-xs text-ink-muted mb-3">
-          PageFlip Cicada V7: set pedal to <strong>Mode 2 (Left/Right Arrow)</strong>.
-          Click a button below to reassign.
+          <Trans i18nKey="settings.pedalHint" components={{ b: <strong /> }} />
         </p>
         <div className="bg-surface-1 rounded-xl px-4 divide-y divide-surface-3">
           <Row label={t('settings.pedalNext')}>
@@ -198,7 +197,7 @@ export default function SettingsPage() {
                   ? 'border-chord text-chord animate-pulse bg-chord/10'
                   : 'border-surface-3 bg-surface-2 text-ink hover:border-chord/50'}`}
             >
-              {capturingKey === 'next' ? 'Press key…' : settings.pedalKeyNext}
+              {capturingKey === 'next' ? t('settings.pressKey') : settings.pedalKeyNext}
             </button>
           </Row>
           <Row label={t('settings.pedalPrev')}>
@@ -209,7 +208,7 @@ export default function SettingsPage() {
                   ? 'border-chord text-chord animate-pulse bg-chord/10'
                   : 'border-surface-3 bg-surface-2 text-ink hover:border-chord/50'}`}
             >
-              {capturingKey === 'prev' ? 'Press key…' : settings.pedalKeyPrev}
+              {capturingKey === 'prev' ? t('settings.pressKey') : settings.pedalKeyPrev}
             </button>
           </Row>
         </div>
@@ -221,7 +220,7 @@ export default function SettingsPage() {
       {/* Sync */}
       {status !== 'unconfigured' && (
         <section>
-          <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Cloud Sync</h2>
+          <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">{t('settings.cloudSync')}</h2>
           <div className="bg-surface-1 rounded-xl px-4 py-3 space-y-3">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
@@ -234,17 +233,17 @@ export default function SettingsPage() {
                     status === 'error'             ? 'bg-red-500'   : 'bg-blue-400 animate-pulse'
                   }`} />
                   <span className="text-sm">
-                    {status === 'syncing'           ? 'Syncing…' :
-                     status === 'error'             ? 'Sync error' :
-                     status === 'pending'           ? `${pendingCount} change${pendingCount !== 1 ? 's' : ''} pending` :
-                     status === 'updates-available' ? 'Updates available — tap Sync Now' :
-                     status === 'offline'           ? 'Offline' :
-                     'Up to date'}
+                    {status === 'syncing'           ? t('library.ctSyncing') :
+                     status === 'error'             ? t('settings.syncError') :
+                     status === 'pending'           ? t('settings.syncPending', { count: pendingCount }) :
+                     status === 'updates-available' ? t('settings.syncUpdates') :
+                     status === 'offline'           ? t('sync.status.offline') :
+                     t('settings.syncUpToDate')}
                   </span>
                 </div>
                 {lastSync && (
                   <p className="text-xs text-ink-faint pl-4">
-                    Last synced {new Date(lastSync).toLocaleString()}
+                    {t('settings.lastSynced', { time: new Date(lastSync).toLocaleString() })}
                   </p>
                 )}
                 {syncError && (
@@ -258,7 +257,7 @@ export default function SettingsPage() {
                 disabled={status === 'syncing'}
               >
                 <RefreshCw size={14} className={status === 'syncing' ? 'animate-spin' : ''} />
-                Sync Now
+                {t('sync.syncNow')}
               </Button>
             </div>
           </div>
@@ -274,7 +273,7 @@ export default function SettingsPage() {
         <div className="bg-surface-1 rounded-xl px-4 py-3 space-y-3">
           {/* URL row */}
           <div className="space-y-1.5">
-            <label className="text-xs text-ink-faint">Church URL</label>
+            <label className="text-xs text-ink-faint">{t('settings.ct.url')}</label>
             <div className="flex gap-2">
               <input
                 type="url"
@@ -289,7 +288,7 @@ export default function SettingsPage() {
                 disabled={!ctUrlInput.trim() || ctUrlInput === baseUrl}
                 onClick={() => setBaseUrl(ctUrlInput.trim())}
               >
-                Save
+                {t('common.save')}
               </Button>
             </div>
           </div>
@@ -300,11 +299,11 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="w-2 h-2 rounded-full bg-green-500" />
-                  Connected as <strong>{personName}</strong>
+                  <Trans i18nKey="settings.ct.connectedAs" values={{ name: personName }} components={{ b: <strong /> }} />
                 </div>
                 <Button variant="ghost" size="sm" onClick={disconnect}>
                   <LogOut size={13} />
-                  Disconnect
+                  {t('settings.ct.disconnect')}
                 </Button>
               </div>
             ) : (
@@ -312,21 +311,21 @@ export default function SettingsPage() {
                 {!showTokenField ? (
                   <Button variant="ghost" size="sm" onClick={() => setShowTokenField(true)}>
                     <LogIn size={13} />
-                    Enter login token
+                    {t('settings.ct.enterToken')}
                   </Button>
                 ) : (
                   <div className="space-y-2">
                     <p className="text-xs text-ink-muted leading-relaxed">
-                      In ChurchTools: <strong className="text-ink">Your profile → Security → Login tokens</strong> → create a token and paste it here. Your password is never stored.
+                      <Trans i18nKey="settings.ct.tokenHowTo" components={{ b: <strong className="text-ink" /> }} />
                     </p>
                     <p className="text-xs text-ink-muted leading-relaxed">
-                      A login token carries all of that user's ChurchTools permissions. Ideally use a dedicated ChurchTools user that only has access to songs and events. Signing out of ChordCrew removes the token from this device.
+                      {t('settings.ct.tokenWarning')}
                     </p>
                     <input
                       type="password"
                       value={ctTokenInput}
                       onChange={e => setCtTokenInput(e.target.value)}
-                      placeholder="Paste login token…"
+                      placeholder={t('settings.ct.tokenPlaceholder')}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && ctTokenInput.trim()) {
                           saveTokenAndVerify(ctTokenInput)
@@ -349,10 +348,10 @@ export default function SettingsPage() {
                         }}
                         disabled={verifying || !ctTokenInput.trim()}
                       >
-                        {verifying ? 'Verifying…' : 'Save & verify'}
+                        {verifying ? t('settings.ct.verifying') : t('settings.ct.saveVerify')}
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => { setShowTokenField(false); setCtTokenInput('') }}>
-                        Cancel
+                        {t('common.cancel')}
                       </Button>
                     </div>
                   </div>
@@ -364,7 +363,7 @@ export default function SettingsPage() {
           {/* Category picker */}
           {isConfigured && categories.length > 1 && (
             <div className="flex items-center justify-between pt-1 border-t border-surface-3">
-              <span className="text-sm">Default song category</span>
+              <span className="text-sm">{t('settings.ct.defaultCategory')}</span>
               <select
                 value={categoryId}
                 onChange={e => setCategoryId(Number(e.target.value))}
@@ -381,38 +380,38 @@ export default function SettingsPage() {
 
       {/* Danger zone */}
       <section>
-        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Data</h2>
+        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">{t('settings.data')}</h2>
         <div className="bg-surface-1 rounded-xl px-4 py-3 space-y-3">
           <p className="text-xs text-ink-muted">
-            Clear all local data. This cannot be undone unless you have synced to the cloud.
+            {t('settings.clearDataHint')}
           </p>
           <Button
             variant="danger"
             size="sm"
             onClick={async () => {
-              if (!confirm('Delete ALL local songs, setlists, and books?')) return
+              if (!confirm(t('settings.clearDataConfirm'))) return
               await db.delete()
               window.location.reload()
             }}
           >
-            Clear local database
+            {t('settings.clearData')}
           </Button>
         </div>
       </section>
 
       {/* Install App */}
       <section>
-        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">Install App</h2>
+        <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-2">{t('settings.install.title')}</h2>
         <div className="bg-surface-1 rounded-xl px-4 py-4 space-y-4">
           {isInstalled ? (
             <div className="flex items-center gap-2 text-sm text-green-400">
               <CheckCircle2 size={16} />
-              ChordCrew is installed on this device
+              {t('settings.install.installed')}
             </div>
           ) : deferredPrompt ? (
             // Chrome / Edge / Android Chrome: native install prompt available
             <div className="space-y-2">
-              <p className="text-xs text-ink-muted">Install ChordCrew as a native app for offline use, a home screen icon, and no browser chrome.</p>
+              <p className="text-xs text-ink-muted">{t('settings.install.intro')}</p>
               <Button
                 variant="primary"
                 size="sm"
@@ -425,7 +424,7 @@ export default function SettingsPage() {
                 }}
               >
                 <Download size={14} />
-                Install ChordCrew
+                {t('settings.install.button')}
               </Button>
             </div>
           ) : isIOS ? (
@@ -433,26 +432,26 @@ export default function SettingsPage() {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Smartphone size={15} className="text-chord" />
-                iOS — Safari
+                {t('settings.install.iosTitle')}
               </div>
               <ol className="text-xs text-ink-muted space-y-1.5 list-decimal list-inside">
-                <li>Tap the <strong className="text-ink">Share</strong> button (<span className="font-mono">⬆</span>) at the bottom of the screen</li>
-                <li>Scroll down and tap <strong className="text-ink">Add to Home Screen</strong></li>
-                <li>Tap <strong className="text-ink">Add</strong> to confirm</li>
+                <li><Trans i18nKey="settings.install.ios1" components={{ b: <strong className="text-ink" />, mono: <span className="font-mono" /> }} /></li>
+                <li><Trans i18nKey="settings.install.ios2" components={{ b: <strong className="text-ink" /> }} /></li>
+                <li><Trans i18nKey="settings.install.ios3" components={{ b: <strong className="text-ink" /> }} /></li>
               </ol>
-              <p className="text-xs text-ink-faint">The app must be opened in Safari (not Chrome) for this to work.</p>
+              <p className="text-xs text-ink-faint">{t('settings.install.iosSafariOnly')}</p>
             </div>
           ) : isAndroid ? (
             // Android — Chrome without prompt (e.g. already dismissed)
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Smartphone size={15} className="text-chord" />
-                Android — Chrome
+                {t('settings.install.androidTitle')}
               </div>
               <ol className="text-xs text-ink-muted space-y-1.5 list-decimal list-inside">
-                <li>Tap the <strong className="text-ink">⋮</strong> menu in the top-right corner</li>
-                <li>Tap <strong className="text-ink">Add to Home screen</strong> or <strong className="text-ink">Install app</strong></li>
-                <li>Tap <strong className="text-ink">Install</strong> to confirm</li>
+                <li><Trans i18nKey="settings.install.android1" components={{ b: <strong className="text-ink" /> }} /></li>
+                <li><Trans i18nKey="settings.install.android2" components={{ b: <strong className="text-ink" /> }} /></li>
+                <li><Trans i18nKey="settings.install.android3" components={{ b: <strong className="text-ink" /> }} /></li>
               </ol>
             </div>
           ) : isMacOS ? (
@@ -463,8 +462,8 @@ export default function SettingsPage() {
                 macOS
               </div>
               <div className="space-y-2 text-xs text-ink-muted">
-                <p><strong className="text-ink">Safari:</strong> File menu → <strong className="text-ink">Add to Dock</strong></p>
-                <p><strong className="text-ink">Chrome / Edge:</strong> Click the install icon <span className="font-mono bg-surface-2 px-1 rounded">⊕</span> in the address bar, or open the browser menu → <strong className="text-ink">Install ChordCrew…</strong></p>
+                <p><Trans i18nKey="settings.install.macSafari" components={{ b: <strong className="text-ink" /> }} /></p>
+                <p><Trans i18nKey="settings.install.chromeEdge" components={{ b: <strong className="text-ink" />, mono: <span className="font-mono bg-surface-2 px-1 rounded" /> }} /></p>
               </div>
             </div>
           ) : isWindows ? (
@@ -475,18 +474,18 @@ export default function SettingsPage() {
                 Windows
               </div>
               <div className="space-y-2 text-xs text-ink-muted">
-                <p><strong className="text-ink">Chrome / Edge:</strong> Click the install icon <span className="font-mono bg-surface-2 px-1 rounded">⊕</span> in the address bar, or open the browser menu → <strong className="text-ink">Install ChordCrew…</strong></p>
-                <p><strong className="text-ink">Edge:</strong> Click <span className="font-mono bg-surface-2 px-1 rounded">…</span> → Apps → Install this site as an app</p>
+                <p><Trans i18nKey="settings.install.chromeEdge" components={{ b: <strong className="text-ink" />, mono: <span className="font-mono bg-surface-2 px-1 rounded" /> }} /></p>
+                <p><Trans i18nKey="settings.install.edge" components={{ b: <strong className="text-ink" />, mono: <span className="font-mono bg-surface-2 px-1 rounded" /> }} /></p>
               </div>
             </div>
           ) : (
             // Generic fallback
             <div className="space-y-2 text-xs text-ink-muted">
-              <p>ChordCrew is a Progressive Web App (PWA). Install it via your browser menu:</p>
+              <p>{t('settings.install.genericIntro')}</p>
               <ul className="list-disc list-inside space-y-1">
-                <li><strong className="text-ink">Chrome / Edge:</strong> address bar install icon or browser menu → Install</li>
-                <li><strong className="text-ink">Safari (iOS):</strong> Share → Add to Home Screen</li>
-                <li><strong className="text-ink">Safari (macOS):</strong> File → Add to Dock</li>
+                <li><Trans i18nKey="settings.install.genericChrome" components={{ b: <strong className="text-ink" /> }} /></li>
+                <li><Trans i18nKey="settings.install.genericIos" components={{ b: <strong className="text-ink" /> }} /></li>
+                <li><Trans i18nKey="settings.install.genericMac" components={{ b: <strong className="text-ink" /> }} /></li>
               </ul>
             </div>
           )}

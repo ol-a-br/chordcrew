@@ -8,7 +8,8 @@
     "import": "Import",
     "curation": "Curation",
     "help": "Help",
-    "settings": "Settings"
+    "settings": "Settings",
+    "teams": "Teams"
   },
   "auth": {
     "signIn": "Sign in with Google",
@@ -20,7 +21,9 @@
     "signInError_cancelled": "Sign-in cancelled.",
     "signInError_network": "Sign-in failed — check your internet connection.",
     "signInError_unauthorized-domain": "Sign-in failed — this domain is not authorised. Contact the app administrator.",
-    "signInError_default": "Sign-in failed. Please try again."
+    "signInError_default": "Sign-in failed. Please try again.",
+    "unknownUser": "Unknown",
+    "localUser": "Local User"
   },
   "library": {
     "allSongs": "All Songs",
@@ -227,7 +230,68 @@
     "defaultColumns": "Default columns",
     "about": "About ChordCrew",
     "version": "Version",
-    "openSource": "Open source on GitHub"
+    "openSource": "Open source on GitHub",
+    "display": "Display",
+    "pageNavigation": "Page navigation",
+    "pageFlip": "Flip",
+    "pageScroll": "Scroll",
+    "performance": "Performance",
+    "metronome": "Metronome",
+    "metronomeMode": {
+      "light": "Light",
+      "sound": "Sound",
+      "both": "Both"
+    },
+    "metronomeLarge": "Large metronome button",
+    "notesAutoHide": "Notes auto-hide",
+    "pedal": "Bluetooth Pedal",
+    "pedalHint": "PageFlip Cicada V7: set pedal to <b>Mode 2 (Left/Right Arrow)</b>. Click a button below to reassign.",
+    "pressKey": "Press key…",
+    "cloudSync": "Cloud Sync",
+    "syncError": "Sync error",
+    "syncPending_one": "{{count}} change pending",
+    "syncPending_other": "{{count}} changes pending",
+    "syncUpdates": "Updates available — tap Sync Now",
+    "syncUpToDate": "Up to date",
+    "lastSynced": "Last synced {{time}}",
+    "ct": {
+      "url": "Church URL",
+      "connectedAs": "Connected as <b>{{name}}</b>",
+      "disconnect": "Disconnect",
+      "enterToken": "Enter login token",
+      "tokenHowTo": "In ChurchTools: <b>Your profile → Security → Login tokens</b> → create a token and paste it here. Your password is never stored.",
+      "tokenWarning": "A login token carries all of that user's ChurchTools permissions. Ideally use a dedicated ChurchTools user that only has access to songs and events. Signing out of ChordCrew removes the token from this device.",
+      "tokenPlaceholder": "Paste login token…",
+      "verifying": "Verifying…",
+      "saveVerify": "Save & verify",
+      "defaultCategory": "Default song category"
+    },
+    "data": "Data",
+    "clearDataHint": "Clear all local data. This cannot be undone unless you have synced to the cloud.",
+    "clearDataConfirm": "Delete ALL local songs, setlists, and books?",
+    "clearData": "Clear local database",
+    "install": {
+      "title": "Install App",
+      "installed": "ChordCrew is installed on this device",
+      "intro": "Install ChordCrew as a native app for offline use, a home screen icon, and no browser chrome.",
+      "button": "Install ChordCrew",
+      "iosTitle": "iOS — Safari",
+      "ios1": "Tap the <b>Share</b> button (<mono>⬆</mono>) at the bottom of the screen",
+      "ios2": "Scroll down and tap <b>Add to Home Screen</b>",
+      "ios3": "Tap <b>Add</b> to confirm",
+      "iosSafariOnly": "The app must be opened in Safari (not Chrome) for this to work.",
+      "androidTitle": "Android — Chrome",
+      "android1": "Tap the <b>⋮</b> menu in the top-right corner",
+      "android2": "Tap <b>Add to Home screen</b> or <b>Install app</b>",
+      "android3": "Tap <b>Install</b> to confirm",
+      "macSafari": "<b>Safari:</b> File menu → <b>Add to Dock</b>",
+      "chromeEdge": "<b>Chrome / Edge:</b> Click the install icon <mono>⊕</mono> in the address bar, or open the browser menu → <b>Install ChordCrew…</b>",
+      "edge": "<b>Edge:</b> Click <mono>…</mono> → Apps → Install this site as an app",
+      "genericIntro": "ChordCrew is a Progressive Web App (PWA). Install it via your browser menu:",
+      "genericChrome": "<b>Chrome / Edge:</b> address bar install icon or browser menu → Install",
+      "genericIos": "<b>Safari (iOS):</b> Share → Add to Home Screen",
+      "genericMac": "<b>Safari (macOS):</b> File → Add to Dock"
+    }
   },
   "sync": {
     "status": {
@@ -237,7 +301,16 @@
       "offline": "Offline"
     },
     "syncNow": "Sync Now",
-    "lastSync": "Last sync: {{time}}"
+    "lastSync": "Last sync: {{time}}",
+    "badge": {
+      "updates": "Updates available",
+      "unsynced": "{{count}} unsynced",
+      "recommended": "Sync recommended",
+      "synced": "Synced",
+      "clickToSync": "{{label}} — click to sync"
+    },
+    "entitiesFailed": "{{count}} entities failed to sync",
+    "failed": "Sync failed"
   },
   "onboarding": {
     "signInTitle": "Sign in to unlock sync & teams",
@@ -260,7 +333,8 @@
     "slide3Title": "Setlists",
     "slide3Desc": "Build service setlists, reorder songs, and present them in full-screen performance mode.",
     "slide4Title": "Performance mode",
-    "slide4Desc": "Full-screen display with pedal navigation support. Keep your hands on your instrument."
+    "slide4Desc": "Full-screen display with pedal navigation support. Keep your hands on your instrument.",
+    "chooseLanguage": "Choose your language"
   },
   "feedback": {
     "title": "Feedback",
@@ -409,5 +483,77 @@
     "keyPreserved": "Key is preserved per copy. The overwritten version can be restored from the Editor's version history.",
     "synced": "Synced",
     "syncNow": "Sync now"
+  },
+  "midi": {
+    "tempoExact": "Exact",
+    "tempoTap": "Tap",
+    "accessFailed": "MIDI access failed ({{reason}}).",
+    "accessBlocked": "MIDI access was blocked. Allow MIDI for this site in the browser settings and try again.",
+    "testRigInvalid": "Rig must be a number 1–128 or Performance.Slot like 6.2",
+    "testSent": "Sent.",
+    "testNoOutput": "No connected MIDI output selected.",
+    "title": "MIDI · Kemper Profiler",
+    "intro": "When a song is opened, send its rig (<code>{x_kemper_rig: …}</code>) and tempo (<code>{tempo: …}</code>) to a Kemper Profiler — e.g. via a CME WIDI Master Bluetooth adapter. Rig: a program number (<code>17</code>) or Performance.Slot (<code>6.2</code>).",
+    "editAllRigs": "Edit the rigs of all songs",
+    "unsupported": "This browser can't send MIDI (no Web MIDI support — e.g. Safari on iPad/iPhone). On iPad/iPhone open ChordCrew in the Web MIDI Browser app; elsewhere use Chrome or Edge on Android, macOS or Windows.",
+    "sendOnSongChange": "Send MIDI on song change",
+    "output": "Output",
+    "connected": "Connected",
+    "notConnected": "Not connected",
+    "outputLabel": "MIDI output",
+    "offlineSuffix": "(offline)",
+    "none": "— none —",
+    "channel": "MIDI channel",
+    "sendRig": "Send rig change",
+    "sendRigOffHint": "Off: the Kemper keeps whatever rig is loaded; song rigs are ignored.",
+    "sendTempo": "Send tempo",
+    "tempoMethod": "Tempo method",
+    "test": "Test",
+    "testRig": "Test rig",
+    "testBpm": "Test BPM",
+    "send": "Send"
+  },
+  "kemper": {
+    "filterAll": "All",
+    "filterSet": "Rig set",
+    "filterMissing": "No rig",
+    "filterInvalid": "Invalid",
+    "lockedCt": "ChurchTools song — content comes from ChurchTools",
+    "lockedReadOnly": "Read-only book",
+    "lockedReader": "You are a reader in this team",
+    "updated_one": "Updated {{count}} song: {{from}} → {{to}}",
+    "updated_other": "Updated {{count}} songs: {{from}} → {{to}}",
+    "noRigParen": "(no rig)",
+    "title": "Kemper rigs",
+    "intro": "The rig (<code>{x_kemper_rig}</code>) and tempo of every song. Edit a cell and press Enter; Esc cancels.",
+    "rigCount": "{{set}} of {{count}} songs have a rig",
+    "invalidCount": "{{count}} invalid",
+    "midiOff": "MIDI out is off on this device",
+    "sendRigOff": "“Send rig change” is off on this device",
+    "notSent": "these rigs are not sent right now.",
+    "replaceTitle": "Replace rig",
+    "from": "From",
+    "to": "To",
+    "replaceFrom": "Replace rig from",
+    "replaceTo": "Replace rig to",
+    "updating": "Updating…",
+    "confirmUpdate_one": "Yes, update {{count}} song",
+    "confirmUpdate_other": "Yes, update {{count}} songs",
+    "noMatches": "No matching songs",
+    "replaceIn_one": "Replace in {{count}} song…",
+    "replaceIn_other": "Replace in {{count}} songs…",
+    "remapError": {
+      "invalidFrom": "From must be a rig (17, 6.2) or a whole performance (6.*)",
+      "invalidTo": "To must be a rig (17, 6.2), a whole performance (8.*) or empty",
+      "performanceOnly": "A whole performance (8.*) can only replace a whole performance (6.*)"
+    },
+    "replaceHint": "A rig (<code>6.2</code>, <code>17</code>) or a whole performance (<code>6.*</code> → <code>8.*</code> keeps each song's slot). Leave To empty to remove the rig. Applies to the songs listed below — narrow it with the filters.",
+    "searchPlaceholder": "Search title, artist or rig…",
+    "book": "Book",
+    "colSong": "Song",
+    "tempoOf": "Tempo of {{title}}",
+    "rigOf": "Rig of {{title}}",
+    "noRig": "no rig",
+    "noSongsMatch": "No songs match."
   }
 }

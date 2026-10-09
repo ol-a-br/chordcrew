@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { Table2 } from 'lucide-react'
+import { useTranslation, Trans } from 'react-i18next'
 import type { AppSettings } from '@/types'
 import { parseKemperRig, formatKemperRig } from '@/midi/kemper'
 import {
@@ -43,13 +44,15 @@ function Switch({ label, checked, onClick }: { label: string; checked: boolean; 
   )
 }
 
+// label = i18n key
 const TEMPO_MODES = [
-  { mode: 'nrpn', label: 'Exact' },
-  { mode: 'tap',  label: 'Tap' },
+  { mode: 'nrpn', label: 'midi.tempoExact' },
+  { mode: 'tap',  label: 'midi.tempoTap' },
 ] as const
 
 /** Settings → MIDI: send each song's Kemper rig + tempo to a Web MIDI output (e.g. CME WIDI Master). */
 export function MidiSettingsSection({ settings, update }: Props) {
+  const { t } = useTranslation()
   const supported = isMidiSupported()
   const [outputs, setOutputs] = useState<MidiOutputInfo[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -79,8 +82,8 @@ export function MidiSettingsSection({ settings, update }: Props) {
     if (!list) {
       const reason = getMidiAccessError()
       setError(reason && !/^(SecurityError|NotAllowedError)\b/.test(reason)
-        ? `MIDI access failed (${reason}).`
-        : `MIDI access was blocked. Allow MIDI for this site in the browser settings and try again.${reason ? ` (${reason})` : ''}`)
+        ? t('midi.accessFailed', { reason })
+        : t('midi.accessBlocked') + (reason ? ` (${reason})` : ''))
       return
     }
     const patch: Partial<AppSettings> = { midiEnabled: true }
@@ -99,38 +102,33 @@ export function MidiSettingsSection({ settings, update }: Props) {
   const parsedTestRig = parseKemperRig(testRig)
 
   const runTest = async () => {
-    if (testRig.trim() && !parsedTestRig) { setTestResult('Rig must be a number 1–128 or Performance.Slot like 6.2'); return }
+    if (testRig.trim() && !parsedTestRig) { setTestResult(t('midi.testRigInvalid')); return }
     const ok = await sendMidiTest({ rig: parsedTestRig, bpm: Number(testBpm) || 0 }, settings)
-    setTestResult(ok ? 'Sent.' : 'No connected MIDI output selected.')
+    setTestResult(ok ? t('midi.testSent') : t('midi.testNoOutput'))
   }
 
   return (
     <section>
-      <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-1">MIDI · Kemper Profiler</h2>
+      <h2 className="text-xs text-ink-faint uppercase tracking-wider mb-1">{t('midi.title')}</h2>
       <p className="text-xs text-ink-muted mb-3">
-        When a song is opened, send its rig (<code className="font-mono">{'{x_kemper_rig: …}'}</code>) and
-        tempo (<code className="font-mono">{'{tempo: …}'}</code>) to a Kemper Profiler — e.g. via a CME WIDI Master
-        Bluetooth adapter. Rig: a program number (<code className="font-mono">17</code>) or
-        Performance.Slot (<code className="font-mono">6.2</code>).
+        <Trans i18nKey="midi.intro" components={{ code: <code className="font-mono" /> }} />
       </p>
       <Link
         to="/midi/rigs"
         className="mb-3 inline-flex items-center gap-1.5 text-sm text-chord hover:text-chord-light"
       >
-        <Table2 size={14} /> Edit the rigs of all songs
+        <Table2 size={14} /> {t('midi.editAllRigs')}
       </Link>
 
       {!supported ? (
         <div className="bg-surface-1 rounded-xl px-4 py-3 text-sm text-ink-muted">
-          This browser can't send MIDI (no Web MIDI support — e.g. Safari on iPad/iPhone).
-          On iPad/iPhone open ChordCrew in the Web MIDI Browser app; elsewhere use Chrome or Edge
-          on Android, macOS or Windows.
+          {t('midi.unsupported')}
         </div>
       ) : (
         <div className="bg-surface-1 rounded-xl px-4 divide-y divide-surface-3">
-          <Row label="Send MIDI on song change">
+          <Row label={t('midi.sendOnSongChange')}>
             <Switch
-              label="Send MIDI on song change"
+              label={t('midi.sendOnSongChange')}
               checked={settings.midiEnabled}
               onClick={() => settings.midiEnabled ? update({ midiEnabled: false }) : enable()}
             />
@@ -140,14 +138,14 @@ export function MidiSettingsSection({ settings, update }: Props) {
 
           {settings.midiEnabled && (
             <>
-              <Row label="Output">
+              <Row label={t('midi.output')}>
                 <div className="flex items-center gap-2">
                   <span
                     className={`w-2 h-2 rounded-full shrink-0 ${selected?.connected ? 'bg-green-500' : 'bg-surface-3'}`}
-                    title={selected?.connected ? 'Connected' : 'Not connected'}
+                    title={selected?.connected ? t('midi.connected') : t('midi.notConnected')}
                   />
                   <select
-                    aria-label="MIDI output"
+                    aria-label={t('midi.outputLabel')}
                     value={selected?.id ?? ''}
                     onChange={e => {
                       const o = outputs.find(x => x.id === e.target.value)
@@ -156,18 +154,18 @@ export function MidiSettingsSection({ settings, update }: Props) {
                     className="bg-surface-2 text-sm rounded-lg px-3 py-1.5 border border-surface-3 focus:outline-none max-w-[12rem]"
                   >
                     <option value="">
-                      {settings.midiOutputName && !selected ? `${settings.midiOutputName} (offline)` : '— none —'}
+                      {settings.midiOutputName && !selected ? `${settings.midiOutputName} ${t('midi.offlineSuffix')}` : t('midi.none')}
                     </option>
                     {outputs.map(o => (
-                      <option key={o.id} value={o.id}>{o.name}{o.connected ? '' : ' (offline)'}</option>
+                      <option key={o.id} value={o.id}>{o.name}{o.connected ? '' : ` ${t('midi.offlineSuffix')}`}</option>
                     ))}
                   </select>
                 </div>
               </Row>
 
-              <Row label="MIDI channel">
+              <Row label={t('midi.channel')}>
                 <select
-                  aria-label="MIDI channel"
+                  aria-label={t('midi.channel')}
                   value={settings.midiChannel}
                   onChange={e => update({ midiChannel: Number(e.target.value) })}
                   className="bg-surface-2 text-sm rounded-lg px-3 py-1.5 border border-surface-3 focus:outline-none"
@@ -179,25 +177,25 @@ export function MidiSettingsSection({ settings, update }: Props) {
               </Row>
 
               <Row
-                label="Send rig change"
-                hint={settings.midiSendRig ? undefined : 'Off: the Kemper keeps whatever rig is loaded; song rigs are ignored.'}
+                label={t('midi.sendRig')}
+                hint={settings.midiSendRig ? undefined : t('midi.sendRigOffHint')}
               >
                 <Switch
-                  label="Send rig change"
+                  label={t('midi.sendRig')}
                   checked={settings.midiSendRig}
                   onClick={() => update({ midiSendRig: !settings.midiSendRig })}
                 />
               </Row>
 
-              <Row label="Send tempo">
+              <Row label={t('midi.sendTempo')}>
                 <Switch
-                  label="Send tempo"
+                  label={t('midi.sendTempo')}
                   checked={settings.midiSendTempo}
                   onClick={() => update({ midiSendTempo: !settings.midiSendTempo })}
                 />
               </Row>
 
-              {settings.midiSendTempo && <Row label="Tempo method">
+              {settings.midiSendTempo && <Row label={t('midi.tempoMethod')}>
                 <div className="flex gap-0 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
                   {TEMPO_MODES.map(({ mode, label }) => (
                     <button
@@ -205,7 +203,7 @@ export function MidiSettingsSection({ settings, update }: Props) {
                       onClick={() => update({ midiTempoMode: mode })}
                       className={`px-3 py-1.5 text-sm ${settings.midiTempoMode === mode ? 'bg-chord/20 text-chord' : 'text-ink-muted hover:text-ink'}`}
                     >
-                      {label}
+                      {t(label)}
                     </button>
                   ))}
                 </div>
@@ -213,11 +211,11 @@ export function MidiSettingsSection({ settings, update }: Props) {
 
               <div className="py-3 space-y-2">
                 <div className="flex items-center gap-2 text-sm flex-wrap">
-                  <span className="text-ink-muted">Test</span>
+                  <span className="text-ink-muted">{t('midi.test')}</span>
                   <label className="flex items-center gap-1 text-xs">
-                    <span className="text-ink-faint">Rig</span>
+                    <span className="text-ink-faint">{t('editor.fieldRig')}</span>
                     <input
-                      aria-label="Test rig"
+                      aria-label={t('midi.testRig')}
                       value={testRig}
                       onChange={e => setTestRig(e.target.value)}
                       placeholder="6.2"
@@ -227,7 +225,7 @@ export function MidiSettingsSection({ settings, update }: Props) {
                   <label className="flex items-center gap-1 text-xs">
                     <span className="text-ink-faint">BPM</span>
                     <input
-                      aria-label="Test BPM"
+                      aria-label={t('midi.testBpm')}
                       type="number"
                       value={testBpm}
                       onChange={e => setTestBpm(e.target.value)}
@@ -238,7 +236,7 @@ export function MidiSettingsSection({ settings, update }: Props) {
                     onClick={runTest}
                     className="px-3 py-1 text-xs rounded-lg border border-surface-3 bg-surface-2 text-ink hover:border-chord/50"
                   >
-                    Send
+                    {t('midi.send')}
                   </button>
                   {parsedTestRig && <span className="text-xs text-ink-faint">{formatKemperRig(parsedTestRig)}</span>}
                 </div>

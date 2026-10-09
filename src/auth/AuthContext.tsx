@@ -8,6 +8,7 @@ import {
   type User as FirebaseUser,
 } from 'firebase/auth'
 import { auth, firebaseConfigured } from '@/firebase'
+import i18n from '@/i18n'
 import { clearToken as clearChurchToolsToken } from '@/churchtools/credentials'
 import type { User } from '@/types'
 
@@ -33,7 +34,7 @@ function toAppUser(fb: FirebaseUser): User {
   return {
     id: fb.uid,
     email: fb.email ?? '',
-    displayName: fb.displayName ?? fb.email ?? 'Unknown',
+    displayName: fb.displayName ?? fb.email ?? i18n.t('auth.unknownUser'),
     photoURL: fb.photoURL ?? undefined,
   }
 }
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!auth) {
       // No Firebase config — run in local-only mode with a guest user
-      setUser({ id: 'local', email: 'local@chordcrew', displayName: 'Local User' })
+      setUser({ id: 'local', email: 'local@chordcrew', displayName: i18n.t('auth.localUser') })
       setLoading(false)
       return
     }

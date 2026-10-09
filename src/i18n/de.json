@@ -8,7 +8,8 @@
     "import": "Importieren",
     "curation": "Pflege",
     "help": "Hilfe",
-    "settings": "Einstellungen"
+    "settings": "Einstellungen",
+    "teams": "Teams"
   },
   "auth": {
     "signIn": "Mit Google anmelden",
@@ -20,7 +21,9 @@
     "signInError_cancelled": "Anmeldung abgebrochen.",
     "signInError_network": "Anmeldung fehlgeschlagen — bitte Internetverbindung prüfen.",
     "signInError_unauthorized-domain": "Anmeldung fehlgeschlagen — diese Domain ist nicht autorisiert. Bitte den App-Administrator kontaktieren.",
-    "signInError_default": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
+    "signInError_default": "Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
+    "unknownUser": "Unbekannt",
+    "localUser": "Lokaler Benutzer"
   },
   "library": {
     "allSongs": "Alle Songs",
@@ -227,7 +230,68 @@
     "defaultColumns": "Standard-Spaltenanzahl",
     "about": "Über ChordCrew",
     "version": "Version",
-    "openSource": "Open Source auf GitHub"
+    "openSource": "Open Source auf GitHub",
+    "display": "Anzeige",
+    "pageNavigation": "Seitennavigation",
+    "pageFlip": "Blättern",
+    "pageScroll": "Scrollen",
+    "performance": "Performance",
+    "metronome": "Metronom",
+    "metronomeMode": {
+      "light": "Licht",
+      "sound": "Ton",
+      "both": "Beides"
+    },
+    "metronomeLarge": "Großer Metronom-Button",
+    "notesAutoHide": "Notizen ausblenden nach",
+    "pedal": "Bluetooth-Pedal",
+    "pedalHint": "PageFlip Cicada V7: Pedal auf <b>Modus 2 (Pfeil links/rechts)</b> stellen. Zum Neubelegen unten auf einen Button klicken.",
+    "pressKey": "Taste drücken…",
+    "cloudSync": "Cloud-Sync",
+    "syncError": "Sync-Fehler",
+    "syncPending_one": "{{count}} Änderung ausstehend",
+    "syncPending_other": "{{count}} Änderungen ausstehend",
+    "syncUpdates": "Neue Daten verfügbar — „Jetzt synchronisieren“ tippen",
+    "syncUpToDate": "Auf dem neuesten Stand",
+    "lastSynced": "Zuletzt synchronisiert {{time}}",
+    "ct": {
+      "url": "Gemeinde-URL",
+      "connectedAs": "Verbunden als <b>{{name}}</b>",
+      "disconnect": "Trennen",
+      "enterToken": "Login-Token eingeben",
+      "tokenHowTo": "In ChurchTools: <b>Dein Profil → Sicherheit → Login-Token</b> → Token erstellen und hier einfügen. Dein Passwort wird nie gespeichert.",
+      "tokenWarning": "Ein Login-Token hat alle ChurchTools-Rechte dieses Benutzers. Nutze am besten einen eigenen ChurchTools-Benutzer, der nur Zugriff auf Songs und Events hat. Beim Abmelden von ChordCrew wird der Token von diesem Gerät entfernt.",
+      "tokenPlaceholder": "Login-Token einfügen…",
+      "verifying": "Prüfe…",
+      "saveVerify": "Speichern & prüfen",
+      "defaultCategory": "Standard-Songkategorie"
+    },
+    "data": "Daten",
+    "clearDataHint": "Alle lokalen Daten löschen. Das kann nicht rückgängig gemacht werden, außer du hast vorher in die Cloud synchronisiert.",
+    "clearDataConfirm": "ALLE lokalen Songs, Setlisten und Bücher löschen?",
+    "clearData": "Lokale Datenbank löschen",
+    "install": {
+      "title": "App installieren",
+      "installed": "ChordCrew ist auf diesem Gerät installiert",
+      "intro": "Installiere ChordCrew als App: offline nutzbar, mit Symbol auf dem Home-Bildschirm und ohne Browserleisten.",
+      "button": "ChordCrew installieren",
+      "iosTitle": "iOS — Safari",
+      "ios1": "Tippe unten auf <b>Teilen</b> (<mono>⬆</mono>)",
+      "ios2": "Scrolle nach unten und tippe auf <b>Zum Home-Bildschirm</b>",
+      "ios3": "Tippe zur Bestätigung auf <b>Hinzufügen</b>",
+      "iosSafariOnly": "Dafür muss die App in Safari (nicht Chrome) geöffnet sein.",
+      "androidTitle": "Android — Chrome",
+      "android1": "Tippe oben rechts auf das Menü <b>⋮</b>",
+      "android2": "Tippe auf <b>Zum Startbildschirm hinzufügen</b> oder <b>App installieren</b>",
+      "android3": "Tippe zur Bestätigung auf <b>Installieren</b>",
+      "macSafari": "<b>Safari:</b> Menü Ablage → <b>Zum Dock hinzufügen</b>",
+      "chromeEdge": "<b>Chrome / Edge:</b> Klicke in der Adressleiste auf das Installationssymbol <mono>⊕</mono> oder öffne das Browsermenü → <b>ChordCrew installieren…</b>",
+      "edge": "<b>Edge:</b> Klicke auf <mono>…</mono> → Apps → Diese Website als App installieren",
+      "genericIntro": "ChordCrew ist eine Progressive Web App (PWA). Installiere sie über dein Browsermenü:",
+      "genericChrome": "<b>Chrome / Edge:</b> Installationssymbol in der Adressleiste oder Browsermenü → Installieren",
+      "genericIos": "<b>Safari (iOS):</b> Teilen → Zum Home-Bildschirm",
+      "genericMac": "<b>Safari (macOS):</b> Ablage → Zum Dock hinzufügen"
+    }
   },
   "sync": {
     "status": {
@@ -237,7 +301,16 @@
       "offline": "Offline"
     },
     "syncNow": "Jetzt synchronisieren",
-    "lastSync": "Letzte Synchronisation: {{time}}"
+    "lastSync": "Letzte Synchronisation: {{time}}",
+    "badge": {
+      "updates": "Neue Daten verfügbar",
+      "unsynced": "{{count}} nicht synchronisiert",
+      "recommended": "Sync empfohlen",
+      "synced": "Synchronisiert",
+      "clickToSync": "{{label}} — zum Synchronisieren klicken"
+    },
+    "entitiesFailed": "{{count}} Einträge konnten nicht synchronisiert werden",
+    "failed": "Synchronisation fehlgeschlagen"
   },
   "onboarding": {
     "signInTitle": "Anmelden für Sync & Teams",
@@ -260,7 +333,8 @@
     "slide3Title": "Setlisten",
     "slide3Desc": "Erstelle Setlisten, ordne Songs um und präsentiere sie im Vollbild-Modus.",
     "slide4Title": "Performance-Modus",
-    "slide4Desc": "Vollbild-Anzeige mit Pedal-Navigation. Hände bleiben am Instrument."
+    "slide4Desc": "Vollbild-Anzeige mit Pedal-Navigation. Hände bleiben am Instrument.",
+    "chooseLanguage": "Sprache wählen"
   },
   "feedback": {
     "title": "Feedback",
@@ -409,5 +483,77 @@
     "keyPreserved": "Die Tonart bleibt pro Kopie erhalten. Die überschriebene Version lässt sich im Versionsverlauf des Editors wiederherstellen.",
     "synced": "Abgeglichen",
     "syncNow": "Jetzt abgleichen"
+  },
+  "midi": {
+    "tempoExact": "Exakt",
+    "tempoTap": "Tap",
+    "accessFailed": "MIDI-Zugriff fehlgeschlagen ({{reason}}).",
+    "accessBlocked": "Der MIDI-Zugriff wurde blockiert. Erlaube MIDI für diese Seite in den Browser-Einstellungen und versuche es erneut.",
+    "testRigInvalid": "Rig muss eine Zahl von 1–128 oder Performance.Slot wie 6.2 sein",
+    "testSent": "Gesendet.",
+    "testNoOutput": "Kein verbundener MIDI-Ausgang ausgewählt.",
+    "title": "MIDI · Kemper Profiler",
+    "intro": "Beim Öffnen eines Songs werden sein Rig (<code>{x_kemper_rig: …}</code>) und Tempo (<code>{tempo: …}</code>) an einen Kemper Profiler gesendet — z. B. über einen CME-WIDI-Master-Bluetooth-Adapter. Rig: eine Programmnummer (<code>17</code>) oder Performance.Slot (<code>6.2</code>).",
+    "editAllRigs": "Rigs aller Songs bearbeiten",
+    "unsupported": "Dieser Browser kann kein MIDI senden (keine Web-MIDI-Unterstützung — z. B. Safari auf iPad/iPhone). Öffne ChordCrew auf iPad/iPhone in der App „Web MIDI Browser“; sonst Chrome oder Edge unter Android, macOS oder Windows verwenden.",
+    "sendOnSongChange": "MIDI beim Songwechsel senden",
+    "output": "Ausgang",
+    "connected": "Verbunden",
+    "notConnected": "Nicht verbunden",
+    "outputLabel": "MIDI-Ausgang",
+    "offlineSuffix": "(offline)",
+    "none": "— keiner —",
+    "channel": "MIDI-Kanal",
+    "sendRig": "Rig-Wechsel senden",
+    "sendRigOffHint": "Aus: Der Kemper behält das geladene Rig; Song-Rigs werden ignoriert.",
+    "sendTempo": "Tempo senden",
+    "tempoMethod": "Tempo-Methode",
+    "test": "Test",
+    "testRig": "Test-Rig",
+    "testBpm": "Test-BPM",
+    "send": "Senden"
+  },
+  "kemper": {
+    "filterAll": "Alle",
+    "filterSet": "Mit Rig",
+    "filterMissing": "Ohne Rig",
+    "filterInvalid": "Ungültig",
+    "lockedCt": "ChurchTools-Song — der Inhalt kommt aus ChurchTools",
+    "lockedReadOnly": "Schreibgeschütztes Buch",
+    "lockedReader": "Du bist in diesem Team nur Leser",
+    "updated_one": "{{count}} Song aktualisiert: {{from}} → {{to}}",
+    "updated_other": "{{count}} Songs aktualisiert: {{from}} → {{to}}",
+    "noRigParen": "(kein Rig)",
+    "title": "Kemper-Rigs",
+    "intro": "Rig (<code>{x_kemper_rig}</code>) und Tempo aller Songs. Zelle bearbeiten und Enter drücken; Esc bricht ab.",
+    "rigCount": "{{set}} von {{count}} Songs haben ein Rig",
+    "invalidCount": "{{count}} ungültig",
+    "midiOff": "MIDI-Ausgabe ist auf diesem Gerät aus",
+    "sendRigOff": "„Rig-Wechsel senden“ ist auf diesem Gerät aus",
+    "notSent": "diese Rigs werden gerade nicht gesendet.",
+    "replaceTitle": "Rig ersetzen",
+    "from": "Von",
+    "to": "Nach",
+    "replaceFrom": "Rig ersetzen von",
+    "replaceTo": "Rig ersetzen durch",
+    "updating": "Aktualisiere…",
+    "confirmUpdate_one": "Ja, {{count}} Song aktualisieren",
+    "confirmUpdate_other": "Ja, {{count}} Songs aktualisieren",
+    "noMatches": "Keine passenden Songs",
+    "replaceIn_one": "In {{count}} Song ersetzen…",
+    "replaceIn_other": "In {{count}} Songs ersetzen…",
+    "remapError": {
+      "invalidFrom": "„Von“ muss ein Rig (17, 6.2) oder eine ganze Performance (6.*) sein",
+      "invalidTo": "„Nach“ muss ein Rig (17, 6.2), eine ganze Performance (8.*) oder leer sein",
+      "performanceOnly": "Eine ganze Performance (8.*) kann nur eine ganze Performance (6.*) ersetzen"
+    },
+    "replaceHint": "Ein Rig (<code>6.2</code>, <code>17</code>) oder eine ganze Performance (<code>6.*</code> → <code>8.*</code> behält den Slot jedes Songs). „Nach“ leer lassen, um das Rig zu entfernen. Gilt für die unten aufgelisteten Songs — mit den Filtern eingrenzen.",
+    "searchPlaceholder": "Titel, Künstler oder Rig suchen…",
+    "book": "Buch",
+    "colSong": "Song",
+    "tempoOf": "Tempo von {{title}}",
+    "rigOf": "Rig von {{title}}",
+    "noRig": "kein Rig",
+    "noSongsMatch": "Keine Songs gefunden."
   }
 }
