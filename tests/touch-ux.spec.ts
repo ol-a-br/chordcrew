@@ -28,7 +28,7 @@
  *   npx playwright test --project=ipad tests/touch-ux.spec.ts
  */
 
-import { test, expect } from './fixtures'
+import { test, expect, viewport } from './fixtures'
 import type { Page } from '@playwright/test'
 import { randomUUID } from 'crypto'
 
@@ -291,11 +291,11 @@ test.describe('Touch & tablet UX', () => {
   test('TUX-7: tapping the right half of the screen advances to next setlist song', async ({ page }) => {
     await openPerformance(page, setup.songAId, setup.setlistId, 0)
 
-    const viewport = page.viewportSize()!
+    const vp = await viewport(page)
     // Click right-half tap zone, below the controls overlay (top-16 = 64px)
     await page.mouse.click(
-      Math.floor(viewport.width * 0.75),
-      Math.floor(viewport.height * 0.5),
+      Math.floor(vp.width * 0.75),
+      Math.floor(vp.height * 0.5),
     )
     await page.waitForTimeout(800)
 
@@ -316,10 +316,10 @@ test.describe('Touch & tablet UX', () => {
     await expect(overlay).toHaveClass(/opacity-0/, { timeout: 1000 })
 
     // Tap the centre of the song content area (below tap zones' concern)
-    const viewport = page.viewportSize()!
+    const vp = await viewport(page)
     await page.mouse.click(
-      Math.floor(viewport.width * 0.5),
-      Math.floor(viewport.height * 0.5),
+      Math.floor(vp.width * 0.5),
+      Math.floor(vp.height * 0.5),
     )
     await page.waitForTimeout(300)
 
