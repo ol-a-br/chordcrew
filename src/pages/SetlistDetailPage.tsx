@@ -16,6 +16,7 @@ import { EventPickerDialog } from '@/components/churchtools/EventPickerDialog'
 import { encodeSetlistShare, buildShareUrl, buildSetlistShareUrl, copyShareUrl, publishSetlistShare } from '@/utils/share'
 import { transposeKey, extractMeta, isValidKey } from '@/utils/chordpro'
 import { fuzzyMatch } from '@/utils/fuzzySearch'
+import { findIdenticalCopy } from '@/utils/linkedSongs'
 import type { SetlistItem, Song, Book } from '@/types'
 
 export default function SetlistDetailPage() {
@@ -353,8 +354,15 @@ export default function SetlistDetailPage() {
 
   // ── Toggle edit mode ──────────────────────────────────────────────────────────
 
-  const handleAddPersonalSong = (song: Song) => {
+  const handleAddPersonalSong = async (song: Song) => {
     const teamBooks = (books ?? []).filter(b => b.sharedTeamId === setlist?.sharedTeamId)
+    // An identical copy already in a team book is used directly — no need to ask
+    const teamSongs = await db.songs.where('bookId').anyOf(teamBooks.map(b => b.id)).toArray()
+    const teamCopy = findIdenticalCopy(song, teamSongs)
+    if (teamCopy) {
+      await addSong(teamCopy.id)
+      return
+    }
     setAddSongDialog({ song, targetBook: teamBooks[0] ?? null })
   }
 

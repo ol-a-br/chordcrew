@@ -58,3 +58,18 @@ export function getLinkStatus(song: Song, songMap: Map<string, Song>): LinkStatu
   if (found.some(linked => isSongDiverged(song, linked))) return 'diverged'
   return 'in-sync'
 }
+
+/**
+ * Find a song among `candidates` that is identical to `song` — not diverged and
+ * in the same key — so it can be reused instead of creating another copy.
+ * Prefers a candidate that is already a linked copy of `song`.
+ */
+export function findIdenticalCopy(song: Song, candidates: Song[]): Song | undefined {
+  const identical = candidates.filter(c =>
+    c.id !== song.id &&
+    c.transcription.key === song.transcription.key &&
+    !isSongDiverged(song, c)
+  )
+  const linkedIds = new Set(song.linkedSongIds ?? [])
+  return identical.find(c => linkedIds.has(c.id) || c.linkedSongIds?.includes(song.id)) ?? identical[0]
+}

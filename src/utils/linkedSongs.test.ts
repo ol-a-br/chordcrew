@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeContent, isSongDiverged, getLinkStatus, resolveLinkedSongs } from './linkedSongs'
+import { normalizeContent, isSongDiverged, getLinkStatus, resolveLinkedSongs, findIdenticalCopy } from './linkedSongs'
 import type { Song } from '@/types'
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -174,5 +174,40 @@ describe('getLinkStatus', () => {
     const b = makeSong({ id: 'b', linkedSongIds: ['a'], transcription: { ...a.transcription, key: 'D' } })
     const map = new Map([['a', a], ['b', b]])
     expect(getLinkStatus(a, map)).toBe('in-sync')
+  })
+})
+
+// ─── findIdenticalCopy ────────────────────────────────────────────────────────
+
+describe('findIdenticalCopy', () => {
+  it('returns an identical song from another book', () => {
+    const song = makeSong()
+    const copy = makeSong({ id: 'b', bookId: 'team' })
+    expect(findIdenticalCopy(song, [copy])?.id).toBe('b')
+  })
+  it('ignores whitespace-only differences', () => {
+    const song = makeSong()
+    const copy = makeSong({ id: 'b', transcription: { ...song.transcription, content: song.transcription.content + '\n\n' } })
+    expect(findIdenticalCopy(song, [copy])?.id).toBe('b')
+  })
+  it('returns undefined when content differs', () => {
+    const song = makeSong()
+    const copy = makeSong({ id: 'b', transcription: { ...song.transcription, content: '[D]Other' } })
+    expect(findIdenticalCopy(song, [copy])).toBeUndefined()
+  })
+  it('returns undefined when the key differs', () => {
+    const song = makeSong()
+    const copy = makeSong({ id: 'b', transcription: { ...song.transcription, key: 'A' } })
+    expect(findIdenticalCopy(song, [copy])).toBeUndefined()
+  })
+  it('never returns the song itself', () => {
+    const song = makeSong()
+    expect(findIdenticalCopy(song, [song])).toBeUndefined()
+  })
+  it('prefers a linked copy over an unlinked identical one', () => {
+    const song = makeSong({ linkedSongIds: ['c'] })
+    const unlinked = makeSong({ id: 'b' })
+    const linked = makeSong({ id: 'c' })
+    expect(findIdenticalCopy(song, [unlinked, linked])?.id).toBe('c')
   })
 })
