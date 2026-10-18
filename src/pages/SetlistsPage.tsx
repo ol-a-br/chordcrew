@@ -6,7 +6,7 @@ import {
   Plus, ListMusic, Play, Calendar, Copy, Users, Lock,
   CheckSquare, Square, Trash2, FolderInput, AlertTriangle,
 } from 'lucide-react'
-import { db, generateId, markPending, getTeamRole } from '@/db'
+import { db, generateId, markPending, getTeamRole, linkSongs } from '@/db'
 import { deleteSetlistFromCloud } from '@/sync/firestoreSync'
 import { Button } from '@/components/shared/Button'
 import { findIdenticalCopy } from '@/utils/linkedSongs'
@@ -266,8 +266,10 @@ export default function SetlistsPage() {
       const now = Date.now()
       for (const song of affectedSongs) {
         const newId = generateId()
-        await db.songs.add({ ...song, id: newId, bookId: targetBook.id, updatedAt: now, accessedAt: undefined })
+        await db.songs.add({ ...song, id: newId, bookId: targetBook.id, updatedAt: now, accessedAt: undefined, linkedSongIds: [song.id] })
+        await linkSongs(song.id, newId)
         await markPending('song', newId)
+        await markPending('song', song.id)
         songIdMap.set(song.id, newId)
       }
     }
