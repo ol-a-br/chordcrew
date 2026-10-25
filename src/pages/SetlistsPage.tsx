@@ -9,7 +9,7 @@ import {
 import { db, generateId, markPending, getTeamRole, linkSongs } from '@/db'
 import { deleteSetlistFromCloud } from '@/sync/firestoreSync'
 import { Button } from '@/components/shared/Button'
-import { findIdenticalCopy } from '@/utils/linkedSongs'
+import { findExistingCopy } from '@/utils/linkedSongs'
 import { useAuth } from '@/auth/AuthContext'
 import type { Setlist, Song } from '@/types'
 
@@ -37,7 +37,7 @@ export default function SetlistsPage() {
     targetLabel: string
     targetBook: { id: string; title: string } | null
     affectedSongs: Song[]
-    reusedSongIds: Map<string, string>  // personal song id → identical team-book song id
+    reusedSongIds: Map<string, string>  // personal song id → existing team-book song id
   }
   const [organizeDialog, setOrganizeDialog] = useState<OrganizeDialog | null>(null)
 
@@ -234,8 +234,8 @@ export default function SetlistsPage() {
       const items = await db.setlistItems.where('setlistId').equals(id).toArray()
       items.forEach(i => { if (i.songId) allSongIds.add(i.songId) })
     }
-    // Find songs not in any team book for this target. A song that already has an
-    // identical copy in a team book is swapped for that copy instead of asking.
+    // Find songs not in any team book for this target. A song that already exists
+    // in a team book (see findExistingCopy) is swapped for that copy instead of asking.
     const teamBookIds = new Set((books ?? []).filter(b => b.sharedTeamId === targetTeamId).map(b => b.id))
     const teamSongs = await db.songs.where('bookId').anyOf([...teamBookIds]).toArray()
     const affected: Song[] = []
@@ -243,7 +243,7 @@ export default function SetlistsPage() {
     for (const songId of allSongIds) {
       const song = await db.songs.get(songId)
       if (!song || teamBookIds.has(song.bookId)) continue
-      const teamCopy = findIdenticalCopy(song, teamSongs)
+      const teamCopy = findExistingCopy(song, teamSongs)
       if (teamCopy) reusedSongIds.set(song.id, teamCopy.id)
       else affected.push(song)
     }

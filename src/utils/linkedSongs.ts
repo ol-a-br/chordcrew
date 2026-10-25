@@ -59,17 +59,31 @@ export function getLinkStatus(song: Song, songMap: Map<string, Song>): LinkStatu
   return 'in-sync'
 }
 
+function normalizeTitle(text: string | undefined): string {
+  return (text ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
 /**
- * Find a song among `candidates` that is identical to `song` — not diverged and
- * in the same key — so it can be reused instead of creating another copy.
- * Prefers a candidate that is already a linked copy of `song`.
+ * Find the song among `candidates` (e.g. a team book) that is the same song as
+ * `song`, so it can be reused instead of creating another copy. Strongest match wins:
+ * 1. a linked copy of `song` (in either direction), even if it has drifted
+ * 2. the same ChurchTools song
+ * 3. the same chords and lyrics (whitespace ignored; metadata like key or tags may differ)
+ * 4. the same title, and the same artist when both songs have one
  */
-export function findIdenticalCopy(song: Song, candidates: Song[]): Song | undefined {
-  const identical = candidates.filter(c =>
-    c.id !== song.id &&
-    c.transcription.key === song.transcription.key &&
-    !isSongDiverged(song, c)
-  )
+export function findExistingCopy(song: Song, candidates: Song[]): Song | undefined {
+  const others = candidates.filter(c => c.id !== song.id)
   const linkedIds = new Set(song.linkedSongIds ?? [])
-  return identical.find(c => linkedIds.has(c.id) || c.linkedSongIds?.includes(song.id)) ?? identical[0]
+  const content = normalizeContent(song.transcription.content)
+  const title = normalizeTitle(song.title)
+  const artist = normalizeTitle(song.artist)
+  return (
+    others.find(c => linkedIds.has(c.id) || c.linkedSongIds?.includes(song.id)) ??
+    (song.ctSongId ? others.find(c => c.ctSongId === song.ctSongId) : undefined) ??
+    others.find(c => normalizeContent(c.transcription.content) === content) ??
+    (title ? others.find(c => {
+      const otherArtist = normalizeTitle(c.artist)
+      return normalizeTitle(c.title) === title && (!artist || !otherArtist || otherArtist === artist)
+    }) : undefined)
+  )
 }
