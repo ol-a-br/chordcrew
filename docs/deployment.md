@@ -205,7 +205,8 @@ reCAPTCHA can't attest `localhost`. With a site key in `.env.local`, `npm run de
 
 ## Dependabot alerts
 
-As of 2026-09-30: `npm audit` reports **0 vulnerabilities** in `/` and `/functions`.
+As of 2026-11-07: `npm audit` reports **0 vulnerabilities** in `/functions` and one
+unfixable low-severity dev-only advisory in `/` (`deepmerge`, see dismissed alerts below).
 
 History: the 2 former critical alerts were in `jspdf`, which was never imported
 (the print pages use `@media print`); `jspdf` and `html2canvas` were removed.
@@ -217,15 +218,17 @@ override once the parent package ships the fixed version itself:
 |----------|-----|--------|
 | `serialize-javascript` `^7.0.5` | High-severity advisory in the PWA build chain | workbox-build ← vite-plugin-pwa |
 | `@grpc/grpc-js` `^1.14.5` | GHSA-m9gg-hp2v-232j, GHSA-f596-whhp-79r4; firebase pins `~1.9.0`, which has no patched release. Only the Node build of Firestore uses gRPC (tests, rules-unit-testing); the browser bundle uses WebChannel | @firebase/firestore ← firebase |
+| `glob` `^14.0.2` (both `/` and `/functions`) | GHSA-3g3m-2fjr-6pw4 (glob) and GHSA-g3hv-75wg-m249 (minimatch, pulled in by glob 14 as 11.0.5). `/`: build-time only; `/functions`: unused rimraf under google-gax | `/`: workbox-build ← vite-plugin-pwa (pins glob 11); `/functions`: rimraf 5 ← google-gax 5 ← @google-cloud/firestore-api ← firebase-admin |
 
-`functions/` needs no override: `npm audit fix` there picks up the patched
-`@grpc/grpc-js` (via firebase-admin → google-gax).
+In `functions/`, `npm audit fix` picks up the patched `@grpc/grpc-js` (via
+firebase-admin → google-gax); `glob` is the only override there.
 
 Dismissed alerts:
 
 | Alert | Package | Why dismissed | Resolution |
 |-------|---------|---------------|------------|
 | #107 (GHSA-86w9-cpqp-85rv, 2026-10-02) | `node-forge` ≤ 1.4.0, no patched release | firebase-admin 12 only calls `privateKeyFromPem()` on service-account keys, never signature verification, and our functions use default credentials (`initializeApp()` without a key) | firebase-admin 14 drops `node-forge` — see "Major-version dependency upgrades" in `docs/roadmap.md` |
+| #129 (GHSA-gcqx-w48m-w2h4, 2026-11-07) | `deepmerge` 4.3.1, no patched release | Dev-only: `@rollup/plugin-node-resolve` inside workbox-build merges our own static build config, never untrusted input | Remove once workbox-build / @rollup/plugin-node-resolve drop or patch `deepmerge` |
 
 ```bash
 npm audit          # see full report
@@ -236,4 +239,4 @@ Do not run `npm audit fix --force` — it may introduce breaking changes.
 
 ---
 
-*Last updated: 2026-10-02*
+*Last updated: 2026-11-07*
