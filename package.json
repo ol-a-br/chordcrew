@@ -44,7 +44,7 @@
     "glob": "^14.0.2"
   },
   "devDependencies": {
-    "@babel/parser": "^8.0.7",
+    "@babel/parser": "^8.1.0",
     "@firebase/rules-unit-testing": "^5.0.2",
     "@playwright/test": "^1.64.0",
     "@types/react": "^18.2.66",
